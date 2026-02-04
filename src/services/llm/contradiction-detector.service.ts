@@ -155,21 +155,7 @@ export class ContradictionDetectorService {
   ): Promise<ContradictionResult> {
     this.stats.totalChecks++;
 
-    // Quick filter: check word overlap first
-    const overlap = this.calculateWordOverlap(newMemory.content, existingMemory.content);
-    if (overlap < this.config.minOverlapForCheck) {
-      logger.debug('Skipping contradiction check due to low overlap', { overlap });
-      return {
-        isContradiction: false,
-        confidence: 0,
-        reason: 'Insufficient content overlap',
-        shouldSupersede: false,
-        cached: false,
-        usedLLM: false,
-      };
-    }
-
-    // Check cache
+    // Check cache first
     if (this.config.enableCache) {
       const cached = this.getCached(newMemory.content, existingMemory.content);
       if (cached) {
@@ -183,7 +169,7 @@ export class ContradictionDetectorService {
       }
     }
 
-    // Try LLM detection if available
+    // Try LLM detection if available (semantic analysis, no overlap filtering)
     if (isLLMAvailable()) {
       try {
         const result = await this.detectWithLLM(newMemory, existingMemory);
@@ -222,6 +208,20 @@ export class ContradictionDetectorService {
     }
 
     // Fallback to heuristics
+    // Only apply overlap filter for heuristics (semantic analysis not available)
+    const overlap = this.calculateWordOverlap(newMemory.content, existingMemory.content);
+    if (overlap < this.config.minOverlapForCheck) {
+      logger.debug('Skipping heuristic check due to low overlap', { overlap });
+      return {
+        isContradiction: false,
+        confidence: 0,
+        reason: 'Insufficient content overlap for heuristic analysis',
+        shouldSupersede: false,
+        cached: false,
+        usedLLM: false,
+      };
+    }
+
     const heuristicResult = this.detectWithHeuristics(newMemory, existingMemory);
     this.stats.heuristicChecks++;
 

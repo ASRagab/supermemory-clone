@@ -157,7 +157,25 @@ export class AnthropicLLMProvider extends BaseLLMProvider {
         throw this.handleAnthropicHttpError(response.status, errorBody);
       }
 
-      const data = (await response.json()) as AnthropicResponse;
+      // Parse and validate JSON response (with error handling for concurrent request corruption)
+      let data: AnthropicResponse;
+      try {
+        data = (await response.json()) as AnthropicResponse;
+      } catch (parseError) {
+        throw LLMError.invalidResponse(
+          'anthropic',
+          `JSON parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+        );
+      }
+
+      // Validate response structure (handles concurrent request JSON corruption)
+      if (!data || typeof data !== 'object') {
+        throw LLMError.invalidResponse('anthropic', 'Malformed JSON response');
+      }
+
+      if (!data.content || !Array.isArray(data.content)) {
+        throw LLMError.invalidResponse('anthropic', 'Invalid response structure: missing content array');
+      }
 
       if (!data.content?.[0]?.text) {
         throw LLMError.invalidResponse('anthropic', 'Empty response from model');
