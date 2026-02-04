@@ -386,11 +386,13 @@ export class MemoryExtensionDetectorService {
     }
 
     // Decision logic
+    // Allow high overlap if there are extension indicators or more detail
+    // The duplicate check (overlap < 0.9) is skipped when extension indicators are present
     const isExtension =
       overlap > 0.2 && // Sufficient overlap
-      overlap < 0.9 && // Not duplicate
       !newContentInOld && // Not contained
-      (hasMoreDetail || hasExtensionIndicator); // Has additional content
+      ((overlap < 0.9 && hasMoreDetail) || // More detail with reasonable overlap
+        hasExtensionIndicator); // Extension indicators override overlap threshold
 
     const confidence = isExtension ? Math.min(0.65, overlap + 0.2) : 0.3;
 

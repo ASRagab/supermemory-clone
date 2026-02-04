@@ -150,6 +150,8 @@ export function createLLMProvider(config: LLMFactoryConfig = {}): LLMProvider {
 
 /**
  * Get the default provider type based on available API keys
+ *
+ * NOTE: Only checks process.env for runtime detection.
  */
 export function getDefaultProviderType(): LLMProviderType {
   // Check environment variable first
@@ -158,8 +160,8 @@ export function getDefaultProviderType(): LLMProviderType {
     return envProvider;
   }
 
-  // Check for API keys
-  const hasOpenAI = !!(process.env[ENV_VARS.OPENAI_API_KEY] || appConfig.openaiApiKey);
+  // Check for API keys in process.env only
+  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY];
   const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY];
 
   if (hasOpenAI) {
@@ -219,18 +221,23 @@ function getAnthropicConfig(factoryConfig: LLMFactoryConfig): AnthropicLLMConfig
 
 /**
  * Check if any LLM provider is available
+ *
+ * NOTE: Only checks process.env for runtime availability detection.
+ * This allows tests to dynamically disable LLM by clearing env vars.
  */
 export function isLLMAvailable(): boolean {
   if (!isLLMFeatureEnabled()) {
     return false;
   }
-  const hasOpenAI = !!(process.env[ENV_VARS.OPENAI_API_KEY] || appConfig.openaiApiKey);
+  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY];
   const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY];
   return hasOpenAI || hasAnthropic;
 }
 
 /**
  * Get list of available provider types
+ *
+ * NOTE: Only checks process.env for runtime availability detection.
  */
 export function getAvailableProviders(): LLMProviderType[] {
   if (!isLLMFeatureEnabled()) {
@@ -238,7 +245,7 @@ export function getAvailableProviders(): LLMProviderType[] {
   }
   const providers: LLMProviderType[] = ['mock'];
 
-  if (process.env[ENV_VARS.OPENAI_API_KEY] || appConfig.openaiApiKey) {
+  if (process.env[ENV_VARS.OPENAI_API_KEY]) {
     providers.push('openai');
   }
 
