@@ -135,6 +135,20 @@ describe('MemoryService', () => {
     });
   });
 
+  describe('containerTag validation', () => {
+    it('should reject empty containerTag in extractMemories', async () => {
+      await expect(
+        service.extractMemories('Valid content for extraction.', { containerTag: '' })
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('should reject whitespace-only containerTag in extractMemories', async () => {
+      await expect(
+        service.extractMemories('Valid content for extraction.', { containerTag: '   ' })
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
   // ============================================================================
   // Memory Type Classification Tests
   // ============================================================================

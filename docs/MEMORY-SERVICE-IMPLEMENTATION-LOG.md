@@ -42,3 +42,24 @@ Notes
 Metrics (Task Scope)
 - Tests added: 1
 - Files changed: 2
+
+## TASK-003: Validate Empty `containerTag` Values
+Status: Completed
+Time: 2026-02-04
+
+Tests Added
+- `tests/services/memory.service.test.ts` (containerTag validation for extractMemories)
+- `tests/services/memory.repository.test.ts` (containerTag validation on create/update)
+
+Test Runs
+- `npm test -- tests/services/memory.service.test.ts` (pass)
+- `npm test -- tests/services/memory.repository.test.ts` (pass)
+- `npm test` (failed: Redis connection EPERM on `tests/queues/bullmq.test.ts` and `tests/integration/phase2-pipeline.test.ts`)
+
+Notes
+- `extractMemories` now validates `containerTag` when provided.
+- Repository create/update rejects empty or whitespace tags.
+
+Metrics (Task Scope)
+- Tests added: 4
+- Files changed: 4

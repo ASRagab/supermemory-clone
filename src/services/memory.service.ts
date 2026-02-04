@@ -432,6 +432,9 @@ export class MemoryService {
   ): Promise<Memory[]> {
     try {
       validateMemoryContent(content);
+      if (options.containerTag !== undefined) {
+        validate(containerTagSchema, options.containerTag);
+      }
       logger.debug('Extracting memories from content', {
         contentLength: content.length,
         useLLM: this.useLLM && !options.forceRegex,

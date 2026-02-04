@@ -31,7 +31,7 @@ Criteria: Superseding is restricted to the same `containerTag`; cross-container 
 Test cases to add: Supersede within same `containerTag` updates prior record; different `containerTag` does not update prior record; missing `containerTag` behavior remains consistent with existing defaults.
 Depends on: None
 
-- [ ] TASK-003: Validate Empty `containerTag` Values (Impact: Medium, Risk: Low, Size: S)
+- [x] TASK-003: Validate Empty `containerTag` Values (Impact: Medium, Risk: Low, Size: S) ✅
 Files: `src/services/memory.service.ts`, `src/services/memory.repository.ts`
 Tests: `tests/services/memory.service.test.ts`, `tests/services/memory.repository.test.ts`
 Criteria: Empty-string `containerTag` is rejected or normalized consistently at service and repository boundaries.
