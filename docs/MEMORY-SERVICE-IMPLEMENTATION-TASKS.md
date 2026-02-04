@@ -73,7 +73,7 @@ Criteria: When embeddings are disabled, `semanticSearch` performs text search an
 Test cases to add: With embeddings disabled, text search is used and threshold is ignored; with embeddings enabled, threshold filters results; both paths return stable ordering.
 Depends on: TASK-001
 
-- [ ] TASK-009: Align Container Isolation in Relationship Superseding Paths (Impact: Medium, Risk: Low, Size: S)
+- [x] TASK-009: Align Container Isolation in Relationship Superseding Paths (Impact: Medium, Risk: Low, Size: S) ✅
 Files: `src/services/memory.service.ts`, `src/services/relationships/memory-integration.ts`
 Tests: `tests/services/relationships/memory-integration.test.ts`
 Criteria: Relationship-driven superseding respects `containerTag` boundaries throughout integration flow.

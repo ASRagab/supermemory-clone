@@ -245,6 +245,16 @@ export class EnhancedMemoryService {
             detected.relationship.type === 'updates' ||
             detected.relationship.type === 'supersedes'
           ) {
+            const target = await this.repository.findById(detected.relationship.targetMemoryId);
+            if (
+              target &&
+              memory.containerTag &&
+              target.containerTag &&
+              memory.containerTag !== target.containerTag
+            ) {
+              continue;
+            }
+
             await this.repository.markSuperseded(detected.relationship.targetMemoryId, memory.id);
             allSupersededIds.push(detected.relationship.targetMemoryId);
           }

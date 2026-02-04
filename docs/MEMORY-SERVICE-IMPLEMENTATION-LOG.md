@@ -164,3 +164,21 @@ Notes
 Metrics (Task Scope)
 - Tests added: 2
 - Files changed: 3
+
+## TASK-009: Align Container Isolation in Relationship Superseding Paths
+Status: Completed
+Time: 2026-02-04
+
+Tests Added
+- `tests/services/relationships/memory-integration.test.ts` (container isolation in superseding)
+
+Test Runs
+- `npm test -- tests/services/relationships/memory-integration.test.ts` (pass)
+- `npm test` (failed: Redis connection EPERM on `tests/queues/bullmq.test.ts` and `tests/integration/phase2-pipeline.test.ts`)
+
+Notes
+- Superseding via relationship detection now enforces containerTag alignment in both base and enhanced paths.
+
+Metrics (Task Scope)
+- Tests added: 2
+- Files changed: 4

@@ -972,10 +972,20 @@ export class MemoryService {
             containerTag
           );
 
+          const existingById = new Map(existingMemories.map((m) => [m.id, m]));
+
           // Process update relationships - mark old memories as superseded
           for (const rel of relationships) {
             if (rel.type === 'updates' || rel.type === 'supersedes') {
-              const target = existingMemories.find((m) => m.id === rel.targetMemoryId);
+              const target = existingById.get(rel.targetMemoryId);
+              if (
+                target &&
+                memory.containerTag &&
+                target.containerTag &&
+                memory.containerTag !== target.containerTag
+              ) {
+                continue;
+              }
               if (target) {
                 supersedeSnapshots.push({
                   id: target.id,
