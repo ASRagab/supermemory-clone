@@ -82,3 +82,24 @@ Notes
 Metrics (Task Scope)
 - Tests added: 2
 - Files changed: 3
+
+## TASK-005: Fix LLM Helper Services to Use Task-Appropriate Prompts
+Status: Completed
+Time: 2026-02-04
+
+Tests Added
+- None (updated existing LLM helper tests)
+
+Test Runs
+- `npm test -- tests/services/llm/memory-classifier.service.test.ts` (pass)
+- `npm test -- tests/services/llm/contradiction-detector.service.test.ts` (pass)
+- `npm test -- tests/services/llm/memory-extension-detector.service.test.ts` (pass)
+- `npm test` (failed: Redis connection EPERM on `tests/queues/bullmq.test.ts` and `tests/integration/phase2-pipeline.test.ts`)
+
+Notes
+- Added JSON-only LLM helper path with dedicated prompt templates and strict JSON parsing.
+- Mock provider now supports JSON responses for deterministic helper tests.
+
+Metrics (Task Scope)
+- Tests updated: 3 files
+- Files changed: 7

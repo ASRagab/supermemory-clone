@@ -45,7 +45,7 @@ Criteria: If relationship storage or supersede updates fail, the service either 
 Test cases to add: Relationship write failure returns partial result or rollback; supersede update failure returns partial result or rollback; all-success path unchanged.
 Depends on: None
 
-- [ ] TASK-005: Fix LLM Helper Services to Use Task-Appropriate Prompts (Impact: High, Risk: Medium, Size: M)
+- [x] TASK-005: Fix LLM Helper Services to Use Task-Appropriate Prompts (Impact: High, Risk: Medium, Size: M) ✅
 Files: `src/services/llm/memory-classifier.service.ts`, `src/services/llm/contradiction-detector.service.ts`, `src/services/llm/memory-extension-detector.service.ts`, `src/services/llm/index.ts`
 Tests: `tests/services/llm/memory-classifier.service.test.ts`, `tests/services/llm/contradiction-detector.service.test.ts`, `tests/services/llm/memory-extension-detector.service.test.ts`
 Criteria: Helper services no longer call `extractMemories` with a mismatched system prompt; outputs are parsed deterministically; failures return predictable errors.
