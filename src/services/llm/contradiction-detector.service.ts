@@ -169,34 +169,10 @@ export class ContradictionDetectorService {
       }
     }
 
-    // Quick filter for truly unrelated content (performance optimization)
-    // Use a very low threshold (0.05) to only skip completely unrelated content
-    // This prevents wasting LLM calls on "pizza" vs "quantum computing"
-    const overlapRatio = this.calculateWordOverlap(newMemory.content, existingMemory.content);
-    if (overlapRatio < 0.05) {
-      logger.debug('Skipping LLM check for completely unrelated content', { overlap: overlapRatio });
-      const result = {
-        isContradiction: false,
-        confidence: 0,
-        reason: 'Insufficient content overlap - statements discuss different topics',
-        shouldSupersede: false,
-      };
-
-      // Cache this "unrelated" result only if it meets confidence threshold
-      // NOTE: confidence=0 typically won't meet minConfidence, so this usually won't cache
-      if (this.config.enableCache && result.confidence >= this.config.minConfidence) {
-        this.setCached(newMemory.content, existingMemory.content, {
-          ...result,
-          timestamp: Date.now(),
-        });
-      }
-
-      return {
-        ...result,
-        cached: false,
-        usedLLM: false,
-      };
-    }
+    // NOTE: We don't skip LLM based on word overlap anymore.
+    // The LLM should handle semantic analysis - "I live in New York" vs "I moved to San Francisco"
+    // have 0% word overlap but ARE semantically related and need LLM analysis.
+    // Only skip for truly empty content.
 
     // Try LLM detection if available (semantic analysis with minimal overlap filter)
     if (isLLMAvailable()) {
