@@ -66,7 +66,7 @@ Criteria: Only one relationship detection path is used by default; alternate pat
 Test cases to add: Default config uses primary detector; explicit flag routes to alternate detector; outputs match expected relationships for a shared fixture.
 Depends on: TASK-001
 
-- [ ] TASK-008: Clarify `semanticSearch` Behavior and Wire to Embeddings When Enabled (Impact: Medium, Risk: Low, Size: S)
+- [x] TASK-008: Clarify `semanticSearch` Behavior and Wire to Embeddings When Enabled (Impact: Medium, Risk: Low, Size: S) ✅
 Files: `src/services/memory.repository.ts`
 Tests: `tests/services/memory.repository.test.ts`
 Criteria: When embeddings are disabled, `semanticSearch` performs text search and documents that `similarityThreshold` is ignored; when embeddings are enabled, threshold is enforced.

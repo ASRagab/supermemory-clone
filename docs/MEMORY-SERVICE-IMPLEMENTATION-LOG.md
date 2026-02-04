@@ -145,3 +145,22 @@ Notes
 Metrics (Task Scope)
 - Tests added: 2
 - Files changed: 7
+
+## TASK-008: Clarify `semanticSearch` Behavior and Wire to Embeddings When Enabled
+Status: Completed
+Time: 2026-02-04
+
+Tests Added
+- `tests/services/memory.repository.test.ts` (semantic search behavior for both paths)
+
+Test Runs
+- `npm test -- tests/services/memory.repository.test.ts` (pass)
+- `npm test` (failed: Redis connection EPERM on `tests/queues/bullmq.test.ts` and `tests/integration/phase2-pipeline.test.ts`)
+
+Notes
+- When embeddings are disabled, semantic search uses text match and ignores `similarityThreshold`.
+- When embeddings are enabled, cosine similarity and threshold filtering are applied with stable ordering.
+
+Metrics (Task Scope)
+- Tests added: 2
+- Files changed: 3
