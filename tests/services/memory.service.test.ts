@@ -15,7 +15,7 @@ import {
   createMemoryRepository,
   resetMemoryRepository,
 } from '../../src/services/memory.repository';
-import { ValidationError } from '../../src/utils/errors';
+import { AppError, ValidationError } from '../../src/utils/errors';
 import type { Memory, MemoryType, RelationshipType } from '../../src/types/index';
 import { randomUUID } from 'node:crypto';
 
@@ -571,6 +571,86 @@ describe('MemoryService', () => {
 
       expect(latest).toHaveLength(1);
       expect(latest[0]?.id).toBe(id2);
+    });
+  });
+
+  // ============================================================================
+  // processAndStoreMemories Partial Failure Tests
+  // ============================================================================
+
+  describe('processAndStoreMemories partial failures', () => {
+    it('should roll back when relationship storage fails', async () => {
+      const isolatedRepo = createMemoryRepository();
+      const localService = createMemoryService({}, isolatedRepo);
+
+      vi.spyOn(localService, 'detectRelationships').mockImplementation((newMemory, existing) => {
+        if (existing.length === 0) return [];
+        return [
+          {
+            id: randomUUID(),
+            sourceMemoryId: newMemory.id,
+            targetMemoryId: existing[0]!.id,
+            type: 'updates',
+            confidence: 0.8,
+            description: 'test',
+            createdAt: new Date(),
+            metadata: { detectionMethod: 'test' },
+          },
+        ];
+      });
+
+      vi.spyOn(isolatedRepo, 'createRelationshipBatch').mockRejectedValue(
+        new Error('relationship write failed')
+      );
+
+      await expect(
+        localService.processAndStoreMemories(
+          'The deadline is Friday. Update: The deadline is Friday now.'
+        )
+      ).rejects.toBeInstanceOf(AppError);
+
+      const memories = await isolatedRepo.getAllMemories();
+      const relationships = await isolatedRepo.getAllRelationships();
+
+      expect(memories).toHaveLength(0);
+      expect(relationships).toHaveLength(0);
+    });
+
+    it('should roll back when supersede update fails', async () => {
+      const isolatedRepo = createMemoryRepository();
+      const localService = createMemoryService({}, isolatedRepo);
+
+      vi.spyOn(localService, 'detectRelationships').mockImplementation((newMemory, existing) => {
+        if (existing.length === 0) return [];
+        return [
+          {
+            id: randomUUID(),
+            sourceMemoryId: newMemory.id,
+            targetMemoryId: existing[0]!.id,
+            type: 'updates',
+            confidence: 0.8,
+            description: 'test',
+            createdAt: new Date(),
+            metadata: { detectionMethod: 'test' },
+          },
+        ];
+      });
+
+      vi.spyOn(isolatedRepo, 'markSuperseded').mockRejectedValue(
+        new Error('supersede failed')
+      );
+
+      await expect(
+        localService.processAndStoreMemories(
+          'The deadline is Friday. Update: The deadline is Friday now.'
+        )
+      ).rejects.toBeInstanceOf(AppError);
+
+      const memories = await isolatedRepo.getAllMemories();
+      const relationships = await isolatedRepo.getAllRelationships();
+
+      expect(memories).toHaveLength(0);
+      expect(relationships).toHaveLength(0);
     });
   });
 });

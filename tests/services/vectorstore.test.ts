@@ -3,19 +3,15 @@
  *
  * Comprehensive tests for vector store implementations including:
  * - InMemoryVectorStore
- * - SQLiteVSSStore
  * - Factory functions
  * - Migration utilities
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, unlinkSync } from 'node:fs';
 import {
   InMemoryVectorStore,
-  SQLiteVSSStore,
   createVectorStore,
   createInMemoryVectorStore,
-  createSQLiteVSSStore,
   migrateVectorStore,
   getAvailableProviders,
   getBestProvider,
@@ -330,7 +326,7 @@ describe('InMemoryVectorStore', () => {
 // SQLiteVSSStore Tests
 // ============================================================================
 
-describe('SQLiteVSSStore', () => {
+describe.skip('SQLiteVSSStore (REMOVED - unused implementation)', () => {
   let store: SQLiteVSSStore;
 
   beforeEach(async () => {
@@ -480,21 +476,6 @@ describe('VectorStore Factory', () => {
       await store.close();
     });
 
-    it('should create SQLite store', async () => {
-      const store = await createVectorStore({
-        provider: 'sqlite-vss',
-        dimensions: TEST_DIMENSIONS,
-        sqlitePath: TEST_DB_PATH,
-      });
-      await store.initialize();
-
-      expect(store).toBeInstanceOf(SQLiteVSSStore);
-      await store.close();
-
-      // Clean up
-      if (existsSync(TEST_DB_PATH)) unlinkSync(TEST_DB_PATH);
-    });
-
     it('should throw for unknown provider', async () => {
       await expect(
         createVectorStore({
@@ -510,8 +491,7 @@ describe('VectorStore Factory', () => {
       const providers = await getAvailableProviders();
 
       expect(providers.memory).toBe(true);
-      expect(typeof providers['sqlite-vss']).toBe('boolean');
-      expect(typeof providers.chroma).toBe('boolean');
+      expect(typeof providers.pgvector).toBe('boolean');
     });
   });
 
@@ -519,7 +499,7 @@ describe('VectorStore Factory', () => {
     it('should return a valid provider', async () => {
       const provider = await getBestProvider();
 
-      expect(['memory', 'sqlite-vss', 'chroma', 'pgvector']).toContain(provider);
+      expect(['memory', 'pgvector']).toContain(provider);
     });
   });
 

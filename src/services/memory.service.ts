@@ -987,6 +987,59 @@ export class MemoryService {
     relationships: Relationship[];
     supersededMemoryIds: string[];
   }> {
+    const createdMemoryIds: string[] = [];
+    const relationshipIdsToRollback: string[] = [];
+    const supersedeSnapshots: Array<{
+      id: string;
+      isLatest: boolean;
+      supersededBy?: string;
+    }> = [];
+
+    const rollback = async (reason: unknown) => {
+      logger.warn('Rolling back processAndStoreMemories due to failure', {
+        error: reason instanceof Error ? reason.message : String(reason),
+      });
+
+      for (const snapshot of supersedeSnapshots) {
+        try {
+          const existing = await this.repository.findById(snapshot.id);
+          if (existing) {
+            await this.repository.update(snapshot.id, {
+              isLatest: snapshot.isLatest,
+              supersededBy: snapshot.supersededBy,
+            });
+          }
+        } catch (error) {
+          logger.warn('Failed to rollback superseded memory', {
+            memoryId: snapshot.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      for (const relId of relationshipIdsToRollback) {
+        try {
+          await this.repository.deleteRelationship(relId);
+        } catch (error) {
+          logger.warn('Failed to rollback relationship', {
+            relationshipId: relId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      for (const memoryId of createdMemoryIds) {
+        try {
+          await this.repository.delete(memoryId);
+        } catch (error) {
+          logger.warn('Failed to rollback memory', {
+            memoryId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    };
+
     try {
       const containerTag = options.containerTag ?? this.config.defaultContainerTag;
       if (containerTag) {
@@ -1019,6 +1072,7 @@ export class MemoryService {
       for (const memory of extractedMemories) {
         // Store the memory in repository only (no local cache)
         await this.repository.create(memory);
+        createdMemoryIds.push(memory.id);
 
         // Detect relationships if enabled
         if (shouldDetectRelationships) {
@@ -1032,6 +1086,14 @@ export class MemoryService {
           // Process update relationships - mark old memories as superseded
           for (const rel of relationships) {
             if (rel.type === 'updates' || rel.type === 'supersedes') {
+              const target = existingMemories.find((m) => m.id === rel.targetMemoryId);
+              if (target) {
+                supersedeSnapshots.push({
+                  id: target.id,
+                  isLatest: target.isLatest,
+                  supersededBy: target.supersededBy,
+                });
+              }
               await this.repository.markSuperseded(rel.targetMemoryId, memory.id);
               supersededMemoryIds.push(rel.targetMemoryId);
             }
@@ -1039,6 +1101,7 @@ export class MemoryService {
 
           // Store relationships
           if (relationships.length > 0) {
+            relationshipIdsToRollback.push(...relationships.map((rel) => rel.id));
             await this.repository.createRelationshipBatch(relationships);
             allRelationships.push(...relationships);
           }
@@ -1057,6 +1120,7 @@ export class MemoryService {
         supersededMemoryIds,
       };
     } catch (error) {
+      await rollback(error);
       if (error instanceof AppError) {
         throw error;
       }

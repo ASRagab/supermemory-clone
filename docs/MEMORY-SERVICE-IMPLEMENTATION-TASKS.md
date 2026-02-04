@@ -38,7 +38,7 @@ Criteria: Empty-string `containerTag` is rejected or normalized consistently at 
 Test cases to add: Empty string `containerTag` triggers validation error; whitespace-only `containerTag` triggers validation error; valid non-empty tag passes.
 Depends on: None
 
-- [ ] TASK-004: Add Partial-Failure Safeguards in `processAndStoreMemories` (Impact: Medium, Risk: Medium, Size: M)
+- [x] TASK-004: Add Partial-Failure Safeguards in `processAndStoreMemories` (Impact: Medium, Risk: Medium, Size: M) ✅
 Files: `src/services/memory.service.ts`
 Tests: `tests/services/memory.service.test.ts`
 Criteria: If relationship storage or supersede updates fail, the service either rolls back or returns explicit partial-failure metadata; no silent partial state.
