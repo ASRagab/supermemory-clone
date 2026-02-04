@@ -20,7 +20,7 @@ const FACT_PATTERNS: readonly RegExp[] = [
 const EVENT_PATTERNS: readonly RegExp[] = [
   /\b(?:happened|occurred|took place)\b/i,
   /\b(?:yesterday|today|tomorrow|last|next)\s+(?:week|month|year|day)\b/i,
-  /\b(?:on|at)\s+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/i,
+  /\b(?:on|at)\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/i,
   /\b(?:meeting|conference|event|party|celebration)\b/i,
 ];
 

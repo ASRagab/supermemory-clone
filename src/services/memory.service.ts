@@ -212,7 +212,7 @@ const ORGANIZATION_ENTITY_PATTERNS: readonly RegExp[] = [
  */
 const DATE_ENTITY_PATTERNS: readonly RegExp[] = [
   /** Matches numeric date formats: MM/DD/YYYY, DD-MM-YY, etc. */
-  /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/g,
+  /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g,
   /** Matches month name formats: January 15, 2024 or January 15 */
   /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s+\d{4})?\b/gi,
 ] as const;
@@ -379,6 +379,7 @@ export class MemoryService {
         keywords: extracted.keywords,
         entities: extracted.entities,
         extractionMethod: 'llm',
+        classificationMethod: 'llm',
         llmProvider: result.provider,
         tokensUsed: result.tokensUsed?.total,
       },
@@ -439,6 +440,7 @@ export class MemoryService {
           keywords,
           entities,
           extractionMethod: 'regex',
+          classificationMethod: 'heuristic',
         },
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -926,7 +928,11 @@ export class MemoryService {
     };
 
     try {
-      const containerTag = options.containerTag ?? this.config.defaultContainerTag;
+      // Only use default containerTag if not explicitly provided (including undefined)
+      const containerTag = 'containerTag' in options
+        ? options.containerTag
+        : this.config.defaultContainerTag;
+
       if (containerTag) {
         validate(containerTagSchema, containerTag);
       }
@@ -971,6 +977,12 @@ export class MemoryService {
             existingMemories,
             containerTag
           );
+
+          // Set relationship detection method in memory metadata
+          const relationshipMethod = this.useEmbeddingRelationships && this.embeddingService
+            ? 'embedding'
+            : 'heuristic';
+          memory.metadata.relationshipMethod = relationshipMethod;
 
           const existingById = new Map(existingMemories.map((m) => [m.id, m]));
 

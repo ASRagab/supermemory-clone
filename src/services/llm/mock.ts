@@ -50,7 +50,7 @@ const ENTITY_PATTERNS: Array<{ pattern: RegExp; type: Entity['type'] }> = [
   { pattern: /\b(?:Inc\.|Corp\.|LLC|Ltd\.|Company)\b/gi, type: 'organization' },
   { pattern: /\b(?:Google|Microsoft|Apple|Amazon|Meta)\b/gi, type: 'organization' },
   { pattern: /\b(?:New York|London|Paris|Tokyo|San Francisco)\b/gi, type: 'place' },
-  { pattern: /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/g, type: 'date' },
+  { pattern: /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, type: 'date' },
 ];
 
 // ============================================================================
