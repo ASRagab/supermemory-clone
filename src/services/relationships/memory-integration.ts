@@ -167,6 +167,20 @@ export class EnhancedMemoryService {
     const shouldDetectContradictions =
       options.detectContradictions ?? this.config.detectContradictions;
 
+    if (!this.config.useEmbeddingDetection || !shouldDetectRelationships) {
+      const baseResult = await this.baseService.processAndStoreMemories(content, {
+        containerTag: options.containerTag,
+        sourceId: options.sourceId,
+        detectRelationships: shouldDetectRelationships,
+      });
+
+      return {
+        ...baseResult,
+        contradictions: [],
+        detectionResults: [],
+      };
+    }
+
     logger.debug('Processing content with enhanced detection', {
       containerTag: options.containerTag,
       detectRelationships: shouldDetectRelationships,
@@ -214,7 +228,7 @@ export class EnhancedMemoryService {
       }
 
       // Detect relationships if enabled
-      if (shouldDetectRelationships && this.config.useEmbeddingDetection) {
+      if (shouldDetectRelationships) {
         const result = await this.relationshipDetector.detectRelationships(memory, {
           containerTag: options.containerTag,
           excludeIds: extractedMemories.map((m) => m.id),
@@ -246,26 +260,6 @@ export class EnhancedMemoryService {
         // Collect contradictions
         if (shouldDetectContradictions) {
           allContradictions.push(...result.contradictions);
-        }
-      } else if (shouldDetectRelationships) {
-        // Fall back to regex-based detection
-        const existingMemories = await this.repository.findPotentialRelations(memory, {
-          containerTag: options.containerTag,
-          limit: this.config.maxRelationshipComparisons,
-        });
-
-        const relationships = this.baseService.detectRelationships(memory, existingMemories);
-
-        for (const rel of relationships) {
-          if (rel.type === 'updates' || rel.type === 'supersedes') {
-            await this.repository.markSuperseded(rel.targetMemoryId, memory.id);
-            allSupersededIds.push(rel.targetMemoryId);
-          }
-        }
-
-        if (relationships.length > 0) {
-          await this.repository.createRelationshipBatch(relationships);
-          allRelationships.push(...relationships);
         }
       }
     }

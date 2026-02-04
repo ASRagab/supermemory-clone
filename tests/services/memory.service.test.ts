@@ -583,6 +583,104 @@ describe('MemoryService', () => {
   });
 
   // ============================================================================
+  // Relationship Detection Path Selection
+  // ============================================================================
+
+  describe('relationship detection path selection', () => {
+    it('should route to embedding detector when embeddings flag is enabled', async () => {
+      const originalEnv = { ...process.env };
+      process.env.MEMORY_ENABLE_EMBEDDINGS = 'true';
+      vi.resetModules();
+
+      const mockDetect = vi.fn(async () => ({
+        sourceMemory: {
+          id: 'mem-new',
+          content: 'New content',
+          type: 'fact',
+          relationships: [],
+          isLatest: true,
+          confidence: 0.8,
+          metadata: { confidence: 0.8 },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        relationships: [
+          {
+            relationship: {
+              id: 'rel-1',
+              sourceMemoryId: 'mem-new',
+              targetMemoryId: 'mem-old',
+              type: 'related',
+              confidence: 0.8,
+              createdAt: new Date(),
+            },
+            score: 0.8,
+            vectorSimilarity: 0.8,
+            entityOverlap: 0,
+            temporalScore: 0,
+            llmVerified: false,
+            detectionStrategy: 'similarity',
+          },
+        ],
+        supersededMemoryIds: [],
+        contradictions: [],
+        stats: {
+          candidatesEvaluated: 1,
+          relationshipsDetected: 1,
+          byType: {
+            updates: 0,
+            extends: 0,
+            derives: 0,
+            contradicts: 0,
+            related: 1,
+            supersedes: 0,
+          },
+          llmVerifications: 0,
+          processingTimeMs: 1,
+          fromCache: false,
+        },
+      }));
+
+      vi.doMock('../../src/services/relationships/detector', () => ({
+        detectRelationshipsWithEmbeddings: mockDetect,
+      }));
+
+      vi.doMock('../../src/services/embedding.service', () => ({
+        getEmbeddingService: () => ({
+          generateEmbedding: vi.fn(async () => [0.1, 0.2, 0.3]),
+          batchEmbed: vi.fn(async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3])),
+        }),
+      }));
+
+      const { createMemoryService, resetMemoryService } = await import(
+        '../../src/services/memory.service'
+      );
+      const { createMemoryRepository, resetMemoryRepository } = await import(
+        '../../src/services/memory.repository'
+      );
+
+      resetMemoryRepository();
+      resetMemoryService();
+      const repo = createMemoryRepository();
+      const embeddingService = createMemoryService({}, repo);
+
+      try {
+        const result = await embeddingService.processAndStoreMemories(
+          'First sentence about REST. Second sentence about REST.',
+          { detectRelationships: true }
+        );
+
+        expect(mockDetect).toHaveBeenCalled();
+        expect(result.relationships).toHaveLength(1);
+        expect(result.relationships[0]?.type).toBe('related');
+      } finally {
+        process.env = { ...originalEnv };
+        vi.resetModules();
+      }
+    });
+  });
+
+  // ============================================================================
   // processAndStoreMemories Partial Failure Tests
   // ============================================================================
 

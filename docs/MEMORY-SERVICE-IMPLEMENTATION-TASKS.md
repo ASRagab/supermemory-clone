@@ -59,7 +59,7 @@ Criteria: Heuristic patterns exist in a single module and are used consistently 
 Test cases to add: Shared heuristics module returns same classification for a set of fixtures; memory service and mock classifier both use shared results.
 Depends on: TASK-005
 
-- [ ] TASK-007: Consolidate Relationship Detection Default Path (Impact: Medium, Risk: Low, Size: M)
+- [x] TASK-007: Consolidate Relationship Detection Default Path (Impact: Medium, Risk: Low, Size: M) ✅
 Files: `src/services/memory.service.ts`, `src/services/relationships/detector.ts`, `src/services/relationships/memory-integration.ts`, `src/config/feature-flags.ts` (or existing config module)
 Tests: `tests/services/relationships/detector.test.ts`, `tests/services/memory.service.test.ts`
 Criteria: Only one relationship detection path is used by default; alternate path is gated behind a flag with parity tests.

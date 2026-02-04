@@ -22,6 +22,8 @@ import { generateId } from '../utils/id.js';
 import { getLogger } from '../utils/logger.js';
 import { AppError, ValidationError, ErrorCode } from '../utils/errors.js';
 import { validate, validateMemoryContent, containerTagSchema } from '../utils/validation.js';
+import { isEmbeddingRelationshipsEnabled } from '../config/feature-flags.js';
+import { getEmbeddingService, type EmbeddingService } from './embedding.service.js';
 import {
   Memory,
   Relationship,
@@ -48,6 +50,7 @@ import {
   classifyMemoryTypeHeuristically,
   countMemoryTypeMatches,
 } from './llm/heuristics.js';
+import { detectRelationshipsWithEmbeddings } from './relationships/detector.js';
 
 const logger = getLogger('MemoryService');
 
@@ -234,6 +237,8 @@ export class MemoryService {
   private config: MemoryServiceConfig;
   private llmProvider: LLMProvider | null = null;
   private useLLM: boolean;
+  private useEmbeddingRelationships: boolean;
+  private embeddingService: EmbeddingService | null = null;
   // Note: Removed redundant `this.memories` Map to avoid dual storage inconsistency.
   // All storage operations now go through the repository only.
 
@@ -259,9 +264,15 @@ export class MemoryService {
       logger.info('No LLM provider configured, using regex-based extraction');
     }
 
+    this.useEmbeddingRelationships = isEmbeddingRelationshipsEnabled();
+    if (this.useEmbeddingRelationships) {
+      this.embeddingService = getEmbeddingService();
+    }
+
     logger.debug('MemoryService initialized', {
       config: this.config,
       useLLM: this.useLLM,
+      useEmbeddings: this.useEmbeddingRelationships,
     });
   }
 
@@ -602,6 +613,44 @@ export class MemoryService {
   }
 
   /**
+   * Detect relationships using the default path selection.
+   * Embedding detection is used only when explicitly enabled.
+   */
+  private async detectRelationshipsForMemory(
+    newMemory: Memory,
+    existingMemories: Memory[],
+    containerTag?: string
+  ): Promise<Relationship[]> {
+    if (!this.useEmbeddingRelationships || !this.embeddingService) {
+      return this.detectRelationships(newMemory, existingMemories);
+    }
+
+    if (existingMemories.length === 0) {
+      return [];
+    }
+
+    try {
+      const result = await detectRelationshipsWithEmbeddings(
+        newMemory,
+        existingMemories,
+        this.embeddingService,
+        {
+          containerTag,
+          config: {
+            maxCandidates: this.config.maxRelationshipComparisons,
+          },
+        }
+      );
+      return result.relationships.map((rel) => rel.relationship);
+    } catch (error) {
+      logger.warn('Embedding relationship detection failed, falling back to patterns', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return this.detectRelationships(newMemory, existingMemories);
+    }
+  }
+
+  /**
    * Classify the type of memory from content
    *
    * @param content - The content to classify
@@ -917,7 +966,11 @@ export class MemoryService {
             limit: this.config.maxRelationshipComparisons,
           });
 
-          const relationships = this.detectRelationships(memory, existingMemories);
+          const relationships = await this.detectRelationshipsForMemory(
+            memory,
+            existingMemories,
+            containerTag
+          );
 
           // Process update relationships - mark old memories as superseded
           for (const rel of relationships) {

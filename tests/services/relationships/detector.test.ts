@@ -7,6 +7,7 @@ import {
   EmbeddingRelationshipDetector,
   InMemoryVectorStoreAdapter,
   createEmbeddingRelationshipDetector,
+  detectRelationshipsWithEmbeddings,
 } from '../../../src/services/relationships/detector.js';
 import type { Memory } from '../../../src/services/memory.types.js';
 import type { EmbeddingService } from '../../../src/services/embedding.service.js';
@@ -219,6 +220,31 @@ describe('EmbeddingRelationshipDetector', () => {
 
     // Should find at least one relationship
     expect(result.stats.candidatesEvaluated).toBeGreaterThan(0);
+  });
+
+  it('should detect relationships using embedding helper for candidates', async () => {
+    const existingMemory = createTestMemory('existing', 'The user prefers dark mode for their IDE');
+    const newMemory = createTestMemory('new', 'The user prefers dark mode for their IDE');
+
+    const result = await detectRelationshipsWithEmbeddings(
+      newMemory,
+      [existingMemory],
+      embeddingService,
+      {
+        config: {
+          thresholds: {
+            updates: 1.1,
+            extends: 0.1,
+            contradicts: 1.1,
+            supersedes: 1.1,
+            related: 0.1,
+            derives: 1.1,
+          },
+        },
+      }
+    );
+
+    expect(result.relationships.length).toBeGreaterThanOrEqual(1);
   });
 
   it('should detect update relationships', async () => {

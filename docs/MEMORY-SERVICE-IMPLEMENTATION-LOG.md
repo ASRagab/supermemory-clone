@@ -124,3 +124,24 @@ Notes
 Metrics (Task Scope)
 - Tests added: 2
 - Files changed: 7
+
+## TASK-007: Consolidate Relationship Detection Default Path
+Status: Completed
+Time: 2026-02-04
+
+Tests Added
+- `tests/services/relationships/detector.test.ts` (embedding helper parity)
+- `tests/services/memory.service.test.ts` (embedding path selection)
+
+Test Runs
+- `npm test -- tests/services/relationships/detector.test.ts` (pass)
+- `npm test -- tests/services/memory.service.test.ts` (pass)
+- `npm test` (failed: Redis connection EPERM on `tests/queues/bullmq.test.ts` and `tests/integration/phase2-pipeline.test.ts`)
+
+Notes
+- Default relationship detection now routes to pattern-based path unless embedding flag is enabled.
+- Embedding detection path consolidated via a helper that accepts candidate memories.
+
+Metrics (Task Scope)
+- Tests added: 2
+- Files changed: 7
