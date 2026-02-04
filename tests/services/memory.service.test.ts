@@ -11,6 +11,7 @@ import {
   createMemoryService,
   resetMemoryService,
 } from '../../src/services/memory.service';
+import { classifyMemoryTypeHeuristically } from '../../src/services/llm/heuristics';
 import {
   createMemoryRepository,
   resetMemoryRepository,
@@ -292,6 +293,13 @@ describe('MemoryService', () => {
           'note',
         ];
         expect(validTypes).toContain(type);
+      });
+
+      it('should align with shared heuristics module', () => {
+        const content = 'I prefer TypeScript over JavaScript.';
+        const heuristic = classifyMemoryTypeHeuristically(content);
+
+        expect(service.classifyMemoryType(content)).toBe(heuristic.type);
       });
     });
   });

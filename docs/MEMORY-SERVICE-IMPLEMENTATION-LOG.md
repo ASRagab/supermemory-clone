@@ -103,3 +103,24 @@ Notes
 Metrics (Task Scope)
 - Tests updated: 3 files
 - Files changed: 7
+
+## TASK-006: Deduplicate Classification Heuristics
+Status: Completed
+Time: 2026-02-04
+
+Tests Added
+- `tests/services/llm/heuristics.test.ts` (shared heuristics fixtures and parity checks)
+- `tests/services/memory.service.test.ts` (heuristics alignment check)
+
+Test Runs
+- `npm test -- tests/services/llm/heuristics.test.ts` (pass)
+- `npm test -- tests/services/memory.service.test.ts` (pass)
+- `npm test -- tests/services/llm/memory-classifier.service.test.ts` (pass)
+- `npm test` (failed: Redis connection EPERM on `tests/queues/bullmq.test.ts` and `tests/integration/phase2-pipeline.test.ts`)
+
+Notes
+- Added shared heuristics module and routed memory service, classifier fallback, and mock provider through it.
+
+Metrics (Task Scope)
+- Tests added: 2
+- Files changed: 7

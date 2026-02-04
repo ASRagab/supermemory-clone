@@ -44,152 +44,12 @@ import {
   getContradictionDetector,
   getMemoryExtensionDetector,
 } from './llm/index.js';
+import {
+  classifyMemoryTypeHeuristically,
+  countMemoryTypeMatches,
+} from './llm/heuristics.js';
 
 const logger = getLogger('MemoryService');
-
-// ============================================================================
-// Memory Type Classification Patterns
-// ============================================================================
-
-/**
- * Patterns for classifying content as factual statements.
- * Matches declarative sentences with being verbs, life events, or definitional statements.
- *
- * @example "Paris is the capital of France" - matches being verb pattern
- * @example "Einstein was born in 1879" - matches life event pattern
- */
-const FACT_PATTERNS: readonly RegExp[] = [
-  /** Matches being/having verbs: is, are, was, were, has, have, had */
-  /\b(?:is|are|was|were|has|have|had)\b/i,
-  /** Matches life events: born, died, founded, created, invented */
-  /\b(?:born|died|founded|created|invented)\b/i,
-  /** Matches location statements: located in, situated at, found on */
-  /\b(?:located|situated|found)\s+(?:in|at|on)\b/i,
-  /** Matches definitional statements: equals, means, represents */
-  /\b(?:equals|means|represents)\b/i,
-] as const;
-
-/**
- * Patterns for classifying content as events or time-bound occurrences.
- * Matches past/future events with temporal references or event-type nouns.
- *
- * @example "The meeting happened yesterday" - matches occurrence pattern
- * @example "Conference on 12/15/2024" - matches date pattern
- */
-const EVENT_PATTERNS: readonly RegExp[] = [
-  /** Matches occurrence verbs: happened, occurred, took place */
-  /\b(?:happened|occurred|took place)\b/i,
-  /** Matches relative time references: yesterday, today, last week, next month */
-  /\b(?:yesterday|today|tomorrow|last|next)\s+(?:week|month|year|day)\b/i,
-  /** Matches date formats: MM/DD/YYYY, DD-MM-YY, etc. */
-  /\b(?:on|at)\s+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/i,
-  /** Matches event nouns: meeting, conference, event, party, celebration */
-  /\b(?:meeting|conference|event|party|celebration)\b/i,
-] as const;
-
-/**
- * Patterns for classifying content as personal preferences.
- * Matches sentiment expressions and habitual behavior patterns.
- *
- * @example "I prefer TypeScript over JavaScript" - matches preference verb
- * @example "My favorite editor is VS Code" - matches superlative pattern
- */
-const PREFERENCE_PATTERNS: readonly RegExp[] = [
-  /** Matches preference verbs: prefer, like, love, enjoy, hate, dislike */
-  /\b(?:prefer|like|love|enjoy|hate|dislike)\b/i,
-  /** Matches superlatives: favorite, favourite, best, worst */
-  /\b(?:favorite|favourite|best|worst)\b/i,
-  /** Matches desire verbs: want, wish, hope, desire */
-  /\b(?:want|wish|hope|desire)\b/i,
-  /** Matches habitual patterns: always use, never choose, usually pick */
-  /\b(?:always|never|usually|often)\s+(?:use|choose|pick|select)\b/i,
-] as const;
-
-/**
- * Patterns for classifying content as skills or capabilities.
- * Matches ability statements and expertise declarations.
- *
- * @example "I know how to write Python" - matches knowledge pattern
- * @example "Expert in machine learning" - matches expertise pattern
- */
-const SKILL_PATTERNS: readonly RegExp[] = [
-  /** Matches knowledge acquisition: know how to, learn to, understand how to */
-  /\b(?:know|learn|understand|master)\s+(?:how to|to)\b/i,
-  /** Matches ability modals: can, able to, capable of */
-  /\b(?:can|able to|capable of)\b/i,
-  /** Matches expertise declarations: expert in, proficient at, skilled with */
-  /\b(?:expert|proficient|skilled|experienced)\s+(?:in|at|with)\b/i,
-  /** Matches technical activities: programming, coding, developing, designing */
-  /\b(?:programming|coding|developing|designing)\b/i,
-] as const;
-
-/**
- * Patterns for classifying content as interpersonal relationships.
- * Matches family relations, professional connections, and social bonds.
- *
- * @example "Married to Jane since 2020" - matches marital status
- * @example "Works for Google" - matches employment pattern
- */
-const RELATIONSHIP_PATTERNS: readonly RegExp[] = [
-  /** Matches relationship status: married, engaged, dating, friends with */
-  /\b(?:married|engaged|dating|friends with)\b/i,
-  /** Matches employment relations: works for, worked with, works at */
-  /\b(?:works|worked)\s+(?:for|with|at)\b/i,
-  /** Matches family relations: brother, sister, mother, father, parent, child, spouse */
-  /\b(?:brother|sister|mother|father|parent|child|spouse)\b/i,
-  /** Matches professional relations: colleague, teammate, partner, boss, manager */
-  /\b(?:colleague|teammate|partner|boss|manager)\b/i,
-] as const;
-
-/**
- * Patterns for classifying content as current context or situation.
- * Matches temporal state indicators and situational descriptors.
- *
- * @example "Currently working on the authentication module" - matches temporal + activity
- * @example "In the context of the refactoring project" - matches contextual phrase
- */
-const CONTEXT_PATTERNS: readonly RegExp[] = [
-  /** Matches present-moment indicators: currently, right now, at the moment */
-  /\b(?:currently|right now|at the moment)\b/i,
-  /** Matches ongoing activities: working on, thinking about, planning */
-  /\b(?:working on|thinking about|planning)\b/i,
-  /** Matches contextual phrases: in the context of, regarding, about */
-  /\b(?:in the context of|regarding|about)\b/i,
-  /** Matches situational nouns: situation, scenario, case */
-  /\b(?:situation|scenario|case)\b/i,
-] as const;
-
-/**
- * Patterns for classifying content as notes or reminders.
- * Matches note-taking conventions and reminder phrases.
- *
- * @example "Note: Remember to update the docs" - matches note prefix
- * @example "- Todo item" - matches list marker
- */
-const NOTE_PATTERNS: readonly RegExp[] = [
-  /** Matches note prefixes: note:, reminder:, todo:, remember: */
-  /^(?:note|reminder|todo|remember)\s*:/i,
-  /** Matches reminder phrases: don't forget, keep in mind, note that */
-  /\b(?:don't forget|keep in mind|note that)\b/i,
-  /** Matches list markers: #, *, - at start of line */
-  /^#|^\*|^-\s/m,
-  /** Matches importance markers: important point, key note, critical fact */
-  /\b(?:important|key|critical)\s+(?:point|note|fact)\b/i,
-] as const;
-
-/**
- * Combined memory type patterns for classification.
- * Maps each MemoryType to its corresponding regex patterns.
- */
-const MEMORY_TYPE_PATTERNS: Record<MemoryType, readonly RegExp[]> = {
-  fact: FACT_PATTERNS,
-  event: EVENT_PATTERNS,
-  preference: PREFERENCE_PATTERNS,
-  skill: SKILL_PATTERNS,
-  relationship: RELATIONSHIP_PATTERNS,
-  context: CONTEXT_PATTERNS,
-  note: NOTE_PATTERNS,
-};
 
 // ============================================================================
 // Relationship Detection Patterns
@@ -757,32 +617,8 @@ export class MemoryService {
     // For new classifications, it falls back to pattern matching
     // To use LLM async, call: await classifier.classify(content)
 
-    // Pattern matching fallback (kept for synchronous calls)
-    const scores: Record<MemoryType, number> = {
-      fact: 0,
-      event: 0,
-      preference: 0,
-      skill: 0,
-      relationship: 0,
-      context: 0,
-      note: 0,
-    };
-
-    for (const [type, patterns] of Object.entries(MEMORY_TYPE_PATTERNS)) {
-      for (const pattern of patterns) {
-        if (pattern.test(content)) {
-          scores[type as MemoryType] += 1;
-        }
-      }
-    }
-
-    const maxScore = Math.max(...Object.values(scores));
-    if (maxScore === 0) {
-      return 'note';
-    }
-
-    const matchedType = Object.entries(scores).find(([_, score]) => score === maxScore);
-    return (matchedType?.[0] as MemoryType) || 'note';
+    const heuristic = classifyMemoryTypeHeuristically(content);
+    return heuristic.type;
   }
 
   /**
@@ -1332,11 +1168,7 @@ export class MemoryService {
     if (content.length > 200) confidence += 0.1;
 
     // Pattern matches increase confidence
-    const patterns = MEMORY_TYPE_PATTERNS[type] || [];
-    let matchCount = 0;
-    for (const pattern of patterns) {
-      if (pattern.test(content)) matchCount++;
-    }
+    const matchCount = countMemoryTypeMatches(content, type);
     confidence += Math.min(matchCount * 0.1, 0.2);
 
     return Math.min(confidence, 1);

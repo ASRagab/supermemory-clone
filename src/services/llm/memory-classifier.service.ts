@@ -18,6 +18,10 @@ import { createHash } from 'crypto';
 import type { MemoryType } from '../../types/index.js';
 import { getLLMProvider, isLLMAvailable } from './index.js';
 import { LLMError } from './base.js';
+import {
+  classifyMemoryTypeHeuristically,
+  calculateHeuristicConfidence,
+} from './heuristics.js';
 
 const logger = getLogger('MemoryClassifier');
 
@@ -77,47 +81,6 @@ interface CacheEntry {
   reasoning?: string;
   timestamp: number;
 }
-
-// ============================================================================
-// Pattern Matching Fallback
-// ============================================================================
-
-const MEMORY_TYPE_PATTERNS: Record<MemoryType, RegExp[]> = {
-  fact: [
-    /^(the |a |an )?.*\b(is|are|was|were|has|have|had|will|would|can|could|does|did)\b/i,
-    /\b(definition|means|refers to|known as|called)\b/i,
-    /^\w+\s+(is|are)\s+/i,
-  ],
-  event: [
-    /\b(yesterday|today|tomorrow|last|next|on|at|during|when)\b.*\b(met|happened|occurred|took place|went|came|attended|joined)\b/i,
-    /\b(meeting|appointment|conference|event|session|call)\b/i,
-    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
-    /\b\d{1,2}:\d{2}\b/i, // Time patterns
-  ],
-  preference: [
-    /\b(prefer|like|love|enjoy|hate|dislike|favorite|favour)\b/i,
-    /\b(better than|rather than|instead of)\b/i,
-    /\b(always|never|usually|typically|tend to)\b.*\b(use|choose|pick|select)\b/i,
-  ],
-  skill: [
-    /\b(expert|proficient|experienced|skilled|know|understand|can|able)\b.*\b(in|with|at)\b/i,
-    /\b(years?|months?)\s+(of\s+)?(experience|working|using|building)\b/i,
-    /\b(programming|development|design|analysis|testing)\b/i,
-  ],
-  relationship: [
-    /\b(works? for|employed by|colleague|teammate|manager|friend|mentor|family)\b/i,
-    /\b(knows?|met|introduced|connected with)\b.*\b(person|people|team)\b/i,
-    /\b(relationship|connection|association)\b/i,
-  ],
-  context: [
-    /\b(currently|now|at the moment|working on|in progress)\b/i,
-    /\b(status|situation|state|condition)\b/i,
-  ],
-  note: [
-    /\b(note|reminder|todo|task|remember|don't forget)\b/i,
-    /^(note:|reminder:|todo:)/i,
-  ],
-};
 
 // ============================================================================
 // Memory Type Classifier
@@ -298,41 +261,19 @@ export class MemoryClassifierService {
     type: MemoryType;
     confidence: number;
   } {
-    const scores: Record<MemoryType, number> = {
-      fact: 0,
-      event: 0,
-      preference: 0,
-      skill: 0,
-      relationship: 0,
-      context: 0,
-      note: 0,
-    };
-
-    // Test each pattern
-    for (const [type, patterns] of Object.entries(MEMORY_TYPE_PATTERNS)) {
-      for (const pattern of patterns) {
-        if (pattern.test(content)) {
-          scores[type as MemoryType] += 1;
-        }
-      }
-    }
-
-    // Find highest scoring type
-    const maxScore = Math.max(...Object.values(scores));
-    if (maxScore === 0) {
-      return { type: 'note', confidence: 0.3 };
-    }
-
-    const matchedType = Object.entries(scores).find(([_, score]) => score === maxScore);
-    const type = (matchedType?.[0] as MemoryType) || 'note';
-
-    // Calculate confidence based on number of pattern matches
-    const confidence = Math.min(0.5 + maxScore * 0.1, 0.9);
+    const heuristic = classifyMemoryTypeHeuristically(content);
+    const type = heuristic.type;
+    const confidence = calculateHeuristicConfidence(heuristic.matchCount, {
+      base: 0.5,
+      perMatch: 0.1,
+      max: 0.9,
+      defaultConfidence: 0.3,
+    });
 
     logger.debug('Pattern classification', {
       type,
       confidence,
-      matchCount: maxScore,
+      matchCount: heuristic.matchCount,
     });
 
     return { type, confidence };

@@ -52,7 +52,7 @@ Criteria: Helper services no longer call `extractMemories` with a mismatched sys
 Test cases to add: Each helper uses dedicated prompt template; JSON-only outputs parse successfully; incorrect model output yields structured error; feature flag off bypasses helper execution.
 Depends on: TASK-001
 
-- [ ] TASK-006: Deduplicate Classification Heuristics (Impact: Medium, Risk: Low, Size: S)
+- [x] TASK-006: Deduplicate Classification Heuristics (Impact: Medium, Risk: Low, Size: S) ✅
 Files: `src/services/llm/memory-classifier.service.ts`, `src/services/llm/mock.ts`, `src/services/memory.service.ts`, `src/services/llm/heuristics.ts` (new)
 Tests: `tests/services/llm/heuristics.test.ts`, `tests/services/memory.service.test.ts`
 Criteria: Heuristic patterns exist in a single module and are used consistently by live and mock paths.

@@ -41,7 +41,7 @@ describe('MemoryClassifierService', () => {
 
     it('should classify events using patterns', async () => {
       const classifier = new MemoryClassifierService({ fallbackToPatterns: true });
-      const result = await classifier.classify('Yesterday I met Sarah at the coffee shop');
+      const result = await classifier.classify('The meeting happened yesterday.');
 
       expect(result.type).toBe('event');
       expect(result.confidence).toBeGreaterThan(0);

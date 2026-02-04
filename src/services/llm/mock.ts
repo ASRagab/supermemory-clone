@@ -17,6 +17,11 @@ import type {
 } from './types.js';
 import { LLMErrorCode } from './types.js';
 import type { MemoryType, Entity } from '../../types/index.js';
+import {
+  classifyMemoryTypeHeuristically,
+  countMemoryTypeMatches,
+  calculateHeuristicConfidence,
+} from './heuristics.js';
 
 const logger = getLogger('MockProvider');
 
@@ -38,19 +43,6 @@ const DEFAULT_MOCK_CONFIG: MockLLMConfig = {
 // ============================================================================
 // Rule-Based Extraction Patterns
 // ============================================================================
-
-const TYPE_PATTERNS: Array<{ pattern: RegExp; type: MemoryType }> = [
-  { pattern: /\b(?:prefer|like|love|enjoy|hate|dislike|favorite)\b/i, type: 'preference' },
-  { pattern: /\b(?:can|able to|know how to|expert|skilled|proficient)\b/i, type: 'skill' },
-  { pattern: /\b(?:happened|occurred|event|meeting|yesterday|tomorrow)\b/i, type: 'event' },
-  {
-    pattern: /\b(?:married|spouse|friend|colleague|works for|works with)\b/i,
-    type: 'relationship',
-  },
-  { pattern: /\b(?:currently|right now|working on|in progress)\b/i, type: 'context' },
-  { pattern: /\b(?:note|reminder|todo|remember to)\b/i, type: 'note' },
-  { pattern: /\b(?:is|are|was|were|has|have)\b/i, type: 'fact' },
-];
 
 const ENTITY_PATTERNS: Array<{ pattern: RegExp; type: Entity['type'] }> = [
   { pattern: /\b(?:Mr\.|Mrs\.|Ms\.|Dr\.)\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/g, type: 'person' },
@@ -311,12 +303,7 @@ export class MockLLMProvider extends BaseLLMProvider {
   }
 
   private classifyType(text: string): MemoryType {
-    for (const { pattern, type } of TYPE_PATTERNS) {
-      if (pattern.test(text)) {
-        return type;
-      }
-    }
-    return 'note';
+    return classifyMemoryTypeHeuristically(text).type;
   }
 
   private extractEntities(text: string): Entity[] {
@@ -416,13 +403,16 @@ export class MockLLMProvider extends BaseLLMProvider {
     if (text.length > 100) confidence += 0.1;
     if (text.length > 200) confidence += 0.1;
 
-    // Type-specific patterns boost confidence
-    for (const { pattern, type: patternType } of TYPE_PATTERNS) {
-      if (patternType === type && pattern.test(text)) {
-        confidence += 0.1;
-        break;
-      }
-    }
+    const matchCount = countMemoryTypeMatches(text, type);
+    confidence = Math.max(
+      confidence,
+      calculateHeuristicConfidence(matchCount, {
+        base: 0.6,
+        perMatch: 0.1,
+        max: 0.95,
+        defaultConfidence: 0.6,
+      })
+    );
 
     return Math.min(confidence, 0.95);
   }
