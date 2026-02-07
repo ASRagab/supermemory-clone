@@ -1,95 +1,173 @@
 # Supermemory Clone
 
-Local-first AI memory service with PostgreSQL + pgvector for semantic search. Designed for AI agents and personal knowledge management.
+Local-first memory service for developers and coding agents.
 
-## What it is
+It stores documents, extracts memories, indexes embeddings, and serves search/profile APIs plus an MCP server for agent workflows.
 
-- Local-first memory storage and retrieval
-- Semantic search via pgvector (HNSW)
-- Multi-tenant isolation with container tags
-- Optional LLM extraction (OpenAI/Anthropic)
-- MCP server for agent integrations
+## What It Does
 
-## Quick links
+- Ingests text and files into documents.
+- Extracts memory units and profile facts.
+- Supports semantic, memory, and hybrid search.
+- Exposes REST API (`/api/v1/*`) and MCP tools (`supermemory_*`).
+- Runs with PostgreSQL + pgvector; Redis is optional (queue path) because inline fallback is built in.
 
-- Dev environment: [`docs/dev-environment-setup.md`](./docs/dev-environment-setup.md)
-- Database setup: [`docs/database-setup.md`](./docs/database-setup.md)
-- Migrations: [`scripts/migrations/README.md`](./scripts/migrations/README.md)
-- Database schema: [`src/db/schema/README.md`](./src/db/schema/README.md)
-- Workers: [`src/workers/README.md`](./src/workers/README.md)
-- API design: [`docs/api-design.md`](./docs/api-design.md)
-- Production deployment: [`docs/PRODUCTION-DEPLOYMENT-GUIDE.md`](./docs/PRODUCTION-DEPLOYMENT-GUIDE.md)
-- Database tests: [`tests/database/README.md`](./tests/database/README.md)
-- Documentation archive: [`docs/archive/README.md`](./docs/archive/README.md)
+## Architecture (High Level)
+
+- `src/index.ts`: Hono API server, middleware stack, route mounting.
+- `src/api/routes/*`: documents, search, profiles endpoints.
+- `src/services/*`: document processing, memory extraction, search, profile logic.
+- `src/mcp/*`: MCP server, tools, resources, rate limiting.
+- `src/db/*`: database client routing (PostgreSQL in runtime; SQLite only for tests).
+- `src/queues/*` + `src/workers/*`: BullMQ pipeline (`extraction -> chunking -> embedding -> indexing`).
 
 ## Requirements
 
-- Node.js 20+
-- PostgreSQL 16+ with pgvector
-- Docker (optional, recommended for local DB)
+- Node.js >= 20
+- PostgreSQL with pgvector
+- Redis (optional but recommended for async workers)
 
-## Quick start (local)
+## Quick Start (Turnkey)
 
 ```bash
-git clone <repo>
+git clone <repo-url>
 cd supermemory-clone
 npm install
-
 npm run setup
 
-docker compose up -d postgres
+# Start dependencies (minimum: postgres)
+docker compose up -d postgres redis
 
+# Apply SQL migrations
 ./scripts/migrations/run_migrations.sh
 
+# Validate env + connectivity
 npm run doctor
+
+# Start API
 npm run dev
+```
+
+Health check:
+
+```bash
 curl http://localhost:3000/health
 ```
 
-## Configuration (essentials)
+## Configuration
 
-Set values in `.env` (see `.env.example` for the full list).
+Copy `.env.example` to `.env` and set values.
 
-```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/supermemory
-API_HOST=localhost
-API_PORT=3000
-AUTH_ENABLED=false
-AUTH_TOKEN=
-CSRF_SECRET=your-random-secret
-OPENAI_API_KEY=sk-...              # Optional: embeddings
-LLM_PROVIDER=openai|anthropic      # Optional: LLM extraction
-ANTHROPIC_API_KEY=sk-ant-...       # Optional
-REDIS_URL=redis://localhost:6379   # Required for BullMQ workers
-```
+Required:
 
-Notes:
+- `DATABASE_URL` (must be `postgres://` or `postgresql://` outside tests)
 
-- Runtime requires PostgreSQL; SQLite is only used in tests (`NODE_ENV=test`).
-- If `AUTH_ENABLED=false`, API auth is disabled (recommended for trusted local networks).
-- If Redis is unavailable, API ingestion falls back to inline memory extraction/indexing.
+Optional:
 
-## Feature modes
+- `AUTH_ENABLED`, `AUTH_TOKEN` (minimal bearer token auth)
+- `REDIS_URL` (queues; if unavailable, ingestion falls back inline)
+- `OPENAI_API_KEY` (embeddings)
+- `LLM_PROVIDER`, `ANTHROPIC_API_KEY` (LLM extraction)
+- `CSRF_SECRET`, `ALLOWED_ORIGINS` (hardening)
 
-- **Local-only**: pattern-based extraction, no external API keys
-- **Embeddings enabled**: semantic search via OpenAI embeddings
-- **LLM extraction**: OpenAI/Anthropic for richer extraction
+No external API keys are required for basic local operation.
 
-## Development
+## Auth and CSRF
 
-```bash
-npm run dev
-npm test
-```
+- API auth is optional.
+- `AUTH_ENABLED=false` (default): pass-through auth context.
+- `AUTH_ENABLED=true`: requires `Authorization: Bearer <AUTH_TOKEN>`.
+- CSRF protection is applied to API state-changing routes; use `GET /api/v1/csrf-token` first for browser clients.
 
-## Coding agent setup (MCP)
+## REST API Surface
+
+Base path: `/api/v1`
+
+- `POST /documents`
+- `GET /documents`
+- `GET /documents/:id`
+- `PUT /documents/:id`
+- `DELETE /documents/:id`
+- `POST /documents/file`
+- `POST /documents/bulk-delete`
+- `POST /search`
+- `GET /profiles`
+- `GET /profiles/:tag`
+- `PUT /profiles/:tag`
+- `DELETE /profiles/:tag`
+
+## MCP for Coding Agents
+
+Build and run:
 
 ```bash
 npm run build
+npm run mcp
+```
+
+Claude Desktop example:
+
+```bash
 claude mcp add supermemory -- node /absolute/path/to/supermemory-clone/dist/mcp/index.js
 ```
 
-Or use `mcp-config.json` and point your agent to this repo root. No API keys are required for local-only mode.
+Local config example (`mcp-config.json`):
+
+```json
+{
+  "mcpServers": {
+    "supermemory": {
+      "command": "node",
+      "args": ["dist/mcp/index.js"],
+      "cwd": "${PROJECT_ROOT}"
+    }
+  }
+}
+```
+
+Primary MCP tools:
+
+- `supermemory_add`
+- `supermemory_search`
+- `supermemory_profile`
+- `supermemory_list`
+- `supermemory_delete`
+- `supermemory_remember`
+- `supermemory_recall`
+
+## Development Commands
+
+- `npm run dev` - API with watch mode
+- `npm run build` - TypeScript build
+- `npm run start` - Run built API
+- `npm run mcp:dev` - MCP with tsx
+- `npm run mcp` - Run built MCP server
+- `npm run test:run` - Full tests once
+- `npm run lint` - ESLint
+- `npm run typecheck` - TS checks
+- `npm run validate` - typecheck + lint + format + tests
+
+## Testing
+
+- Unit/integration tests: `vitest`
+- Typical focused run:
+
+```bash
+npx vitest run tests/services/search.service.test.ts
+```
+
+- Database regression flow:
+
+```bash
+npm run db:test:phase1
+```
+
+## Project Policy
+
+Repository documentation is intentionally consolidated into only:
+
+- `README.md` (project/system/operator reference)
+- `AGENTS.md` (agent/contributor implementation reference)
 
 ## License
 
