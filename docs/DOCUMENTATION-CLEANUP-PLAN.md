@@ -99,7 +99,7 @@ These files contain evergreen, production-relevant information that should remai
   - RATIONALE: Project-specific instructions
 
 #### Security & Authentication (5 files)
-- **api-key-authentication.md** (358 lines) - API key auth guide
+- **auth-configuration.md** (358 lines) - API key auth guide
   - STATUS: Keep as-is (primary reference)
   - RATIONALE: Production authentication mechanism
   - CONSOLIDATE INTO: From API-KEY-IMPLEMENTATION-SUMMARY.md
@@ -156,13 +156,13 @@ These files contain evergreen, production-relevant information that should remai
 These files contain important information that overlaps with or supplements KEEP files. Content should be merged into the appropriate permanent documentation.
 
 #### API & Security Implementation Summaries (6 files)
-1. **API-KEY-IMPLEMENTATION-SUMMARY.md** → CONSOLIDATE INTO api-key-authentication.md
+1. **API-KEY-IMPLEMENTATION-SUMMARY.md** → CONSOLIDATE INTO auth-configuration.md
    - 337 lines of implementation details
    - ACTION: Extract implementation details, keep reference docs
 
 2. **API-KEY-INSTALLATION.md** → CONSOLIDATE INTO dev-environment-setup.md
    - 218 lines, installation instructions
-   - DUPLICATE: api-key-authentication.md covers this
+   - DUPLICATE: auth-configuration.md covers this
 
 3. **SECRETS-IMPLEMENTATION-SUMMARY.md** → CONSOLIDATE INTO SECRETS-MANAGEMENT.md
    - 342 lines of implementation notes
@@ -428,11 +428,11 @@ These files have been superseded, contain only phase-specific metadata, or are r
 1. **Create SECURITY-GUIDE.md** (new)
    - Extract from: PHASE2B-SECURITY-AUDIT-REPORT.md
    - Extract from: PHASE2B-SECURITY-HARDENING-PLAN.md
-   - Include: api-key-authentication.md (reference)
+   - Include: auth-configuration.md (reference)
    - Include: csrf-protection.md (reference)
    - Include: SECRETS-MANAGEMENT.md (reference)
 
-2. **Consolidate api-key-authentication.md**
+2. **Consolidate auth-configuration.md**
    - Merge: API-KEY-IMPLEMENTATION-SUMMARY.md content
    - Merge: API-KEY-INSTALLATION.md instructions
    - Result: Comprehensive API key guide
@@ -526,7 +526,7 @@ docs/
 │
 ├── SECURITY & AUTHENTICATION
 │   ├── SECURITY-GUIDE.md               # Consolidated security guide (NEW)
-│   ├── api-key-authentication.md       # API key auth (consolidated)
+│   ├── auth-configuration.md       # API key auth (consolidated)
 │   ├── csrf-protection.md              # CSRF protection (consolidated)
 │   └── SECRETS-MANAGEMENT.md           # Secrets management (consolidated)
 │
@@ -565,7 +565,7 @@ docs/
 ### During Consolidation
 - [ ] Priority 1: Consolidate security docs
   - [ ] Create SECURITY-GUIDE.md
-  - [ ] Update api-key-authentication.md
+  - [ ] Update auth-configuration.md
   - [ ] Update csrf-protection.md
   - [ ] Update SECRETS-MANAGEMENT.md
 
@@ -662,7 +662,7 @@ docs/
 | database-performance.md | 349 | Perf tuning | Keep as-is |
 | dev-environment-setup.md | 850 | Dev setup | Minor (consolidate install) |
 | PRODUCTION-DEPLOYMENT-GUIDE.md | 1,941 | Prod deploy | Minor (add Phase 2 notes) |
-| api-key-authentication.md | 358 | API auth | Consolidate IMPL+TEST |
+| auth-configuration.md | 358 | API auth | Consolidate IMPL+TEST |
 | SECRETS-MANAGEMENT.md | 533 | Secrets | Consolidate IMPL+TEST |
 | csrf-protection.md | 321 | CSRF | Consolidate IMPL+TEST |
 | JSDOC-TEMPLATE.md | 885 | Templates | Keep as-is |

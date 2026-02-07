@@ -75,7 +75,7 @@ if (this.tokenStore.size >= MAX_TOKENS) {
 
 ### HIGH-003: Remove Fallback Credentials ✅
 
-**File**: /Users/ahmad.ragab/Dev/supermemory-clone/src/services/auth.service.ts
+**File**: /Users/ahmad.ragab/Dev/supermemory-clone/src/api/middleware/auth.ts
 **Lines**: 22-28
 
 **Problem**: Hardcoded database credentials as fallback
@@ -221,7 +221,7 @@ Test coverage:
    - Added MAX_TOKENS constant
    - Added LRU eviction logic
 
-3. **/Users/ahmad.ragab/Dev/supermemory-clone/src/services/auth.service.ts**
+3. **/Users/ahmad.ragab/Dev/supermemory-clone/src/api/middleware/auth.ts**
    - Removed hardcoded database URL fallback
    - Added validation with error throw
 

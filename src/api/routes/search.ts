@@ -46,10 +46,8 @@ searchRouter.post('/', requireScopes('read'), searchRateLimit, async (c) => {
         }
       : undefined;
 
-  const serviceSearchMode = searchMode === 'fulltext' ? 'memory' : searchMode;
-
   const response = await searchService.hybridSearch(q, containerTag, {
-    searchMode: serviceSearchMode,
+    searchMode,
     limit,
     threshold,
     rerank,

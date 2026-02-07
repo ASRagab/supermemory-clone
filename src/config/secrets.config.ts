@@ -5,8 +5,6 @@
  * Used during application startup to validate environment configuration.
  */
 
-import type { ApiKeyValidation } from '../utils/secret-validation.js';
-
 /** Secret definition with validation rules */
 export interface SecretDefinition {
   envVar: string;
@@ -53,8 +51,8 @@ export const ENCRYPTION_SECRETS: SecretCategory = {
   secrets: [
     {
       envVar: 'SECRETS_MASTER_PASSWORD',
-      description: 'Master password for secrets encryption',
-      required: true,
+      description: 'Optional master password for secrets encryption features',
+      required: false,
       format: 'password',
       minLength: 32,
       rotationDays: 180,
@@ -115,10 +113,12 @@ export const AUTH_SECRETS: SecretCategory = {
       rotationDays: 90,
     },
     {
-      envVar: 'SUPERMEMORY_API_KEYS',
-      description: 'API keys for authenticating requests',
+      envVar: 'AUTH_TOKEN',
+      description: 'Bearer token for optional REST API auth',
       required: false,
-      format: 'generic',
+      format: 'password',
+      minLength: 16,
+      rotationDays: 90,
     },
     {
       envVar: 'CSRF_SECRET',

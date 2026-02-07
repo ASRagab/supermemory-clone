@@ -9,7 +9,7 @@
 
 **Current Test Status**:
 - **Total Tests**: 489 tests across 5 files
-- **Auth Service**: 98 tests (auth.service.test.ts)
+- **Auth Service**: 98 tests (auth middleware tests (removed))
 - **CSRF Service**: 93 tests (csrf.service.test.ts)
 - **CSRF Middleware**: 155 tests (csrf.test.ts)
 - **Secrets Service**: 87 tests (secrets.service.test.ts)
@@ -19,7 +19,7 @@
 
 ---
 
-## 1. Auth Service Coverage Gaps (auth.service.test.ts)
+## 1. Auth Service Coverage Gaps (auth middleware tests (removed))
 
 ### Current Coverage (98 tests)
 - ✅ Basic key generation, hashing, validation

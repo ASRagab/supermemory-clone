@@ -335,7 +335,7 @@ npm test -- tests/queues/bullmq.test.ts --run
 - Current format is more descriptive
 
 **Would Affect:**
-- `tests/services/auth.service.test.ts`
+- `tests/api/middleware/auth.middleware.test.ts`
 - `tests/services/profile.service.test.ts`
 - `tests/services/search.service.test.ts`
 - Any other code throwing NotFoundError

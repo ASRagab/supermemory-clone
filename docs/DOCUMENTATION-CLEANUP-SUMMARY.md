@@ -193,7 +193,7 @@ General Implementation (9 files):
 - CHANGELOG.md - Version history
 
 **Security & Authentication** (3 files):
-- api-key-authentication.md - API key auth
+- auth-configuration.md - API key auth
 - csrf-protection.md - CSRF protection
 - SECRETS-MANAGEMENT.md - Secrets management
 
@@ -238,7 +238,7 @@ docs/
 The following files may contain references to archived documents:
 
 1. **implementation-roadmap.md** - May reference Phase 3 plan
-2. **api-key-authentication.md** - May reference implementation summaries
+2. **auth-configuration.md** - May reference implementation summaries
 3. **csrf-protection.md** - May reference implementation summaries
 4. **SECRETS-MANAGEMENT.md** - May reference implementation summaries
 5. **database-schema.md** - May reference Phase 1 migration guides
@@ -253,7 +253,7 @@ The cleanup plan identified these consolidation opportunities for future work:
 
 ### High Priority
 
-1. **api-key-authentication.md** - Consolidate content from:
+1. **auth-configuration.md** - Consolidate content from:
    - archive/implementation/API-KEY-IMPLEMENTATION-SUMMARY.md
    - archive/implementation/API-KEY-INSTALLATION.md
 

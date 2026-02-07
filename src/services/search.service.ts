@@ -28,6 +28,9 @@ import {
 } from './vectorstore/index.js';
 import { expandQuery } from '../utils/synonyms.js';
 import { getDatabaseUrl, isPostgresUrl } from '../db/client.js';
+import { getPostgresDatabase } from '../db/postgres.js';
+import { documents } from '../db/schema/documents.schema.js';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 /**
  * Internal result type for compatibility with search types
@@ -256,6 +259,9 @@ export class SearchService {
         break;
       case 'memory':
         results = this.memorySearchInternal(searchQuery, containerTag, searchOptions);
+        break;
+      case 'fulltext':
+        results = await this.fullTextSearchInternal(searchQuery, containerTag, searchOptions);
         break;
       case 'hybrid':
       default:
@@ -508,10 +514,10 @@ export class SearchService {
     containerTag: string | undefined,
     options: SearchOptions
   ): Promise<SearchResult[]> {
-    // Run both searches
-    const [vectorResults, memoryResults] = await Promise.all([
+    // Run vector + full-text searches.
+    const [vectorResults, fullTextResults] = await Promise.all([
       this.vectorSearchInternal(query, options),
-      Promise.resolve(this.memorySearchInternal(query, containerTag, options)),
+      this.fullTextSearchInternal(query, containerTag, options),
     ]);
 
     // Merge and deduplicate
@@ -522,8 +528,8 @@ export class SearchService {
       resultMap.set(result.id, result);
     }
 
-    // Add memory results, merging if exists
-    for (const result of memoryResults) {
+    // Add full-text results, merging if exists
+    for (const result of fullTextResults) {
       const existing = resultMap.get(result.id);
       if (existing) {
         // Combine scores - keep higher similarity, mark as hybrid
@@ -538,6 +544,80 @@ export class SearchService {
     }
 
     return Array.from(resultMap.values());
+  }
+
+  private async fullTextSearchInternal(
+    query: string,
+    containerTag: string | undefined,
+    options: SearchOptions
+  ): Promise<SearchResult[]> {
+    const connectionString = getDatabaseUrl();
+
+    // PostgreSQL full-text search is the runtime path; use memory fallback only in tests.
+    if (!isPostgresUrl(connectionString)) {
+      return this.memorySearchInternal(query, containerTag, options);
+    }
+
+    const db = getPostgresDatabase(connectionString);
+    const rankExpr = sql<number>`
+      ts_rank_cd(
+        to_tsvector('english', ${documents.content}),
+        plainto_tsquery('english', ${query})
+      )
+    `;
+
+    const textMatch = sql<boolean>`
+      to_tsvector('english', ${documents.content})
+      @@
+      plainto_tsquery('english', ${query})
+    `;
+    const whereClause = containerTag
+      ? and(textMatch, eq(documents.containerTag, containerTag))
+      : textMatch;
+
+    const rows = await db
+      .select({
+        id: documents.id,
+        content: documents.content,
+        containerTag: documents.containerTag,
+        metadata: documents.metadata,
+        createdAt: documents.createdAt,
+        updatedAt: documents.updatedAt,
+        rank: rankExpr,
+      })
+      .from(documents)
+      .where(whereClause)
+      .orderBy(desc(rankExpr), desc(documents.updatedAt))
+      .limit(options.limit * 2);
+
+    return rows.map((row) => {
+      const metadata =
+        row.metadata && typeof row.metadata === 'object' ? (row.metadata as Record<string, unknown>) : {};
+      const createdAt = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
+      const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt);
+      const score = Math.max(0, Math.min(1, Number(row.rank ?? 0)));
+
+      return {
+        id: row.id,
+        memory: {
+          id: row.id,
+          content: row.content,
+          type: 'fact',
+          relationships: [],
+          isLatest: true,
+          containerTag: row.containerTag,
+          metadata,
+          createdAt,
+          updatedAt,
+          confidence: 1,
+          sourceId: row.id,
+        },
+        similarity: score,
+        metadata,
+        updatedAt,
+        source: 'fulltext',
+      };
+    });
   }
 
   private vectorResultToSearchResult(vr: InternalVectorSearchResult): SearchResult {

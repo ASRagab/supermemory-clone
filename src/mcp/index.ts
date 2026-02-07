@@ -34,10 +34,6 @@ import {
   DeleteContentInputSchema,
   RememberInputSchema,
   RecallInputSchema,
-  CreateApiKeyInputSchema,
-  RevokeApiKeyInputSchema,
-  ListApiKeysInputSchema,
-  RotateApiKeyInputSchema,
   type AddContentResult,
   type SearchResult,
   type ProfileResult,
@@ -45,21 +41,7 @@ import {
   type DeleteResult,
   type RememberResult,
   type RecallResult,
-  type CreateApiKeyResult,
-  type RevokeApiKeyResult,
-  type ListApiKeysResult,
-  type RotateApiKeyResult,
 } from './tools.js';
-
-import {
-  authenticateRequest,
-  authorizeRequest,
-  getToolScopes,
-  formatAuthError,
-  formatAuthzError,
-} from './auth.js';
-
-import { createApiKey, revokeApiKey, rotateApiKey, listApiKeys } from '../services/auth.service.js';
 
 import {
   RESOURCE_TEMPLATES,
@@ -79,12 +61,13 @@ import { SearchService, createSearchService } from '../services/search.service.j
 import { ProfileService } from '../services/profile.service.js';
 import { EmbeddingService, cosineSimilarity } from '../services/embedding.service.js';
 import { generateId } from '../utils/id.js';
-import { ValidationError, NotFoundError, ErrorCode as AppErrorCode } from '../utils/errors.js';
+import { ValidationError } from '../utils/errors.js';
 import { getLogger } from '../utils/logger.js';
 import { getDatabaseUrl } from '../db/client.js';
 import { getPostgresDatabase, type PostgresDatabaseInstance } from '../db/postgres.js';
 import { documents } from '../db/schema/documents.schema.js';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { initializeAndValidate } from '../startup.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -798,98 +781,6 @@ async function handleRecall(state: ServerState, args: unknown): Promise<RecallRe
 }
 
 // ============================================================================
-// API Key Management Handlers
-// ============================================================================
-
-async function handleCreateApiKey(args: unknown): Promise<CreateApiKeyResult> {
-  const input = CreateApiKeyInputSchema.parse(args);
-
-  const expiresAt = input.expiresInDays
-    ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000)
-    : undefined;
-
-  const { apiKey, plaintextKey } = await createApiKey({
-    name: input.name,
-    scopes: input.scopes,
-    expiresAt,
-    metadata: input.metadata,
-  });
-
-  return {
-    success: true,
-    apiKey: {
-      id: apiKey.id,
-      name: apiKey.name,
-      scopes: Array.isArray(apiKey.scopes) ? apiKey.scopes : [],
-      expiresAt: apiKey.expiresAt?.toISOString(),
-      createdAt: apiKey.createdAt.toISOString(),
-    },
-    plaintextKey,
-    message: `API key created successfully. IMPORTANT: Save this key now, it will not be shown again: ${plaintextKey}`,
-  };
-}
-
-async function handleRevokeApiKey(args: unknown): Promise<RevokeApiKeyResult> {
-  const input = RevokeApiKeyInputSchema.parse(args);
-
-  const success = await revokeApiKey(input.id);
-
-  return {
-    success,
-    message: success ? `API key ${input.id} revoked successfully` : `API key ${input.id} not found`,
-  };
-}
-
-async function handleListApiKeys(args: unknown): Promise<ListApiKeysResult> {
-  const input = ListApiKeysInputSchema.parse(args);
-
-  const keys = await listApiKeys({
-    includeRevoked: input.includeRevoked,
-    includeExpired: input.includeExpired,
-  });
-
-  return {
-    keys: keys.map((key) => ({
-      id: key.id,
-      name: key.name,
-      scopes: Array.isArray(key.scopes) ? key.scopes : [],
-      expiresAt: key.expiresAt?.toISOString(),
-      lastUsedAt: key.lastUsedAt?.toISOString(),
-      revoked: key.revoked?.toISOString(),
-      createdAt: key.createdAt.toISOString(),
-      updatedAt: key.updatedAt.toISOString(),
-    })),
-    total: keys.length,
-  };
-}
-
-async function handleRotateApiKey(args: unknown): Promise<RotateApiKeyResult> {
-  const input = RotateApiKeyInputSchema.parse(args);
-
-  const result = await rotateApiKey(input.id, input.newName);
-
-  if (!result) {
-    throw new NotFoundError('API key', input.id, AppErrorCode.NOT_FOUND);
-  }
-
-  const { apiKey, plaintextKey } = result;
-
-  return {
-    success: true,
-    oldKeyId: input.id,
-    newKey: {
-      id: apiKey.id,
-      name: apiKey.name,
-      scopes: Array.isArray(apiKey.scopes) ? apiKey.scopes : [],
-      expiresAt: apiKey.expiresAt?.toISOString(),
-      createdAt: apiKey.createdAt.toISOString(),
-    },
-    plaintextKey,
-    message: `API key rotated successfully. New key: ${plaintextKey}`,
-  };
-}
-
-// ============================================================================
 // Resource Handlers
 // ============================================================================
 
@@ -1086,6 +977,8 @@ function extractContainerTag(args: unknown): string {
 // ============================================================================
 
 async function main() {
+  await initializeAndValidate();
+
   const state = createServerState();
   await migrateLegacyMcpState(state);
 
@@ -1111,41 +1004,6 @@ async function main() {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-
-    // Check if authentication is enabled (via environment variable)
-    const authEnabled = process.env.MCP_AUTH_ENABLED === 'true';
-
-    if (authEnabled) {
-      // Authenticate the request
-      const headers = request.params._meta?.headers as
-        | Record<string, string | string[] | undefined>
-        | undefined;
-      const authResult = await authenticateRequest(headers);
-
-      if (!authResult.authenticated) {
-        logger.warn('Authentication failed', { tool: name, error: authResult.error });
-        return formatAuthError(authResult);
-      }
-
-      // Authorize the request based on tool requirements
-      const requiredScopes = getToolScopes(name);
-      const authzResult = authorizeRequest(authResult, requiredScopes);
-
-      if (!authzResult.authorized) {
-        logger.warn('Authorization failed', {
-          tool: name,
-          error: authzResult.error,
-          requiredScopes,
-        });
-        return formatAuthzError(authzResult.error ?? 'Authorization failed');
-      }
-
-      logger.debug('Request authenticated', {
-        tool: name,
-        apiKeyId: authResult.apiKey?.id,
-        scopes: authResult.apiKey?.scopes,
-      });
-    }
 
     // Extract containerTag from arguments for rate limiting
     // Different tools use containerTag in different argument positions
@@ -1189,18 +1047,6 @@ async function main() {
           break;
         case 'supermemory_recall':
           result = await handleRecall(state, args);
-          break;
-        case 'supermemory_create_api_key':
-          result = await handleCreateApiKey(args);
-          break;
-        case 'supermemory_revoke_api_key':
-          result = await handleRevokeApiKey(args);
-          break;
-        case 'supermemory_list_api_keys':
-          result = await handleListApiKeys(args);
-          break;
-        case 'supermemory_rotate_api_key':
-          result = await handleRotateApiKey(args);
           break;
         default:
           throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

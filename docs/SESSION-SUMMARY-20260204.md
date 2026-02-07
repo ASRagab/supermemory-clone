@@ -230,7 +230,7 @@ docker compose logs -f api
 ```bash
 DATABASE_URL=postgresql://supermemory:password@localhost:5432/supermemory
 API_PORT=3000
-API_SECRET_KEY=your-secret-key
+AUTH_TOKEN=your-secret-key
 ```
 
 **Optional (Enhanced Features):**

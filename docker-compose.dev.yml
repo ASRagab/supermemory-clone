@@ -3,19 +3,16 @@
 # =============================================================================
 # This file extends docker-compose.yml for local development:
 # - Hot reload with source code mounting
-# - SQLite for simplicity (no PostgreSQL)
+# - PostgreSQL for runtime parity
 # - Debug logging enabled
 # - Exposed debug ports
 #
 # Usage:
-#   # SQLite only (default dev mode):
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-#
-#   # SQLite + Redis (for testing caching/queues):
+#   # PostgreSQL + Redis (recommended):
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile redis up
 #
-#   # SQLite + PostgreSQL (for testing migrations):
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile postgres up
+#   # PostgreSQL without Redis (inline ingestion fallback):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 #
 #   # With worker:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile worker up
@@ -50,13 +47,14 @@ services:
       - NODE_ENV=development
       - API_HOST=0.0.0.0
       - API_PORT=3000
-      # Use SQLite for simpler local development
-      - DATABASE_URL=./data/supermemory-dev.db
+      # Use PostgreSQL for runtime parity
+      - DATABASE_URL=postgresql://supermemory:dev_password@postgres:5432/supermemory_dev
       # Debug logging
       - LOG_LEVEL=debug
       # API keys from .env file
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - API_SECRET_KEY=${API_SECRET_KEY:-dev-secret-key-change-in-production}
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
       # Vector Store (memory by default for dev, or use chroma profile)
       - VECTOR_STORE_PROVIDER=${VECTOR_STORE_PROVIDER:-memory}
       - VECTOR_DIMENSIONS=${VECTOR_DIMENSIONS:-1536}
@@ -73,6 +71,10 @@ services:
     ports:
       - "3000:3000"
       - "9229:9229"  # Node.js debugger
+
+    depends_on:
+      postgres:
+        condition: service_healthy
 
     # Disable resource limits in development
     deploy:
@@ -137,10 +139,15 @@ services:
 
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=./data/supermemory-dev.db
+      - DATABASE_URL=postgresql://supermemory:dev_password@postgres:5432/supermemory_dev
       - LOG_LEVEL=debug
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - API_SECRET_KEY=${API_SECRET_KEY:-dev-secret-key-change-in-production}
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
 
     # Disable resource limits in development
     deploy:

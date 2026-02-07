@@ -48,7 +48,7 @@ class DependencyError extends AppError
 - ✅ `/src/services/pipeline.service.ts` (3)
 - ✅ `/src/services/extractors/pdf.extractor.ts` (1)
 - ✅ `/src/services/extractors/url.extractor.ts` (1)
-- ✅ `/src/services/auth.service.ts` (2)
+- ✅ `/src/api/middleware/auth.ts` (2)
 
 #### Workers (4 errors)
 - ✅ `/src/workers/chunking.worker.ts` (1)
@@ -222,7 +222,7 @@ src/
 │   │   └── index.ts (1 error)
 │   ├── embedding.service.ts (5 errors)
 │   ├── pipeline.service.ts (3 errors)
-│   ├── auth.service.ts (2 errors)
+│   ├── auth middleware (removed) (2 errors)
 │   └── extractors/
 │       ├── pdf.extractor.ts (1 error)
 │       └── url.extractor.ts (1 error)

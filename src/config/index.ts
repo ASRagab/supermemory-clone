@@ -31,7 +31,9 @@ const configSchema = z.object({
   llmCacheTtlMs: z.coerce.number().default(900000), // 15 minutes
 
   // Database
-  databaseUrl: z.string().default('./data/supermemory.db'),
+  databaseUrl: z
+    .string()
+    .default('postgresql://supermemory:supermemory_secret@localhost:5432/supermemory'),
 
   // Vector Store
   vectorStoreProvider: z.enum(['memory', 'sqlite-vss', 'chroma']).default('memory'),
@@ -44,8 +46,13 @@ const configSchema = z.object({
   apiPort: z.coerce.number().default(3000),
   apiHost: z.string().default('localhost'),
 
-  // Authentication (optional for MCP mode)
-  apiSecretKey: z.string().optional(),
+  // Minimal API authentication (optional)
+  authEnabled: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true' || val === '1')
+    .default('false'),
+  authToken: z.string().optional(),
 
   // Rate Limiting
   rateLimitRequests: z.coerce.number().default(100),
@@ -89,7 +96,8 @@ function loadConfig(): Config {
 
     apiPort: process.env.API_PORT,
     apiHost: process.env.API_HOST,
-    apiSecretKey: process.env.API_SECRET_KEY,
+    authEnabled: process.env.AUTH_ENABLED,
+    authToken: process.env.AUTH_TOKEN,
     rateLimitRequests: process.env.RATE_LIMIT_REQUESTS,
     rateLimitWindowMs: process.env.RATE_LIMIT_WINDOW_MS,
     logLevel: process.env.LOG_LEVEL,

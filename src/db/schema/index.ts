@@ -9,4 +9,3 @@ export * from './embeddings.schema.js';
 export * from './relationships.schema.js';
 export * from './profiles.schema.js';
 export * from './queue.schema.js';
-export * from './api-keys.schema.js';

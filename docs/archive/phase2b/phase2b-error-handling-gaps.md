@@ -259,7 +259,7 @@ class PgVectorStore {
 
 #### C. Auth Service (1 instance)
 
-**File:** `src/services/auth.service.ts`
+**File:** `src/api/middleware/auth.ts`
 
 **Instance:**
 
@@ -289,7 +289,7 @@ export class APIKeyCreationError extends Error {
   }
 }
 
-// Usage in auth.service.ts
+// Usage in auth middleware (removed)
 async createAPIKey(
   userId: string,
   name: string,

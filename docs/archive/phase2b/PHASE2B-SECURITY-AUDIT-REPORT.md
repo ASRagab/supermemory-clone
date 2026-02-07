@@ -42,7 +42,7 @@ Phase 2B security implementation demonstrates **strong foundational security** w
 // Lines 15-59: API keys loaded and stored in plaintext in memory
 const VALID_API_KEYS = loadApiKeys();
 
-// Environment format: SUPERMEMORY_API_KEYS=key1:user1:read,write;key2:user2:read
+// Environment format: AUTH_TOKEN=key1:user1:read,write;key2:user2:read
 // Keys are stored in plaintext in Map<string, AuthContext>
 ```
 
@@ -59,7 +59,7 @@ const VALID_API_KEYS = loadApiKeys();
 
 **Recommendation:**
 ```typescript
-// 1. Hash API keys using bcrypt (like auth.service.ts does)
+// 1. Hash API keys using bcrypt (like auth middleware (removed) does)
 import * as bcrypt from 'bcrypt';
 
 // 2. Store only hashed keys
@@ -121,8 +121,8 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next) => {
 **Issue:**
 ```bash
 # Found 29 console.log/error/warn statements that may leak secrets:
-src/services/auth.service.ts:98:  console.log(`[Auth] Created API key: ${record.id} (${options.name})`);
-src/services/auth.service.ts:136:  console.log(`[Auth] API key expired: ${candidate.id}`);
+src/api/middleware/auth.ts:98:  console.log(`[Auth] Created API key: ${record.id} (${options.name})`);
+src/api/middleware/auth.ts:136:  console.log(`[Auth] API key expired: ${candidate.id}`);
 src/api/middleware/auth.ts:44:  console.warn('[Auth] Using development test API keys...');
 src/api/middleware/errorHandler.ts:51:  console.error('Error caught in error handler:', error);
 ```

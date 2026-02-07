@@ -208,7 +208,7 @@ error  Unnecessary escape character: \-  no-useless-escape
 - `src/queues/index.ts`: 10 console statements
 - `src/mcp/index.ts`: 16 console statements
 - `src/api/middleware/rateLimit.ts`: 8 console statements
-- `src/services/auth.service.ts`: 5 console statements
+- `src/api/middleware/auth.ts`: 5 console statements
 
 **Issue**: Production code using `console.log` instead of logger
 **Impact**: Unstructured logging, performance overhead, security risk (potential PII leakage)
@@ -256,7 +256,7 @@ error  Unnecessary escape character: \-  no-useless-escape
 **Categories**:
 1. ✅ API Keys (OPENAI_API_KEY, ANTHROPIC_API_KEY)
 2. ✅ Secrets Management (SECRETS_MASTER_PASSWORD, SECRETS_SALT)
-3. ✅ Server Configuration (API_PORT, API_HOST, API_SECRET_KEY)
+3. ✅ Server Configuration (API_PORT, API_HOST, AUTH_TOKEN)
 4. ✅ Authentication (CSRF_SECRET, ALLOWED_ORIGINS)
 5. ✅ Database (DATABASE_URL, pool settings)
 6. ✅ Embeddings (EMBEDDING_MODEL, EMBEDDING_DIMENSIONS)
@@ -762,7 +762,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=require&sslcert=...&ssl
 
 ### API Key Validation: ✅ IMPLEMENTED
 
-**File**: `src/services/auth.service.ts`
+**File**: `src/api/middleware/auth.ts`
 
 **Features** (from grep results):
 - API key authentication middleware
@@ -830,7 +830,7 @@ containerTag: z.string().max(100)
 - Error messages may reveal implementation details
 
 **Examples from grep**:
-- `src/services/auth.service.ts`: 5 console statements
+- `src/api/middleware/auth.ts`: 5 console statements
 - `src/queues/index.ts`: 10 console statements
 - `src/mcp/index.ts`: 16 console statements
 
@@ -1505,7 +1505,7 @@ DATABASE_URL=postgresql://...
 ```bash
 DATABASE_URL=postgresql://...
 OPENAI_API_KEY=sk-...
-API_SECRET_KEY=...
+AUTH_TOKEN=...
 SECRETS_MASTER_PASSWORD=...
 CSRF_SECRET=...
 ```

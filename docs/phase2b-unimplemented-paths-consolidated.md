@@ -107,7 +107,7 @@ async classifyMemoryType(content: string): Promise<MemoryType> {
 // src/services/vectorstore/pgvector.ts (12 instances)
 if (!this.pool) throw new Error('Database not initialized');
 
-// src/services/auth.service.ts
+// src/api/middleware/auth.ts
 throw new Error('Failed to create API key'); // No original error context
 
 // src/services/extraction.service.ts
@@ -141,7 +141,7 @@ if (!this.pool) {
 
 **Files Requiring Updates:**
 - `src/services/vectorstore/pgvector.ts` (12 instances)
-- `src/services/auth.service.ts` (1 instance)
+- `src/api/middleware/auth.ts` (1 instance)
 - `src/services/extraction.service.ts` (1 instance)
 - `src/services/embedding.service.ts` (4 instances)
 - `src/services/pipeline.service.ts` (3 instances)
@@ -182,7 +182,7 @@ if (!this.pool) {
 
 3. **Auth Query Builder Cast**
    ```typescript
-   // src/services/auth.service.ts:238
+   // src/api/middleware/auth.ts:238
    query = query.where(and(...conditions)) as any;
    ```
    - **Fix:** Proper Drizzle query type inference
@@ -200,7 +200,7 @@ if (!this.pool) {
 - `src/services/relationships/detector.ts:74, 432, 438` - Strategy and entities (3x)
 - `src/services/relationships/strategies.ts:57` - Strategy type
 - `src/services/extractors/pdf.extractor.ts:301` - Page render function
-- `src/services/auth.service.ts:238` - Query builder
+- `src/api/middleware/auth.ts:238` - Query builder
 - `src/services/llm/mock.ts:409` - Mock responses
 - `src/utils/sanitization.ts:473` - Sanitization return type
 - `src/services/persistence/index.ts:253` - Store cast
@@ -289,7 +289,7 @@ Console statements in production code can leak sensitive data and impact perform
 
 **Instances Found:**
 - `src/services/csrf.service.ts` - CSRF debugging
-- `src/services/auth.service.ts` - API key warnings
+- `src/api/middleware/auth.ts` - API key warnings
 - `src/services/relationships/index.ts` - Relationship detection debug
 - `src/services/vectorstore/migration.ts` - Migration progress
 - `src/services/extractors/markdown.extractor.ts` - Extraction debug

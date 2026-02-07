@@ -333,7 +333,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 Implementation based on:
 - Security research from OWASP, NIST
 - Industry best practices (GitHub, AWS, Google)
-- Existing codebase patterns (auth.service.ts, validation.ts)
+- Existing codebase patterns (auth middleware (removed), validation.ts)
 
 ---
 

@@ -42,7 +42,7 @@ Successfully replaced **82 console statements** across **25 source files** with 
 - Connection events (error, connect)
 - Redis operation errors (get, set, increment)
 
-### 4. src/services/auth.service.ts - 5 statements ✅
+### 4. src/api/middleware/auth.ts - 5 statements ✅
 **Risk Level**: HIGH (Authentication, PII)
 **Logger**: `auth-service`
 **PII Protection**:

@@ -6,7 +6,7 @@ Successfully removed all 9 `as any` type casts from Phase 2B source files and im
 
 ## Files Fixed
 
-### 1. `src/services/auth.service.ts` (2 instances)
+### 1. `src/api/middleware/auth.ts` (2 instances)
 
 **Issue**: Drizzle query builder type not properly typed when conditionally adding WHERE clauses.
 
@@ -239,7 +239,7 @@ Test files (in `tests/` directory) still contain intentional `as any` casts for 
 
 - `tests/services/vectorstore.test.ts` - Testing invalid inputs
 - `tests/integration/phase2-pipeline.test.ts` - Testing error handling
-- `tests/mcp/auth.test.ts` - Mocking request objects
+- `tests/api/middleware/auth.middleware.test.ts` - Mocking request objects
 - `tests/services/search.service.test.ts` - Testing edge cases
 
 ## Next Steps

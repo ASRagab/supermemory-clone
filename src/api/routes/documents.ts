@@ -12,9 +12,12 @@ import { requireScopes } from '../middleware/auth.js';
 import { notFound, validationError } from '../middleware/errorHandler.js';
 import { uploadRateLimit } from '../middleware/rateLimit.js';
 import { getDocumentService } from '../../services/documents.service.js';
+import { enqueueDocumentForProcessing } from '../../services/ingestion.service.js';
+import { getLogger } from '../../utils/logger.js';
 
 const documentsRouter = new Hono();
 const documentsService = getDocumentService();
+const logger = getLogger('documents-route');
 
 /**
  * POST / - Add a new document
@@ -41,6 +44,20 @@ documentsRouter.post('/', requireScopes('write'), async (c) => {
     customId: validatedData.customId,
     contentType: 'text/plain',
   });
+
+  const ingestion = await enqueueDocumentForProcessing({
+    documentId: created.id,
+    content: created.content,
+    containerTag: created.containerTag ?? 'default',
+    sourceType: 'text',
+  });
+  if (ingestion.error) {
+    logger.warn('Document ingestion reported error', {
+      documentId: created.id,
+      mode: ingestion.mode,
+      error: ingestion.error,
+    });
+  }
 
   const response: SuccessResponse<ApiDocument> = {
     data: created,
@@ -89,6 +106,22 @@ documentsRouter.put('/:id', requireScopes('write'), async (c) => {
 
   if (!updatedDocument) {
     return notFound('Document', id);
+  }
+
+  if (validatedData.content) {
+    const ingestion = await enqueueDocumentForProcessing({
+      documentId: updatedDocument.id,
+      content: updatedDocument.content,
+      containerTag: updatedDocument.containerTag ?? 'default',
+      sourceType: 'text',
+    });
+    if (ingestion.error) {
+      logger.warn('Document re-ingestion reported error', {
+        documentId: updatedDocument.id,
+        mode: ingestion.mode,
+        error: ingestion.error,
+      });
+    }
   }
 
   const response: SuccessResponse<ApiDocument> = {
@@ -200,6 +233,20 @@ documentsRouter.post('/file', requireScopes('write'), uploadRateLimit, async (c)
     },
     contentType: file.type || 'text/plain',
   });
+
+  const ingestion = await enqueueDocumentForProcessing({
+    documentId: newDocument.id,
+    content: newDocument.content,
+    containerTag: newDocument.containerTag ?? 'default',
+    sourceType: 'file',
+  });
+  if (ingestion.error) {
+    logger.warn('File ingestion reported error', {
+      documentId: newDocument.id,
+      mode: ingestion.mode,
+      error: ingestion.error,
+    });
+  }
 
   const responseTime = Date.now();
   const response: SuccessResponse<ApiDocument> = {

@@ -208,7 +208,7 @@ export const profileFactInputSchema = z.object({
 /**
  * Search mode enum schema
  */
-export const searchModeSchema = z.enum(['vector', 'memory', 'hybrid']);
+export const searchModeSchema = z.enum(['vector', 'memory', 'fulltext', 'hybrid']);
 
 /**
  * Metadata filter operator schema

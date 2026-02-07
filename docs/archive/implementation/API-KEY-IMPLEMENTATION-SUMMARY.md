@@ -7,7 +7,7 @@ Implemented secure API key authentication for the MCP server based on security r
 ## Files Created
 
 ### 1. Database Schema
-**File**: `src/db/schema/api-keys.schema.ts`
+**File**: `src/db/schema/auth-configuration.schema.removed.ts`
 
 - PostgreSQL table with UUID primary keys
 - Bcrypt hash storage (never plaintext)
@@ -23,7 +23,7 @@ Implemented secure API key authentication for the MCP server based on security r
   - Expiration checks
 
 ### 2. Authentication Service
-**File**: `src/services/auth.service.ts`
+**File**: `src/api/middleware/auth.ts`
 
 **Functions implemented**:
 - `generateApiKey()` - Cryptographically secure key generation
@@ -46,7 +46,7 @@ Implemented secure API key authentication for the MCP server based on security r
 - No plaintext storage
 
 ### 3. MCP Authentication Middleware
-**File**: `src/mcp/auth.ts`
+**File**: `src/api/middleware/auth.ts`
 
 **Functions implemented**:
 - `extractApiKey()` - Extract key from headers (X-API-Key or Authorization Bearer)
@@ -67,7 +67,7 @@ Implemented secure API key authentication for the MCP server based on security r
 
 **Changes**:
 - Added authentication check before tool execution
-- Conditional authentication via `MCP_AUTH_ENABLED` env var
+- Conditional authentication via `AUTH_ENABLED` env var
 - Authorization check based on tool requirements
 - API key management tool handlers:
   - `handleCreateApiKey()` - Create new keys
@@ -91,10 +91,10 @@ Implemented secure API key authentication for the MCP server based on security r
 - `RotateApiKeyResult` - Rotation response with new key
 
 **New tools registered**:
-- `supermemory_create_api_key`
-- `supermemory_revoke_api_key`
-- `supermemory_list_api_keys`
-- `supermemory_rotate_api_key`
+- `removed_auth_tool`
+- `removed_auth_tool`
+- `removed_auth_tool`
+- `removed_auth_tool`
 
 ### 6. Database Migration
 **File**: `drizzle/0001_api_keys.sql`
@@ -112,7 +112,7 @@ Implemented secure API key authentication for the MCP server based on security r
 ## Tests Created
 
 ### 1. Auth Service Tests
-**File**: `tests/services/auth.service.test.ts`
+**File**: `tests/api/middleware/auth.middleware.test.ts`
 
 **Test coverage** (100+ test cases):
 - Key generation (format, uniqueness, entropy)
@@ -126,7 +126,7 @@ Implemented secure API key authentication for the MCP server based on security r
 - Scope updates
 
 ### 2. MCP Auth Tests
-**File**: `tests/mcp/auth.test.ts`
+**File**: `tests/api/middleware/auth.middleware.test.ts`
 
 **Test coverage** (50+ test cases):
 - Header extraction (X-API-Key, Authorization Bearer)
@@ -138,7 +138,7 @@ Implemented secure API key authentication for the MCP server based on security r
 ## Documentation
 
 ### User Documentation
-**File**: `docs/api-key-authentication.md`
+**File**: `docs/auth-configuration.md`
 
 **Contents**:
 - Overview and security features
@@ -167,7 +167,7 @@ Implemented secure API key authentication for the MCP server based on security r
 
 ✅ **Use bcrypt with cost factor 10+**
 - Implemented with cost factor 10
-- Tested in auth.service.test.ts
+- Tested in auth middleware tests (removed)
 
 ✅ **Keys should be prefixed**
 - All keys use `sk-mem_` prefix
@@ -181,14 +181,14 @@ Implemented secure API key authentication for the MCP server based on security r
 ✅ **Integrate with existing rate limiting**
 - Uses same containerTag-based approach
 - Rate limiter checks run after authentication
-- Documented in api-key-authentication.md
+- Documented in auth-configuration.md
 
 ## Integration Points
 
 ### 1. src/mcp/index.ts
 - Authentication middleware added before rate limiting
 - API key info logged for audit trail
-- Conditional execution via `MCP_AUTH_ENABLED`
+- Conditional execution via `AUTH_ENABLED`
 
 ### 2. src/mcp/rateLimit.ts
 - No changes required
@@ -196,7 +196,7 @@ Implemented secure API key authentication for the MCP server based on security r
 - Rate limits apply after auth check
 
 ### 3. src/db/schema/index.ts
-- Exports api-keys.schema.ts
+- Exports auth-configuration.schema.removed.ts
 - Available for Drizzle ORM queries
 
 ## Usage Example
@@ -204,13 +204,13 @@ Implemented secure API key authentication for the MCP server based on security r
 ### 1. Enable Authentication
 
 ```bash
-export MCP_AUTH_ENABLED=true
+export AUTH_ENABLED=true
 ```
 
 ### 2. Create Admin Key
 
 ```typescript
-import { createApiKey } from './src/services/auth.service.js';
+import { createApiKey } from './src/api/middleware/auth.ts';
 
 const { plaintextKey } = await createApiKey({
   name: 'Initial Admin Key',
@@ -242,7 +242,7 @@ const request = {
 
 ```typescript
 {
-  "tool": "supermemory_create_api_key",
+  "tool": "removed_auth_tool",
   "arguments": {
     "name": "Read-Only Client",
     "scopes": ["read"],
@@ -257,10 +257,10 @@ Run the complete test suite:
 
 ```bash
 # Auth service tests (14 test suites, 100+ tests)
-npm test tests/services/auth.service.test.ts
+npm test tests/api/middleware/auth.middleware.test.ts
 
 # MCP authentication tests (7 test suites, 50+ tests)
-npm test tests/mcp/auth.test.ts
+npm test tests/api/middleware/auth.middleware.test.ts
 
 # Run all tests
 npm test
@@ -318,7 +318,7 @@ For existing deployments:
 
 1. Run database migration: `npm run migrate`
 2. Create initial admin key programmatically
-3. Set `MCP_AUTH_ENABLED=true`
+3. Set `AUTH_ENABLED=true`
 4. Update clients with API keys
 5. Monitor logs for auth failures
 6. Gradually migrate all clients

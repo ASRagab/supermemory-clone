@@ -9,10 +9,9 @@
  * - HIGH-005: Origin validation consistency
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { SecretsService } from '../../src/services/secrets.service.js';
 import { CsrfService } from '../../src/services/csrf.service.js';
-import * as authService from '../../src/services/auth.service.js';
 
 describe('HIGH-001: PBKDF2 Iteration Consistency', () => {
   it('should use PBKDF2_ITERATIONS constant (600,000) instead of hardcoded 10,000', () => {
@@ -260,8 +259,9 @@ describe('HIGH-005: Origin Validation Consistency', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     // Simulate the middleware logic
-    const allowedOrigins = ['http://localhost:3000'];
-    if (!undefined && !undefined) {
+    const origin = undefined;
+    const referer = undefined;
+    if (!origin && !referer) {
       const allowMissing = process.env.CSRF_ALLOW_MISSING_ORIGIN === 'true';
       if (allowMissing && process.env.NODE_ENV !== 'production') {
         console.warn('[CSRF] Allowing request with missing Origin/Referer (dev mode)');
@@ -296,7 +296,7 @@ describe('Security Fixes Summary', () => {
       {
         id: 'HIGH-003',
         name: 'Remove Fallback Credentials',
-        files: ['src/services/auth.service.ts'],
+        files: ['src/api/middleware/auth.ts'],
         changes: 'Removed hardcoded database URL, throw error if not set',
         status: 'FIXED',
       },

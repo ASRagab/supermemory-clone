@@ -36,7 +36,7 @@ interface RotationResult {
 class SecretsIntegrationService {
   private requiredSecrets = [
     'DATABASE_URL',
-    'API_SECRET_KEY',
+    'AUTH_TOKEN',
     'ENCRYPTION_KEY',
   ];
 
@@ -235,7 +235,7 @@ describe('Secrets Integration Tests', () => {
   describe('Startup Validation', () => {
     it('should pass validation when all required secrets are present', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
-      process.env.API_SECRET_KEY = 'sk-' + 'a'.repeat(40);
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
       process.env.ENCRYPTION_KEY = 'b'.repeat(32);
 
       const result = service.validateStartup();
@@ -246,18 +246,18 @@ describe('Secrets Integration Tests', () => {
 
     it('should detect missing required secrets', () => {
       delete process.env.DATABASE_URL;
-      delete process.env.API_SECRET_KEY;
+      delete process.env.AUTH_TOKEN;
 
       const result = service.validateStartup();
 
       expect(result.valid).toBe(false);
       expect(result.missingSecrets).toContain('DATABASE_URL');
-      expect(result.missingSecrets).toContain('API_SECRET_KEY');
+      expect(result.missingSecrets).toContain('AUTH_TOKEN');
     });
 
     it('should detect weak secrets', () => {
       process.env.DATABASE_URL = 'postgresql://user:password123@localhost:5432/db';
-      process.env.API_SECRET_KEY = 'test';
+      process.env.AUTH_TOKEN = 'test';
       process.env.ENCRYPTION_KEY = 'weak';
 
       const result = service.validateStartup();
@@ -268,7 +268,7 @@ describe('Secrets Integration Tests', () => {
 
     it('should warn about weak optional secrets', () => {
       process.env.DATABASE_URL = 'postgresql://user:strong-random-pass-123@localhost:5432/db';
-      process.env.API_SECRET_KEY = 'sk-' + 'a'.repeat(40);
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
       process.env.ENCRYPTION_KEY = 'b'.repeat(32);
       process.env.OPENAI_API_KEY = 'test'; // Weak optional
 
@@ -280,7 +280,7 @@ describe('Secrets Integration Tests', () => {
 
     it('should not fail for missing optional secrets', () => {
       process.env.DATABASE_URL = 'postgresql://user:strong-pass-xyz@localhost:5432/db';
-      process.env.API_SECRET_KEY = 'sk-' + 'a'.repeat(40);
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
       process.env.ENCRYPTION_KEY = 'b'.repeat(32);
       delete process.env.OPENAI_API_KEY;
 
@@ -304,7 +304,7 @@ describe('Secrets Integration Tests', () => {
 
     it('should not throw when all required secrets are present', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
-      process.env.API_SECRET_KEY = 'sk-' + 'a'.repeat(40);
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
       process.env.ENCRYPTION_KEY = 'b'.repeat(32);
 
       expect(() => service.failFastValidation()).not.toThrow();
@@ -312,14 +312,14 @@ describe('Secrets Integration Tests', () => {
 
     it('should list all missing secrets in error message', () => {
       delete process.env.DATABASE_URL;
-      delete process.env.API_SECRET_KEY;
+      delete process.env.AUTH_TOKEN;
 
       try {
         service.failFastValidation();
         expect.fail('Should have thrown');
       } catch (error: any) {
         expect(error.message).toContain('DATABASE_URL');
-        expect(error.message).toContain('API_SECRET_KEY');
+        expect(error.message).toContain('AUTH_TOKEN');
       }
     });
   });
@@ -330,29 +330,29 @@ describe('Secrets Integration Tests', () => {
 
   describe('Secret Rotation Without Downtime', () => {
     it('should rotate secret successfully', async () => {
-      process.env.API_SECRET_KEY = 'old-secret-value';
+      process.env.AUTH_TOKEN = 'old-secret-value';
       const newSecret = 'new-secret-value-with-high-entropy';
 
-      const result = await service.rotateSecret('API_SECRET_KEY', newSecret);
+      const result = await service.rotateSecret('AUTH_TOKEN', newSecret);
 
       expect(result.success).toBe(true);
-      expect(process.env.API_SECRET_KEY).toBe(newSecret);
+      expect(process.env.AUTH_TOKEN).toBe(newSecret);
     });
 
     it('should have minimal downtime during rotation', async () => {
-      process.env.API_SECRET_KEY = 'old-secret';
+      process.env.AUTH_TOKEN = 'old-secret';
       const newSecret = 'new-secret';
 
-      const result = await service.rotateSecret('API_SECRET_KEY', newSecret);
+      const result = await service.rotateSecret('AUTH_TOKEN', newSecret);
 
       expect(result.downtime).toBeLessThan(100); // Less than 100ms
     });
 
     it('should maintain both old and new secrets during transition', async () => {
-      process.env.API_SECRET_KEY = 'old-secret';
+      process.env.AUTH_TOKEN = 'old-secret';
       const newSecret = 'new-secret';
 
-      const result = await service.rotateSecret('API_SECRET_KEY', newSecret);
+      const result = await service.rotateSecret('AUTH_TOKEN', newSecret);
 
       expect(result.oldSecretValid).toBe(true);
       expect(result.newSecretValid).toBe(true);
@@ -497,10 +497,10 @@ describe('Secrets Integration Tests', () => {
   describe('Cross-Service Integration', () => {
     it('should validate secrets for multiple services', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
-      process.env.API_SECRET_KEY = 'sk-' + 'a'.repeat(40);
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
 
       const dbValid = service.integrateWithDatabase(process.env.DATABASE_URL);
-      const authValid = service.integrateWithAuth(process.env.API_SECRET_KEY);
+      const authValid = service.integrateWithAuth(process.env.AUTH_TOKEN);
 
       expect(dbValid).toBe(true);
       expect(authValid).toBe(true);
@@ -508,10 +508,10 @@ describe('Secrets Integration Tests', () => {
 
     it('should detect configuration conflicts', () => {
       process.env.DATABASE_URL = 'invalid-db-url';
-      process.env.API_SECRET_KEY = 'invalid-key';
+      process.env.AUTH_TOKEN = 'invalid-key';
 
       const dbValid = service.integrateWithDatabase(process.env.DATABASE_URL);
-      const authValid = service.integrateWithAuth(process.env.API_SECRET_KEY);
+      const authValid = service.integrateWithAuth(process.env.AUTH_TOKEN);
 
       expect(dbValid).toBe(false);
       expect(authValid).toBe(false);

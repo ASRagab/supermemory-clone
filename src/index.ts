@@ -16,6 +16,7 @@ import { authMiddleware } from './api/middleware/auth.js';
 import { errorHandlerMiddleware } from './api/middleware/errorHandler.js';
 import { standardRateLimit } from './api/middleware/rateLimit.js';
 import { setCsrfCookie, csrfProtection } from './api/middleware/csrf.js';
+import { initializeAndValidate } from './startup.js';
 
 const { Pool } = pkg;
 
@@ -219,10 +220,19 @@ Available endpoints:
   DELETE /api/v1/profiles/:tag    - Delete profile
 `);
 
-serve({
-  fetch: app.fetch,
-  port,
-  hostname: host,
+async function startServer(): Promise<void> {
+  await initializeAndValidate();
+
+  serve({
+    fetch: app.fetch,
+    port,
+    hostname: host,
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start API server:', error);
+  process.exit(1);
 });
 
 export { app, db };

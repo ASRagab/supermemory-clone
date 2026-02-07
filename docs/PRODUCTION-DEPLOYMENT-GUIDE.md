@@ -82,7 +82,7 @@ ANTHROPIC_API_KEY   - For LLM memory extraction (optional)
 
 Required variables:
 - [ ] `OPENAI_API_KEY` - OpenAI API key for embeddings
-- [ ] `API_SECRET_KEY` - Strong secret key (32+ characters)
+- [ ] `AUTH_TOKEN` - Strong secret key (32+ characters)
 - [ ] `DATABASE_URL` - PostgreSQL connection string
 - [ ] `REDIS_URL` - Redis connection string
 
@@ -470,7 +470,7 @@ Create `.env` file with production values:
 NODE_ENV=production
 API_HOST=0.0.0.0
 API_PORT=3000
-API_SECRET_KEY=generate-strong-random-secret-32-chars-minimum
+AUTH_TOKEN=generate-strong-random-secret-32-chars-minimum
 
 # Database Configuration (PostgreSQL)
 DATABASE_URL=postgresql://supermemory:your-strong-password@postgres:5432/supermemory
@@ -1278,7 +1278,7 @@ curl -X POST http://localhost:3000/api/v1/search \
 NEW_KEY=$(openssl rand -base64 32)
 
 # Update environment variable
-sed -i "s/API_SECRET_KEY=.*/API_SECRET_KEY=$NEW_KEY/" .env
+sed -i "s/AUTH_TOKEN=.*/AUTH_TOKEN=$NEW_KEY/" .env
 
 # Restart API
 docker compose restart api
@@ -1593,7 +1593,7 @@ SELECT pg_reload_conf();
 docker compose logs api --tail 100
 
 # Common issues:
-# 1. Missing API_SECRET_KEY
+# 1. Missing AUTH_TOKEN
 # 2. Database not ready
 # 3. Redis not available
 # 4. Port 3000 already in use

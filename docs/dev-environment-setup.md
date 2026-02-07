@@ -110,7 +110,7 @@ OPENAI_API_KEY=sk-your-openai-api-key-here
 ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
 
 # Optional: API authentication (leave empty for MCP mode)
-API_SECRET_KEY=your-secret-key-here
+AUTH_TOKEN=your-secret-key-here
 
 # Optional: Server configuration
 API_PORT=3000

@@ -14,7 +14,7 @@ All files handling PII, authentication tokens, API keys, and CSRF tokens have be
 
 | File | Statements | Status | Security Measures |
 |------|-----------|--------|-------------------|
-| `src/services/auth.service.ts` | 5 | ✅ COMPLETE | ✅ Never logs plaintext API keys<br>✅ Only logs API key IDs<br>✅ Redacted user credentials |
+| `src/api/middleware/auth.ts` | 5 | ✅ COMPLETE | ✅ Never logs plaintext API keys<br>✅ Only logs API key IDs<br>✅ Redacted user credentials |
 | `src/services/csrf.service.ts` | 2 | ✅ COMPLETE | ✅ Never logs CSRF tokens<br>✅ Only logs validation status |
 | `src/api/middleware/csrf.ts` | 2 | ✅ COMPLETE | ✅ Logs validation results only<br>✅ No token exposure |
 | `src/api/middleware/auth.ts` | 2 | ✅ COMPLETE | ✅ Logs auth status, never credentials<br>✅ No API key exposure |
@@ -86,7 +86,7 @@ All files handling PII, authentication tokens, API keys, and CSRF tokens have be
 ### Security Verification ✅
 ```bash
 # Verify no sensitive data in auth files
-grep -r "console\." src/services/auth.service.ts src/services/csrf.service.ts \
+grep -r "console\." src/api/middleware/auth.ts src/services/csrf.service.ts \
   src/api/middleware/auth.ts src/api/middleware/csrf.ts
 
 # Result: 0 console statements (all replaced)
@@ -121,7 +121,7 @@ grep -r "console\." src/ --include="*.ts" | \
 ## Next Steps
 
 ### Immediate (HIGH PRIORITY) ✅ COMPLETE
-- ✅ Replace auth.service.ts (PII protection)
+- ✅ Replace auth middleware (removed) (PII protection)
 - ✅ Replace csrf.service.ts (token protection)
 - ✅ Replace auth middleware
 - ✅ Replace csrf middleware
@@ -233,7 +233,7 @@ The remaining work (32 statements in low-risk files) is recommended for operatio
 ## Files Modified
 
 ### High-Risk (Security-Critical) ✅
-1. `src/services/auth.service.ts` - API key management
+1. `src/api/middleware/auth.ts` - API key management
 2. `src/services/csrf.service.ts` - CSRF token handling
 3. `src/api/middleware/auth.ts` - Authentication middleware
 4. `src/api/middleware/csrf.ts` - CSRF middleware

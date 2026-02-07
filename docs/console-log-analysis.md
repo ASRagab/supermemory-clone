@@ -7,7 +7,7 @@ Total console statements found: **82** (excluding logger.ts implementation)
 ## Files by Priority
 
 ### HIGH RISK (PII/Security Concerns) - 9 statements
-1. `src/services/auth.service.ts` - 5 statements
+1. `src/api/middleware/auth.ts` - 5 statements
    - Risk: Authentication tokens, API keys
    - Strategy: Use logger.error() with redacted context (log IDs only, never tokens)
 

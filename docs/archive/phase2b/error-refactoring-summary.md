@@ -66,7 +66,7 @@ New error classes:
 10. **src/services/extractors/url.extractor.ts** (1 error → structured)
     - HTTP errors → `ExternalServiceError` with status codes
 
-11. **src/services/auth.service.ts** (2 errors → structured)
+11. **src/api/middleware/auth.ts** (2 errors → structured)
     - Missing DATABASE_URL → `ConfigurationError` (file was refactored with default)
     - Failed API key creation → `DatabaseError` with table context
 
@@ -171,7 +171,7 @@ throw new DependencyError('pdf-parse', 'npm install pdf-parse');
 7. workers/embedding.worker.ts - 2/2 ✅
 8. services/extractors/pdf.extractor.ts - 1/1 ✅
 9. services/extractors/url.extractor.ts - 1/1 ✅
-10. services/auth.service.ts - 2/2 ✅
+10. services/auth middleware (removed) - 2/2 ✅
 11. mcp/index.ts - 4/4 ✅
 
 ## Next Steps for Completion
@@ -216,7 +216,7 @@ Create comprehensive test suite in `tests/utils/errors/`:
 - ✅ workers/embedding.worker.ts
 - ✅ services/extractors/pdf.extractor.ts
 - ✅ services/extractors/url.extractor.ts
-- ✅ services/auth.service.ts
+- ✅ services/auth middleware (removed)
 
 ### Pending Migration (29 errors)
 - ⏳ config/index.ts (1)

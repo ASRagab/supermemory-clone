@@ -35,7 +35,7 @@ npm run build
 Create a script or run in Node.js REPL:
 
 ```typescript
-import { createApiKey } from './src/services/auth.service.js';
+import { createApiKey } from './src/api/middleware/auth.ts';
 
 const { plaintextKey } = await createApiKey({
   name: 'Initial Admin Key',
@@ -53,13 +53,13 @@ Or use the MCP server (see step 6).
 Add to your environment variables:
 
 ```bash
-export MCP_AUTH_ENABLED=true
+export AUTH_ENABLED=true
 ```
 
 Or add to `.env` file:
 
 ```env
-MCP_AUTH_ENABLED=true
+AUTH_ENABLED=true
 ```
 
 ## 6. Start the MCP Server
@@ -79,7 +79,7 @@ curl -X POST http://localhost:3000/mcp \
   -d '{
     "method": "tools/call",
     "params": {
-      "name": "supermemory_create_api_key",
+      "name": "removed_auth_tool",
       "arguments": {
         "name": "Read-Only Test Key",
         "scopes": ["read"],
@@ -112,10 +112,10 @@ Run the test suite:
 
 ```bash
 # Test auth service
-npm test tests/services/auth.service.test.ts
+npm test tests/api/middleware/auth.middleware.test.ts
 
 # Test MCP authentication
-npm test tests/mcp/auth.test.ts
+npm test tests/api/middleware/auth.middleware.test.ts
 
 # Run all tests
 npm test
@@ -127,7 +127,7 @@ All tests should pass.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_AUTH_ENABLED` | `false` | Enable API key authentication |
+| `AUTH_ENABLED` | `false` | Enable API key authentication |
 | `DATABASE_URL` | - | PostgreSQL connection string |
 | `NODE_ENV` | `development` | Environment (production/development) |
 
@@ -162,7 +162,7 @@ psql $DATABASE_URL < drizzle/0001_api_keys.sql
 Verify environment variable is set:
 
 ```bash
-echo $MCP_AUTH_ENABLED
+echo $AUTH_ENABLED
 # Should output: true
 ```
 
@@ -170,13 +170,13 @@ echo $MCP_AUTH_ENABLED
 
 If you haven't created an admin key yet:
 
-1. Temporarily disable auth: `export MCP_AUTH_ENABLED=false`
+1. Temporarily disable auth: `export AUTH_ENABLED=false`
 2. Create admin key using the service directly
-3. Re-enable auth: `export MCP_AUTH_ENABLED=true`
+3. Re-enable auth: `export AUTH_ENABLED=true`
 
 ## Next Steps
 
-1. Read the full documentation: `docs/api-key-authentication.md`
+1. Read the full documentation: `docs/auth-configuration.md`
 2. Create keys for your use cases (read-only, write, admin)
 3. Distribute keys to clients/users
 4. Monitor usage via `lastUsedAt` timestamps
@@ -187,7 +187,7 @@ If you haven't created an admin key yet:
 - [ ] Run database migration
 - [ ] Create initial admin key
 - [ ] Store admin key securely (password manager, vault)
-- [ ] Enable authentication (`MCP_AUTH_ENABLED=true`)
+- [ ] Enable authentication (`AUTH_ENABLED=true`)
 - [ ] Test authentication works
 - [ ] Create service-specific keys (not admin)
 - [ ] Set expiration dates on temporary keys
@@ -199,7 +199,7 @@ If you haven't created an admin key yet:
 
 Additional steps for production:
 
-1. **Use environment variables** for `MCP_AUTH_ENABLED`
+1. **Use environment variables** for `AUTH_ENABLED`
 2. **Store admin key** in secure vault (AWS Secrets Manager, HashiCorp Vault)
 3. **Enable database backups** for api_keys table
 4. **Set up monitoring** for:
@@ -213,6 +213,6 @@ Additional steps for production:
 
 ## Support
 
-- Documentation: `docs/api-key-authentication.md`
+- Documentation: `docs/auth-configuration.md`
 - Implementation details: `docs/API-KEY-IMPLEMENTATION-SUMMARY.md`
-- Tests: `tests/services/auth.service.test.ts`, `tests/mcp/auth.test.ts`
+- Tests: `tests/api/middleware/auth.middleware.test.ts`, `tests/api/middleware/auth.middleware.test.ts`

@@ -147,7 +147,7 @@ The SuperMemory Clone development environment has been fully set up, configured,
 **Required Variables**:
 - OPENAI_API_KEY (for embeddings) - ⚠️ NEEDS USER INPUT
 - ANTHROPIC_API_KEY (optional, for LLM features)
-- API_SECRET_KEY (optional, for authentication)
+- AUTH_TOKEN (optional, for authentication)
 
 **Configured Defaults**:
 - API_PORT=3000
@@ -282,7 +282,7 @@ npm run clean           # Remove build artifacts
 1. Replace console.log with logger utility
 2. Clean up unused variables
 3. Set up OpenAI API key in .env
-4. Configure authentication (API_SECRET_KEY)
+4. Configure authentication (AUTH_TOKEN)
 5. Review and fix npm audit issues
 
 ## Next Steps for Developers

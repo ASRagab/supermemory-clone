@@ -12,7 +12,7 @@ export type { Memory };
 /**
  * Search mode determines how results are retrieved
  */
-export type SearchMode = 'vector' | 'memory' | 'hybrid';
+export type SearchMode = 'vector' | 'memory' | 'fulltext' | 'hybrid';
 
 /**
  * Metadata filters for search queries
@@ -35,7 +35,7 @@ export interface DateRangeFilter {
  * Search options configuration
  */
 export interface SearchOptions {
-  /** Search mode: vector, memory, or hybrid (default: hybrid) */
+  /** Search mode: vector, memory, fulltext, or hybrid (default: hybrid) */
   searchMode: SearchMode;
 
   /** Maximum number of results to return (default: 10) */
@@ -111,8 +111,8 @@ export interface SearchResult {
   /** Last update timestamp */
   updatedAt: Date;
 
-  /** Source of the result: vector, memory, or both */
-  source: 'vector' | 'memory' | 'hybrid';
+  /** Source of the result */
+  source: 'vector' | 'memory' | 'fulltext' | 'hybrid';
 
   /** Reranking score if reranking was applied */
   rerankScore?: number;

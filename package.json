@@ -11,6 +11,8 @@
     "start": "node dist/index.js",
     "mcp": "node dist/mcp/index.js",
     "mcp:dev": "tsx src/mcp/index.ts",
+    "setup": "tsx scripts/setup.ts",
+    "doctor": "tsx scripts/doctor.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",

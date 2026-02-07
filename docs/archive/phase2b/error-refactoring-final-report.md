@@ -76,7 +76,7 @@ class DependencyError extends AppError {
 ✅ **src/services/extractors/url.extractor.ts** (1 error)
 - HTTP errors → `ExternalServiceError` with status codes
 
-✅ **src/services/auth.service.ts** (2 errors)
+✅ **src/api/middleware/auth.ts** (2 errors)
 - Missing DATABASE_URL → `ConfigurationError`
 - Failed API key creation → `DatabaseError`
 
@@ -306,7 +306,7 @@ Update `/src/api/middleware/errorHandler.ts` to:
 7. `/src/services/pipeline.service.ts` - 3 errors refactored
 8. `/src/services/extractors/pdf.extractor.ts` - 1 error refactored
 9. `/src/services/extractors/url.extractor.ts` - 1 error refactored
-10. `/src/services/auth.service.ts` - 2 errors refactored
+10. `/src/api/middleware/auth.ts` - 2 errors refactored
 11. `/src/workers/chunking.worker.ts` - 1 error refactored
 12. `/src/workers/extraction.worker.ts` - 1 error refactored
 13. `/src/workers/embedding.worker.ts` - 2 errors refactored

@@ -35,14 +35,13 @@ git clone <repo>
 cd supermemory-clone
 npm install
 
-cp .env.example .env
-# Update DATABASE_URL to a PostgreSQL connection string
-# (tests may use SQLite when NODE_ENV=test)
+npm run setup
 
 docker compose up -d postgres
 
 ./scripts/migrations/run_migrations.sh
 
+npm run doctor
 npm run dev
 curl http://localhost:3000/health
 ```
@@ -55,7 +54,8 @@ Set values in `.env` (see `.env.example` for the full list).
 DATABASE_URL=postgresql://user:password@localhost:5432/supermemory
 API_HOST=localhost
 API_PORT=3000
-API_SECRET_KEY=your-random-secret
+AUTH_ENABLED=false
+AUTH_TOKEN=
 CSRF_SECRET=your-random-secret
 OPENAI_API_KEY=sk-...              # Optional: embeddings
 LLM_PROVIDER=openai|anthropic      # Optional: LLM extraction
@@ -66,7 +66,8 @@ REDIS_URL=redis://localhost:6379   # Required for BullMQ workers
 Notes:
 
 - Runtime requires PostgreSQL; SQLite is only used in tests (`NODE_ENV=test`).
-- If `API_SECRET_KEY` is empty, API auth is disabled (use with MCP or trusted networks only).
+- If `AUTH_ENABLED=false`, API auth is disabled (recommended for trusted local networks).
+- If Redis is unavailable, API ingestion falls back to inline memory extraction/indexing.
 
 ## Feature modes
 
@@ -80,6 +81,15 @@ Notes:
 npm run dev
 npm test
 ```
+
+## Coding agent setup (MCP)
+
+```bash
+npm run build
+claude mcp add supermemory -- node /absolute/path/to/supermemory-clone/dist/mcp/index.js
+```
+
+Or use `mcp-config.json` and point your agent to this repo root. No API keys are required for local-only mode.
 
 ## License
 

@@ -528,6 +528,6 @@ SECRETS_SALT=<generated-salt>
 
 ## See Also
 
-- [API Authentication](./api-key-authentication.md)
+- [API Authentication](./auth-configuration.md)
 - [Security Hardening Plan](./archive/phase2b/PHASE2B-SECURITY-HARDENING-PLAN.md)
 - [Production Deployment Guide](./PRODUCTION-DEPLOYMENT-GUIDE.md)
