@@ -1,0 +1,156 @@
+# =============================================================================
+# SuperMemory Clone - Docker Compose Development Override
+# =============================================================================
+# This file extends docker-compose.yml for local development:
+# - Hot reload with source code mounting
+# - SQLite for simplicity (no PostgreSQL)
+# - Debug logging enabled
+# - Exposed debug ports
+#
+# Usage:
+#   # SQLite only (default dev mode):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+#   # SQLite + Redis (for testing caching/queues):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile redis up
+#
+#   # SQLite + PostgreSQL (for testing migrations):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile postgres up
+#
+#   # With worker:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile worker up
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API Service - Development configuration
+  # ---------------------------------------------------------------------------
+  api:
+    # Build from Dockerfile.dev for development (or use same with different target)
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deps  # Stop at deps stage, we'll mount source
+
+    # Override command for development with hot reload
+    command: ["npm", "run", "dev"]
+
+    # Mount source code for hot reload
+    volumes:
+      - ./src:/app/src:ro
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./drizzle.config.ts:/app/drizzle.config.ts:ro
+      # Persistent data directory
+      - ./data:/app/data
+      # Exclude node_modules from mount (use container's modules)
+      - /app/node_modules
+
+    environment:
+      - NODE_ENV=development
+      - API_HOST=0.0.0.0
+      - API_PORT=3000
+      # Use SQLite for simpler local development
+      - DATABASE_URL=./data/supermemory-dev.db
+      # Debug logging
+      - LOG_LEVEL=debug
+      # API keys from .env file
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_SECRET_KEY=${API_SECRET_KEY:-dev-secret-key-change-in-production}
+      # Vector Store (memory by default for dev, or use chroma profile)
+      - VECTOR_STORE_PROVIDER=${VECTOR_STORE_PROVIDER:-memory}
+      - VECTOR_DIMENSIONS=${VECTOR_DIMENSIONS:-1536}
+      - VECTOR_SQLITE_PATH=./data/vectors-dev.db
+      - CHROMA_URL=${CHROMA_URL:-http://chromadb:8000}
+      - CHROMA_COLLECTION=${CHROMA_COLLECTION:-supermemory_dev_vectors}
+      # LLM Provider (optional for dev)
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_CACHE_ENABLED=${LLM_CACHE_ENABLED:-true}
+
+    # Expose Node.js debugger port
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Node.js debugger
+
+    # Disable resource limits in development
+    deploy:
+      resources: {}
+
+    # Faster health check for development
+    healthcheck:
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL - Development configuration (optional via profile)
+  # ---------------------------------------------------------------------------
+  postgres:
+    # Use standard postgres for development (smaller image)
+    image: postgres:16-alpine
+
+    environment:
+      - POSTGRES_USER=supermemory
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=supermemory_dev
+
+    # Don't persist data in development (fresh start each time)
+    volumes: []
+    tmpfs:
+      - /var/lib/postgresql/data
+
+    # Disable resource limits in development
+    deploy:
+      resources: {}
+
+  # ---------------------------------------------------------------------------
+  # Redis - Development configuration (optional via profile)
+  # ---------------------------------------------------------------------------
+  redis:
+    # Simpler configuration for development
+    command: redis-server
+
+    # Don't persist data in development
+    volumes: []
+
+    # Disable resource limits in development
+    deploy:
+      resources: {}
+
+  # ---------------------------------------------------------------------------
+  # Worker - Development configuration
+  # ---------------------------------------------------------------------------
+  worker:
+    # Mount source code for hot reload
+    volumes:
+      - ./src:/app/src:ro
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./data:/app/data
+      - /app/node_modules
+
+    # Use tsx for development
+    command: ["npx", "tsx", "watch", "src/worker.ts"]
+
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=./data/supermemory-dev.db
+      - LOG_LEVEL=debug
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_SECRET_KEY=${API_SECRET_KEY:-dev-secret-key-change-in-production}
+
+    # Disable resource limits in development
+    deploy:
+      resources: {}
+
+# =============================================================================
+# Override volumes for development (empty - no persistence needed)
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

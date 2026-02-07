@@ -9,7 +9,7 @@ import type { Memory, Relationship, MemoryServiceConfig } from '../memory.types.
 import type { EmbeddingService } from '../embedding.service.js';
 import { getEmbeddingService } from '../embedding.service.js';
 import { MemoryService, getMemoryService } from '../memory.service.js';
-import { MemoryRepository, getMemoryRepository } from '../memory.repository.js';
+import { type MemoryRepository, getMemoryRepository } from '../memory.repository.js';
 import { getLogger } from '../../utils/logger.js';
 import type {
   RelationshipConfig,

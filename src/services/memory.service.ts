@@ -34,7 +34,7 @@ import {
   MemoryServiceConfig,
   DEFAULT_MEMORY_CONFIG,
 } from './memory.types.js';
-import { MemoryRepository, getMemoryRepository } from './memory.repository.js';
+import { type MemoryRepository, getMemoryRepository } from './memory.repository.js';
 import {
   getLLMProvider,
   isLLMAvailable,
@@ -46,10 +46,7 @@ import {
   getContradictionDetector,
   getMemoryExtensionDetector,
 } from './llm/index.js';
-import {
-  classifyMemoryTypeHeuristically,
-  countMemoryTypeMatches,
-} from './llm/heuristics.js';
+import { classifyMemoryTypeHeuristically, countMemoryTypeMatches } from './llm/heuristics.js';
 import { detectRelationshipsWithEmbeddings } from './relationships/detector.js';
 
 const logger = getLogger('MemoryService');
@@ -841,7 +838,10 @@ export class MemoryService {
    * @param existing - The existing memory to compare
    * @returns Promise with ExtensionCheckResult
    */
-  async checkForExtensionsAsync(newMemory: Memory, existing: Memory): Promise<ExtensionCheckResult> {
+  async checkForExtensionsAsync(
+    newMemory: Memory,
+    existing: Memory
+  ): Promise<ExtensionCheckResult> {
     const detector = getMemoryExtensionDetector();
     const result = await detector.checkExtension(newMemory, existing);
 
@@ -929,9 +929,8 @@ export class MemoryService {
 
     try {
       // Only use default containerTag if not explicitly provided (including undefined)
-      const containerTag = 'containerTag' in options
-        ? options.containerTag
-        : this.config.defaultContainerTag;
+      const containerTag =
+        'containerTag' in options ? options.containerTag : this.config.defaultContainerTag;
 
       if (containerTag) {
         validate(containerTagSchema, containerTag);
@@ -979,9 +978,8 @@ export class MemoryService {
           );
 
           // Set relationship detection method in memory metadata
-          const relationshipMethod = this.useEmbeddingRelationships && this.embeddingService
-            ? 'embedding'
-            : 'heuristic';
+          const relationshipMethod =
+            this.useEmbeddingRelationships && this.embeddingService ? 'embedding' : 'heuristic';
           memory.metadata.relationshipMethod = relationshipMethod;
 
           const existingById = new Map(existingMemories.map((m) => [m.id, m]));

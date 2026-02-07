@@ -1,0 +1,89 @@
+# =============================================================================
+# SuperMemory Clone - Docker Compose Production Override
+# =============================================================================
+# This file extends docker-compose.yml for production deployment:
+# - PostgreSQL with pgvector for vector search
+# - Redis for caching and job queues (BullMQ)
+# - ChromaDB for scalable vector search (optional)
+# - Full resource limits enabled
+# - Persistent volumes
+#
+# Usage:
+#   # Full production stack (API + PostgreSQL + Redis):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
+#
+#   # With ChromaDB vector store:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile chroma up -d
+#
+#   # With worker:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile worker up -d
+#
+#   # View logs:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f api
+#
+#   # Stop all services:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+#
+#   # Stop and remove volumes (WARNING: deletes data):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API Service - Production configuration
+  # ---------------------------------------------------------------------------
+  api:
+    environment:
+      - NODE_ENV=production
+      - API_HOST=0.0.0.0
+      - API_PORT=3000
+      # Database connection (PostgreSQL)
+      - DATABASE_URL=postgresql://supermemory:supermemory_secret@postgres:5432/supermemory
+      # Redis connection
+      - REDIS_URL=redis://redis:6379
+      # These should be provided via .env file or secrets
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1536}
+      # Vector Store Configuration
+      - VECTOR_STORE_PROVIDER=${VECTOR_STORE_PROVIDER:-memory}
+      - VECTOR_DIMENSIONS=${VECTOR_DIMENSIONS:-1536}
+      - CHROMA_URL=${CHROMA_URL:-http://chromadb:8000}
+      - CHROMA_COLLECTION=${CHROMA_COLLECTION:-supermemory_vectors}
+      # LLM Provider Configuration
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-2000}
+      - LLM_CACHE_ENABLED=${LLM_CACHE_ENABLED:-true}
+      - LLM_CACHE_TTL_MS=${LLM_CACHE_TTL_MS:-900000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+
+    # In production, API depends on postgres and redis being healthy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Worker - Production configuration
+  # ---------------------------------------------------------------------------
+  worker:
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://supermemory:supermemory_secret@postgres:5432/supermemory
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+    # In production, worker depends on postgres and redis being healthy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

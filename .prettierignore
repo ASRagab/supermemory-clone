@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+drizzle
+*.log
+.env
+.env.*
+!.env.example
+package-lock.json

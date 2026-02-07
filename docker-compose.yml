@@ -1,0 +1,353 @@
+# =============================================================================
+# SuperMemory Clone - Docker Compose Base Configuration
+# =============================================================================
+# This file defines the base service configurations.
+# Services use profiles for flexible deployment:
+#
+# Development (SQLite only):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Development with Redis:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile redis up
+#
+# Production (requires docker-compose.prod.yml):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API Service - Main SuperMemory Clone API
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: supermemory-api
+    restart: unless-stopped
+
+    # Environment variables - base configuration
+    # Override in dev/prod compose files as needed
+    environment:
+      - NODE_ENV=production
+      - API_HOST=0.0.0.0
+      - API_PORT=3000
+      # These should be provided via .env file or secrets
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1536}
+      # Vector Store Configuration
+      - VECTOR_STORE_PROVIDER=${VECTOR_STORE_PROVIDER:-memory}
+      - VECTOR_DIMENSIONS=${VECTOR_DIMENSIONS:-1536}
+      - VECTOR_SQLITE_PATH=${VECTOR_SQLITE_PATH:-./data/vectors.db}
+      - CHROMA_URL=${CHROMA_URL:-http://chromadb:8000}
+      - CHROMA_COLLECTION=${CHROMA_COLLECTION:-supermemory_vectors}
+      # Redis Configuration
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      # BullMQ Queue Configuration
+      - BULLMQ_CONCURRENCY_EXTRACTION=${BULLMQ_CONCURRENCY_EXTRACTION:-5}
+      - BULLMQ_CONCURRENCY_CHUNKING=${BULLMQ_CONCURRENCY_CHUNKING:-3}
+      - BULLMQ_CONCURRENCY_EMBEDDING=${BULLMQ_CONCURRENCY_EMBEDDING:-2}
+      - BULLMQ_CONCURRENCY_INDEXING=${BULLMQ_CONCURRENCY_INDEXING:-1}
+      # LLM Provider Configuration (optional - for memory extraction)
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-2000}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.1}
+      - LLM_TIMEOUT_MS=${LLM_TIMEOUT_MS:-30000}
+      - LLM_MAX_RETRIES=${LLM_MAX_RETRIES:-3}
+      - LLM_CACHE_ENABLED=${LLM_CACHE_ENABLED:-true}
+      - LLM_CACHE_TTL_MS=${LLM_CACHE_TTL_MS:-900000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+
+    ports:
+      - "3000:3000"
+
+    # No depends_on in base - override in prod compose file
+    # This allows dev mode to work without postgres/redis
+
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits to prevent runaway processes
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    networks:
+      - supermemory-network
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL with pgvector - Vector database for embeddings
+  # ---------------------------------------------------------------------------
+  # Only started when postgres profile is active or via prod compose
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: supermemory-postgres
+    restart: unless-stopped
+
+    environment:
+      - POSTGRES_USER=supermemory
+      - POSTGRES_PASSWORD=supermemory_secret
+      - POSTGRES_DB=supermemory
+      # Performance tuning
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+
+    ports:
+      - "5432:5432"
+
+    # Persistent storage for database
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Mount initialization script for pgvector extension setup
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      # Mount migration scripts for easy access
+      - ./scripts/migrations:/migrations:ro
+
+    # Health check to verify PostgreSQL is ready
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supermemory -d supermemory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    networks:
+      - supermemory-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # PostgreSQL is optional - use profile to enable
+    profiles:
+      - postgres
+      - production
+
+  # ---------------------------------------------------------------------------
+  # Redis - Caching and job queue (BullMQ)
+  # ---------------------------------------------------------------------------
+  # Only started when redis profile is active or via prod compose
+  redis:
+    image: redis:7-alpine
+    container_name: supermemory-redis
+    restart: unless-stopped
+
+    # Redis configuration for persistence and memory management
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+
+    ports:
+      - "6379:6379"
+
+    # Persistent storage for Redis
+    volumes:
+      - redis_data:/data
+
+    # Health check to verify Redis is ready
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+    networks:
+      - supermemory-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Redis is optional - use profile to enable
+    profiles:
+      - redis
+      - production
+
+  # ---------------------------------------------------------------------------
+  # ChromaDB - Vector database for embeddings (optional)
+  # ---------------------------------------------------------------------------
+  # Started when chroma profile is active or via prod compose with chroma
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: supermemory-chromadb
+    restart: unless-stopped
+
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+      # Optional authentication (uncomment to enable)
+      # - CHROMA_SERVER_AUTH_PROVIDER=token
+      # - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_AUTH_TOKEN}
+      # - CHROMA_SERVER_AUTH_TOKEN_TRANSPORT_HEADER=Authorization
+
+    ports:
+      - "8000:8000"
+
+    # Persistent storage for vector data
+    volumes:
+      - chromadb_data:/chroma/chroma
+
+    # Health check to verify ChromaDB is ready
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    networks:
+      - supermemory-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ChromaDB is optional - use profile to enable
+    profiles:
+      - chroma
+      - production
+
+  # ---------------------------------------------------------------------------
+  # Worker Service - Background job processor
+  # ---------------------------------------------------------------------------
+  # Handles asynchronous tasks like:
+  # - Document processing and chunking
+  # - Embedding generation
+  # - Batch imports
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: supermemory-worker
+    restart: unless-stopped
+
+    # Override command to run worker instead of API
+    command: ["node", "dist/worker.js"]
+
+    environment:
+      - NODE_ENV=production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Redis Configuration
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      # BullMQ Queue Configuration
+      - BULLMQ_CONCURRENCY_EXTRACTION=${BULLMQ_CONCURRENCY_EXTRACTION:-5}
+      - BULLMQ_CONCURRENCY_CHUNKING=${BULLMQ_CONCURRENCY_CHUNKING:-3}
+      - BULLMQ_CONCURRENCY_EMBEDDING=${BULLMQ_CONCURRENCY_EMBEDDING:-2}
+      - BULLMQ_CONCURRENCY_INDEXING=${BULLMQ_CONCURRENCY_INDEXING:-1}
+
+    # No depends_on in base - override in prod compose file
+
+    # No health check for worker - it doesn't expose HTTP
+    # You could add a custom health check script if needed
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    networks:
+      - supermemory-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Worker is optional - use profile to enable
+    profiles:
+      - worker
+
+# =============================================================================
+# Volumes - Persistent storage
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+    name: supermemory_postgres_data
+  redis_data:
+    driver: local
+    name: supermemory_redis_data
+  chromadb_data:
+    driver: local
+    name: supermemory_chromadb_data
+
+# =============================================================================
+# Networks - Container networking
+# =============================================================================
+networks:
+  supermemory-network:
+    driver: bridge
+    name: supermemory-network
