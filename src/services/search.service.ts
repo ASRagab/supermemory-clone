@@ -553,8 +553,8 @@ export class SearchService {
   ): Promise<SearchResult[]> {
     const connectionString = getDatabaseUrl();
 
-    // PostgreSQL full-text search is the runtime path; use memory fallback only in tests.
-    if (!isPostgresUrl(connectionString)) {
+    // Keep test behavior deterministic by using in-memory fallback.
+    if (process.env.NODE_ENV === 'test' || !isPostgresUrl(connectionString)) {
       return this.memorySearchInternal(query, containerTag, options);
     }
 

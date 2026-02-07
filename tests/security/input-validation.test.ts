@@ -349,14 +349,14 @@ describe('Enum Schemas', () => {
 
   describe('Search Mode', () => {
     it('should accept all valid search modes', () => {
-      const validModes = ['vector', 'memory', 'hybrid'];
+      const validModes = ['vector', 'memory', 'fulltext', 'hybrid'];
       for (const mode of validModes) {
         expect(searchModeSchema.parse(mode)).toBe(mode);
       }
     });
 
     it('should reject invalid search modes', () => {
-      expect(() => searchModeSchema.parse('fulltext')).toThrow(ZodError);
+      expect(() => searchModeSchema.parse('keyword')).toThrow(ZodError);
       expect(() => searchModeSchema.parse('')).toThrow(ZodError);
     });
   });
