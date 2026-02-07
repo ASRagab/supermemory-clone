@@ -8,7 +8,18 @@ import { dirname } from 'node:path';
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 let sqliteInstance: Database.Database | null = null;
 
+function isPostgresConnectionString(url: string): boolean {
+  const normalized = url.trim().toLowerCase();
+  return normalized.startsWith('postgresql://') || normalized.startsWith('postgres://');
+}
+
 function createDatabase(databaseUrl: string) {
+  if (isPostgresConnectionString(databaseUrl)) {
+    throw new Error(
+      'SQLite database module received a PostgreSQL URL. Use src/db/client.ts or src/db/postgres.ts for PostgreSQL connections.'
+    );
+  }
+
   // Ensure the directory exists
   const dir = dirname(databaseUrl);
   if (dir !== '.' && !existsSync(dir)) {

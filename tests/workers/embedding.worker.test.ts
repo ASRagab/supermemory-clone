@@ -8,12 +8,6 @@ import { EmbeddingWorker } from '../../src/workers/embedding.worker.js';
 import type { EmbeddingJobData, EmbeddingJobResult } from '../../src/workers/embedding.worker.js';
 import * as embeddingServiceModule from '../../src/services/embedding.service.js';
 import * as pgvectorModule from '../../src/services/vectorstore/pgvector.js';
-import { getDatabase } from '../../src/db/index.js';
-
-// Standardized database setup for consistency with other worker tests
-const DATABASE_URL = process.env.TEST_POSTGRES_URL ||
-  'postgresql://supermemory:supermemory_secret@localhost:5432/supermemory';
-const db = getDatabase(DATABASE_URL);
 
 // Mock BullMQ
 const mockJob = {
