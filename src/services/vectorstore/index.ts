@@ -92,9 +92,11 @@ const logger = getLogger('VectorStoreFactory');
 
 /**
  * Vector store constructor type that accepts a VectorStoreConfig or extended config
- * Using 'any' for config to support different constructor signatures (InMemory vs PgVector)
+ * Uses any for constructor compatibility across implementations.
  */
-type VectorStoreConstructor = new (config: VectorStoreConfig | any) => BaseVectorStore;
+type VectorStoreConstructor = new (
+  config: VectorStoreConfig | any
+) => BaseVectorStore;
 
 /**
  * Lazy-loaded implementation loaders

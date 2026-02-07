@@ -24,7 +24,6 @@ const PBKDF2_DIGEST = 'sha512';
 const KEY_LENGTH = 32;
 const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
-const AUTH_TAG_LENGTH = 16;
 const MIN_SECRET_ENTROPY = 128;
 const REDACTED = '[REDACTED]';
 

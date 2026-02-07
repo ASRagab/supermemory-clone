@@ -10,6 +10,7 @@ import {
   timestamp,
   index,
   check,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { documents } from './documents.schema.js';
@@ -26,7 +27,7 @@ export const memories = pgTable(
     isLatest: boolean('is_latest').notNull().default(true),
     similarityHash: varchar('similarity_hash', { length: 64 }).notNull(),
     version: integer('version').notNull().default(1),
-    supersedesId: uuid('supersedes_id').references((): any => memories.id, {
+    supersedesId: uuid('supersedes_id').references((): AnyPgColumn => memories.id, {
       onDelete: 'set null',
     }),
     containerTag: varchar('container_tag', { length: 255 }).notNull(),

@@ -15,9 +15,7 @@ import type {
   RelationshipConfig,
   RelationshipDetectionResult,
   Contradiction,
-  VectorStore,
   LLMProvider,
-  DetectedRelationship,
 } from './types.js';
 import {
   EmbeddingRelationshipDetector,
@@ -25,8 +23,6 @@ import {
   createEmbeddingRelationshipDetector,
 } from './detector.js';
 import {
-  indexMemoryForRelationships,
-  removeMemoryFromRelationshipIndex,
   getSharedVectorStore,
 } from './index.js';
 import { isEmbeddingRelationshipsEnabled } from '../../config/feature-flags.js';

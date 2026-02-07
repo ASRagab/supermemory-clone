@@ -1,4 +1,15 @@
-import { pgTable, uuid, varchar, text, jsonb, boolean, timestamp, index, check } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  jsonb,
+  boolean,
+  timestamp,
+  index,
+  check,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const containerTags = pgTable(
@@ -8,7 +19,7 @@ export const containerTags = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     tag: varchar('tag', { length: 255 }).notNull().unique(),
-    parentTag: varchar('parent_tag', { length: 255 }).references((): any => containerTags.tag, {
+    parentTag: varchar('parent_tag', { length: 255 }).references((): AnyPgColumn => containerTags.tag, {
       onDelete: 'set null',
     }),
     displayName: varchar('display_name', { length: 255 }),

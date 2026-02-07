@@ -10,7 +10,7 @@
  * - XSS-safe string schemas with auto-sanitization
  */
 
-import { z, ZodError, ZodSchema, ZodType } from 'zod';
+import { z, ZodError, ZodSchema } from 'zod';
 import { ValidationError } from './errors.js';
 import { sanitizeHtml, sanitizeForStorage, isPathSafe, sanitizeUrl } from './sanitization.js';
 

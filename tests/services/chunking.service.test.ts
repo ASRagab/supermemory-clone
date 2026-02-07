@@ -69,7 +69,8 @@ class ChunkingService {
       });
 
       position = endPosition - opts.overlap;
-      if (position <= chunks[chunks.length - 1]?.startOffset ?? 0) {
+      const previousStartOffset = chunks[chunks.length - 1]?.startOffset ?? 0;
+      if (position <= previousStartOffset) {
         position = endPosition;
       }
       index++;

@@ -7,7 +7,6 @@
  * Uses isomorphic-dompurify for cross-platform (Node.js/browser) XSS prevention.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 import DOMPurifyDefault from 'isomorphic-dompurify';
 
 // Use the sanitize function directly to avoid type conflicts between dompurify versions

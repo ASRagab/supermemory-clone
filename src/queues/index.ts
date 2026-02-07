@@ -14,7 +14,6 @@ import {
   defaultQueueOptions,
   deadLetterQueueOptions,
   redisConfig,
-  concurrencySettings,
   JobProgress,
 } from './config.js';
 import { ValidationError, NotFoundError, ErrorCode } from '../utils/errors.js';

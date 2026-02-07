@@ -21,7 +21,7 @@ import {
   VectorStoreEvent,
   VectorStoreEventListener,
 } from './types.js';
-import { ValidationError, ErrorCode } from '../../utils/errors.js';
+import { ValidationError } from '../../utils/errors.js';
 
 /**
  * Calculate cosine similarity between two vectors

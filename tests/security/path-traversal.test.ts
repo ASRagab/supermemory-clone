@@ -138,8 +138,10 @@ function sanitizePath(inputPath: string): string {
   // Remove double slashes
   sanitized = sanitized.replace(/[/\\]+/g, '/');
 
-  // Remove any remaining dangerous characters
-  sanitized = sanitized.replace(/[\x00-\x1f]/g, '');
+  // Remove any remaining ASCII control characters
+  sanitized = Array.from(sanitized)
+    .filter((ch) => ch.charCodeAt(0) >= 32)
+    .join('');
 
   return sanitized;
 }
@@ -450,7 +452,8 @@ describe('Path Sanitization', () => {
 
     it('should remove other control characters', () => {
       const sanitized = sanitizePath('file\x01\x02name.txt');
-      expect(sanitized).not.toMatch(/[\x00-\x1f]/);
+      const hasControlChars = Array.from(sanitized).some((ch) => ch.charCodeAt(0) < 32);
+      expect(hasControlChars).toBe(false);
     });
   });
 });

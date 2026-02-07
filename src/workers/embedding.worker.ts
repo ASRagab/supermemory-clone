@@ -32,7 +32,7 @@ export interface EmbeddingJobData {
   chunks: Array<{
     id: string;
     content: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }>;
   /** Optional: Override default batch size */
   batchSize?: number;

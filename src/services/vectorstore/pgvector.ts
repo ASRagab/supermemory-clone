@@ -26,7 +26,7 @@ import {
 import { BaseVectorStore, validateVector } from './base.js';
 import pkg from 'pg';
 const { Pool } = pkg;
-import type { Pool as PgPool, PoolClient, QueryResult } from 'pg';
+import type { Pool as PgPool } from 'pg';
 import { DatabaseError, ConflictError, ErrorCode } from '../../utils/errors.js';
 import {
   getPostgresDatabase,
@@ -52,7 +52,7 @@ export interface PgVectorStoreConfig extends VectorStoreConfig {
 interface PgVectorEntry {
   id: string;
   embedding: string; // pgvector format: '[1,2,3]'
-  metadata: any; // Already parsed by pg library from JSONB
+  metadata: unknown; // Already parsed by pg library from JSONB
   namespace: string;
   created_at: Date;
   updated_at: Date;
@@ -291,7 +291,7 @@ export class PgVectorStore extends BaseVectorStore {
     }
 
     const updateFields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     if (updates.embedding) {
@@ -481,11 +481,18 @@ export class PgVectorStore extends BaseVectorStore {
       resultsCount: result.rows.length,
     });
 
-    return result.rows.map((row: any) => ({
+    const rows = result.rows as Array<{
+      id: string;
+      score: number;
+      embedding?: string;
+      metadata?: Record<string, unknown>;
+    }>;
+
+    return rows.map((row) => ({
       id: row.id,
       score: row.score,
-      embedding: opts.includeVectors ? this.parseEmbedding(row.embedding) : undefined,
-      metadata: opts.includeMetadata ? row.metadata : {},
+      embedding: opts.includeVectors ? this.parseEmbedding(row.embedding ?? '[]') : undefined,
+      metadata: opts.includeMetadata ? (row.metadata ?? {}) : {},
     }));
   }
 
@@ -515,7 +522,9 @@ export class PgVectorStore extends BaseVectorStore {
     ]);
 
     const stats = countResult.rows[0] as { total: string; namespace_count: string };
-    const namespaces = namespacesResult.rows.map((row: any) => row.namespace);
+    const namespaces = (namespacesResult.rows as Array<{ namespace: string }>).map(
+      (row) => row.namespace
+    );
 
     return {
       totalVectors: parseInt(stats.total, 10),
@@ -600,7 +609,7 @@ export class PgVectorStore extends BaseVectorStore {
     return {
       id: row.id,
       embedding: this.parseEmbedding(row.embedding),
-      metadata: row.metadata, // Already parsed by pg library from JSONB
+      metadata: (row.metadata ?? {}) as Record<string, unknown>, // JSONB is already parsed by pg
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -637,12 +646,14 @@ export class PgVectorStore extends BaseVectorStore {
         return `(metadata->>'${key}')::numeric < ${value}`;
       case 'lte':
         return `(metadata->>'${key}')::numeric <= ${value}`;
-      case 'in':
+      case 'in': {
         const inValues = Array.isArray(value) ? value.map((v) => `'${v}'`).join(',') : `'${value}'`;
         return `metadata->>'${key}' IN (${inValues})`;
-      case 'nin':
+      }
+      case 'nin': {
         const ninValues = Array.isArray(value) ? value.map((v) => `'${v}'`).join(',') : `'${value}'`;
         return `metadata->>'${key}' NOT IN (${ninValues})`;
+      }
       case 'contains':
         return `metadata->>'${key}' LIKE '%${value}%'`;
       case 'startsWith':

@@ -25,7 +25,6 @@ import type {
   DetectedRelationship,
   RelationshipDetectionStats,
   CachedRelationshipScore,
-  LLMVerificationRequest,
   DetectionStrategyType,
 } from './types.js';
 import { DEFAULT_RELATIONSHIP_CONFIG, generateCacheKey } from './types.js';

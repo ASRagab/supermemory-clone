@@ -12,7 +12,6 @@
  */
 
 import type {
-  Memory as BaseMemory,
   MemoryType,
   MemoryRelationship,
   RelationshipType,
@@ -27,8 +26,6 @@ import { getEmbeddingService, type EmbeddingService } from './embedding.service.
 import {
   Memory,
   Relationship,
-  MemoryExtractionResult,
-  RelationshipDetectionResult,
   UpdateCheckResult,
   ExtensionCheckResult,
   MemoryServiceConfig,
@@ -658,12 +655,8 @@ export class MemoryService {
   classifyMemoryType(content: string): MemoryType {
     // Use LLM-based classification service with pattern matching fallback
     // This replaces the TODO-001 implementation
-    const classifier = getMemoryClassifier();
-
-    // Note: This is synchronous for backward compatibility
-    // The classifier will use cached results when available
-    // For new classifications, it falls back to pattern matching
-    // To use LLM async, call: await classifier.classify(content)
+    // Note: This is synchronous for backward compatibility.
+    // For LLM async, call: await getMemoryClassifier().classify(content)
 
     const heuristic = classifyMemoryTypeHeuristically(content);
     return heuristic.type;

@@ -2,7 +2,6 @@ import {
   sqliteTable,
   text,
   integer,
-  real,
   blob,
   index,
   uniqueIndex,

@@ -16,7 +16,6 @@ import {
 import {
   getRequiredSecrets,
   getOptionalSecrets,
-  getAllSecrets,
   type SecretDefinition,
 } from './config/secrets.config.js';
 import { logger } from './utils/logger.js';
@@ -204,7 +203,7 @@ function validateSecret(
     case 'database_url': {
       try {
         validateDatabaseUrl(value);
-      } catch (error) {
+      } catch {
         errors.push('Invalid database URL format');
       }
       break;
@@ -241,7 +240,6 @@ function validateSecret(
  * Get sanitized configuration summary for logging
  */
 export function getConfigurationSummary(): ConfigurationSummary {
-  const allSecrets = getAllSecrets();
   const requiredSecrets = getRequiredSecrets();
   const optionalSecrets = getOptionalSecrets();
 

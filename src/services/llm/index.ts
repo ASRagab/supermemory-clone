@@ -14,12 +14,11 @@ import type {
   OpenAILLMConfig,
   AnthropicLLMConfig,
   MockLLMConfig,
-  LLMConfig,
   CacheConfig,
 } from './types.js';
-import { OpenAILLMProvider, createOpenAIProvider } from './openai.js';
-import { AnthropicLLMProvider, createAnthropicProvider } from './anthropic.js';
-import { MockLLMProvider, createMockProvider } from './mock.js';
+import { createOpenAIProvider } from './openai.js';
+import { createAnthropicProvider } from './anthropic.js';
+import { createMockProvider } from './mock.js';
 
 const logger = getLogger('LLMFactory');
 

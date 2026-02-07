@@ -5,7 +5,6 @@
  * Resources use URI patterns to identify different data types.
  */
 
-import { z } from 'zod';
 import { ValidationError } from '../utils/errors.js';
 
 // ============================================================================

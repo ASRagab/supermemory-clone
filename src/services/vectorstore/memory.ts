@@ -177,7 +177,7 @@ export class InMemoryVectorStore extends BaseVectorStore {
     if (!entry) return null;
 
     // Return copy without internal fields
-    const { namespace, ...publicEntry } = entry;
+    const { namespace: _namespace, ...publicEntry } = entry;
     return publicEntry;
   }
 
@@ -267,7 +267,7 @@ export class InMemoryVectorStore extends BaseVectorStore {
    * Get all entries (for migration/export)
    */
   async getAllEntries(): Promise<VectorEntry[]> {
-    return Array.from(this.entries.values()).map(({ namespace, ...entry }) => entry);
+    return Array.from(this.entries.values()).map(({ namespace: _namespace, ...entry }) => entry);
   }
 
   /**

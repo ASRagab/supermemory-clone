@@ -259,7 +259,7 @@ export class HTTPClient {
   /**
    * Execute a request with retry logic
    */
-  private async executeWithRetry<T>(
+  private async executeWithRetry(
     method: string,
     path: string,
     options: {

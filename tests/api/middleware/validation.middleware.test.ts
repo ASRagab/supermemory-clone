@@ -95,39 +95,35 @@ function contentSizeLimit(maxBytes: number) {
     }
 
     // Also check after parsing
-    try {
-      const body = await c.req.text();
-      const bodySize = new TextEncoder().encode(body).length;
+    const body = await c.req.text();
+    const bodySize = new TextEncoder().encode(body).length;
 
-      if (bodySize > maxBytes) {
-        return c.json({
-          error: {
-            code: 'PAYLOAD_TOO_LARGE',
-            message: `Request body exceeds maximum size of ${maxBytes} bytes`,
-            details: { maxBytes, receivedBytes: bodySize },
-          },
-          status: 413,
-        }, 413);
-      }
-
-      // Parse JSON and continue
-      try {
-        const json = JSON.parse(body);
-        c.set('parsedBody', json);
-      } catch {
-        return c.json({
-          error: {
-            code: ErrorCodes.BAD_REQUEST,
-            message: 'Invalid JSON in request body',
-          },
-          status: 400,
-        }, 400);
-      }
-
-      return next();
-    } catch (error) {
-      throw error;
+    if (bodySize > maxBytes) {
+      return c.json({
+        error: {
+          code: 'PAYLOAD_TOO_LARGE',
+          message: `Request body exceeds maximum size of ${maxBytes} bytes`,
+          details: { maxBytes, receivedBytes: bodySize },
+        },
+        status: 413,
+      }, 413);
     }
+
+    // Parse JSON and continue
+    try {
+      const json = JSON.parse(body);
+      c.set('parsedBody', json);
+    } catch {
+      return c.json({
+        error: {
+          code: ErrorCodes.BAD_REQUEST,
+          message: 'Invalid JSON in request body',
+        },
+        status: 400,
+      }, 400);
+    }
+
+    return next();
   };
 }
 

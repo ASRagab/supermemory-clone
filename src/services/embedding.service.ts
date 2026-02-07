@@ -10,7 +10,6 @@ import {
   ValidationError,
   EmbeddingError,
   ExternalServiceError,
-  ErrorCode,
 } from '../utils/errors.js';
 
 /**
@@ -77,15 +76,10 @@ function generateLocalEmbedding(text: string, dimensions: number = 384): number[
     .split(/\s+/)
     .filter((t) => t.length > 0);
 
-  // Create a deterministic seed from the text
-  const seed = hashCode(text);
-  const random = seededRandom(seed);
-
   // Initialize embedding vector
   const embedding = new Array(dimensions).fill(0);
 
   // Combine token-based features with random projection
-  const tokenSet = new Set(tokens);
   const tokenWeights = new Map<string, number>();
 
   // Calculate term frequency

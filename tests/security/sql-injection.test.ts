@@ -95,10 +95,10 @@ function escapeSQLString(input: string): string {
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "''")
     .replace(/"/g, '\\"')
-    .replace(/\x00/g, '\\0')
+    .split('\0').join('\\0')
     .replace(/\n/g, '\\n')
     .replace(/\r/g, '\\r')
-    .replace(/\x1a/g, '\\Z');
+    .split(String.fromCharCode(26)).join('\\Z');
 }
 
 /**

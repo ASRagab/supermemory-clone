@@ -296,7 +296,7 @@ export class MemoryClassifierService {
     let parsed: unknown;
     try {
       parsed = JSON.parse(jsonMatch);
-    } catch (error) {
+    } catch {
       throw LLMError.invalidResponse(provider, 'Invalid JSON response');
     }
 
