@@ -56,22 +56,33 @@ Prefer reviewing remote scripts before execution:
 curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | less
 ```
 
-The installer handles:
+The `install` command handles:
 
 - prerequisite checks (Node/Docker/Compose)
 - `npm install`
 - `.env` creation from `.env.example`
 - optional API key prompts (or you can skip and configure later)
-- Docker startup (`postgres`, `redis`) + migrations
+- Docker startup (`postgres`, `redis`, `api`) + migrations
+- API health verification on `http://localhost:13000/health`
 - non-conflicting local host ports by default (`13000`, `15432`, `16379`)
 - build + optional Claude Code MCP registration
 - connectivity check (`npm run doctor`)
 
-Optional installer flags:
+Installer lifecycle commands:
+
+```bash
+./scripts/install.sh install      # default if command is omitted
+./scripts/install.sh update       # clean reinstall of app components; preserves postgres/redis data and attempts migrations
+./scripts/install.sh uninstall    # removes install artifacts, docker resources, and Claude MCP registrations
+```
+
+Optional flags:
 
 ```bash
 ./scripts/install.sh --skip-api-keys --skip-claude
-./scripts/install.sh --skip-docker
+./scripts/install.sh update --skip-docker
+./scripts/install.sh install --skip-api-start
+./scripts/install.sh --scope project
 ./scripts/install.sh --non-interactive
 ```
 
@@ -79,15 +90,22 @@ Manual path (if you skip parts of installer):
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres redis
+npm run stack:up
 ./scripts/migrations/run_migrations.sh
 npm run build
 npm run doctor
 ```
 
-Start and verify the API:
+After `./scripts/install.sh`, the API is already running in Docker and ready to use:
 
 ```bash
+curl http://localhost:13000/health
+```
+
+If you prefer local watch mode instead of Docker for API runtime:
+
+```bash
+docker compose stop api
 npm run dev
 curl http://localhost:13000/health
 ```
@@ -138,8 +156,8 @@ Base path: `/api/v1`
 
 ### Quick Setup
 
-`./scripts/install.sh` already attempts project-scope Claude Code MCP registration.
-If you want to run MCP setup manually:
+`./scripts/install.sh` already attempts Claude Code MCP registration at **user scope** (available across your local projects).
+If you want to override the installer scope (for example, `--scope project`) or choose scope manually, run:
 
 ```bash
 npm run mcp:setup
@@ -217,6 +235,9 @@ claude mcp list       # confirm supermemory appears
 - `npm run start` - Run built API
 - `npm run mcp:dev` - MCP with tsx
 - `npm run mcp` - Run built MCP server
+- `npm run stack:up` - Start API + Postgres + Redis containers
+- `npm run stack:down` - Stop and remove stack containers
+- `npm run stack:logs` - Tail API container logs
 - `npm run test:run` - Full tests once
 - `npm run lint` - ESLint
 - `npm run typecheck` - TS checks
