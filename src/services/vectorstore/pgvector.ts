@@ -28,7 +28,12 @@ import pkg from 'pg'
 const { Pool } = pkg
 import type { Pool as PgPool } from 'pg'
 import { DatabaseError, ConflictError, ErrorCode } from '../../utils/errors.js'
-import { getPostgresDatabase, closePostgresDatabase, type PostgresDatabaseInstance } from '../../db/postgres.js'
+import {
+  getPostgresDatabase,
+  closePostgresDatabase,
+  getPostgresPoolConfig,
+  type PostgresDatabaseInstance,
+} from '../../db/postgres.js'
 
 /**
  * pgvector-specific configuration
@@ -88,7 +93,10 @@ export class PgVectorStore extends BaseVectorStore {
     this.db = getPostgresDatabase(this.connectionString)
 
     // Create connection pool for direct queries
-    this.pool = new Pool({ connectionString: this.connectionString })
+    this.pool = new Pool({
+      connectionString: this.connectionString,
+      ...getPostgresPoolConfig(),
+    })
 
     // Create table if it doesn't exist
     await this.createTableIfNotExists()

@@ -5,8 +5,8 @@
  * add, search, profile, list, delete, remember, and recall tools.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { z } from 'zod'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { AddContentInputSchema, TOOL_DEFINITIONS } from '../../src/mcp/tools.js'
 
 // Tool types from the actual implementation
 interface ToolDefinition {
@@ -21,10 +21,13 @@ interface ToolDefinition {
 
 interface AddContentInput {
   content: string
+  customId?: string
+  idempotencyKey?: string
   containerTag?: string
   metadata?: Record<string, unknown>
   sourceUrl?: string
   title?: string
+  upsert?: boolean
 }
 
 interface SearchInput {
@@ -81,7 +84,14 @@ interface RecallInput {
 
 // Tool handler types
 interface ToolHandlerContext {
-  documents: Map<string, { content: string; metadata: Record<string, unknown> }>
+  documents: Map<
+    string,
+    {
+      content: string
+      metadata: Record<string, unknown>
+      customId?: string
+    }
+  >
   facts: Map<string, { content: string; type: string; category?: string }>
   profiles: Map<string, { staticFacts: unknown[]; dynamicFacts: unknown[] }>
 }
@@ -94,26 +104,56 @@ class MCPToolHandlers {
     profiles: new Map(),
   }
 
-  async handleAdd(input: AddContentInput): Promise<{ success: boolean; documentId?: string; message: string }> {
-    if (!input.content || input.content.trim().length === 0) {
-      return { success: false, message: 'Content is required' }
+  async handleAdd(input: AddContentInput): Promise<{
+    success: boolean
+    documentId?: string
+    customId?: string
+    created?: boolean
+    reused?: boolean
+    updated?: boolean
+    message: string
+  }> {
+    const parsed = AddContentInputSchema.parse(input)
+    const customId = parsed.customId ?? parsed.idempotencyKey
+    const existingEntry = customId
+      ? Array.from(this.ctx.documents.entries()).find(([, doc]) => doc.customId === customId) ?? null
+      : null
+
+    if (existingEntry && !parsed.upsert) {
+      return {
+        success: true,
+        documentId: existingEntry[0],
+        customId,
+        created: false,
+        reused: true,
+        updated: false,
+        message: `Reused existing document for customId "${customId}"`,
+      }
     }
 
-    const documentId = `doc-${Date.now()}`
+    const documentId = existingEntry?.[0] ?? `doc-${Date.now()}`
+    const existingDocument = existingEntry?.[1]
+    const containerTag = parsed.containerTag ?? (existingDocument?.metadata.containerTag as string | undefined)
     this.ctx.documents.set(documentId, {
-      content: input.content,
+      content: parsed.content,
       metadata: {
-        containerTag: input.containerTag,
-        sourceUrl: input.sourceUrl,
-        title: input.title,
-        ...input.metadata,
+        ...existingDocument?.metadata,
+        containerTag,
+        sourceUrl: parsed.sourceUrl,
+        title: parsed.title,
+        ...parsed.metadata,
       },
+      customId,
     })
 
     return {
       success: true,
       documentId,
-      message: 'Content added successfully',
+      customId,
+      created: !existingDocument,
+      reused: false,
+      updated: Boolean(existingDocument),
+      message: existingDocument ? 'Content updated successfully' : 'Content added successfully',
     }
   }
 
@@ -350,14 +390,13 @@ describe('MCP Tool Handlers', () => {
 
       expect(result.success).toBe(true)
       expect(result.documentId).toBeDefined()
+      expect(result.created).toBe(true)
+      expect(result.reused).toBe(false)
       expect(result.message).toContain('successfully')
     })
 
     it('should reject empty content', async () => {
-      const result = await handlers.handleAdd({ content: '' })
-
-      expect(result.success).toBe(false)
-      expect(result.message).toContain('required')
+      await expect(handlers.handleAdd({ content: '' })).rejects.toThrow('Content is required')
     })
 
     it('should store metadata', async () => {
@@ -378,6 +417,67 @@ describe('MCP Tool Handlers', () => {
       })
 
       expect(result.success).toBe(true)
+    })
+
+    it('should reuse an existing document when the same customId is retried', async () => {
+      const first = await handlers.handleAdd({
+        content: 'Test content to remember',
+        customId: 'retry-demo',
+        containerTag: 'project-a',
+      })
+      const second = await handlers.handleAdd({
+        content: 'Test content to remember',
+        customId: 'retry-demo',
+      })
+
+      expect(second.success).toBe(true)
+      expect(second.documentId).toBe(first.documentId)
+      expect(second.customId).toBe('retry-demo')
+      expect(second.created).toBe(false)
+      expect(second.reused).toBe(true)
+      expect(second.updated).toBe(false)
+    })
+
+    it('should normalize idempotencyKey into customId', async () => {
+      const result = await handlers.handleAdd({
+        content: 'Test content to remember',
+        idempotencyKey: 'request-123',
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.customId).toBe('request-123')
+    })
+
+    it('should reject conflicting customId and idempotencyKey values', () => {
+      expect(() =>
+        AddContentInputSchema.parse({
+          content: 'Test content to remember',
+          customId: 'alpha',
+          idempotencyKey: 'beta',
+        })
+      ).toThrow('customId and idempotencyKey must match when both are provided')
+    })
+
+    it('should update existing content when upsert is true and preserve containerTag when omitted', async () => {
+      const created = await handlers.handleAdd({
+        content: 'alpha',
+        customId: 'retry-demo',
+        containerTag: 'project-a',
+      })
+      const updated = await handlers.handleAdd({
+        content: 'beta',
+        customId: 'retry-demo',
+        upsert: true,
+      })
+      const listed = await handlers.handleList({ containerTag: 'project-a' })
+
+      expect(updated.success).toBe(true)
+      expect(updated.documentId).toBe(created.documentId)
+      expect(updated.created).toBe(false)
+      expect(updated.reused).toBe(false)
+      expect(updated.updated).toBe(true)
+      expect(listed.documents).toHaveLength(1)
+      expect(listed.documents[0]?.id).toBe(created.documentId)
     })
   })
 
@@ -633,33 +733,7 @@ describe('MCP Tool Handlers', () => {
 })
 
 describe('MCP Tool Definitions', () => {
-  // Test that tool definitions match expected schema
-  const toolDefinitions: ToolDefinition[] = [
-    {
-      name: 'supermemory_add',
-      description: 'Add content to supermemory',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          content: { type: 'string' },
-          containerTag: { type: 'string' },
-        },
-        required: ['content'],
-      },
-    },
-    {
-      name: 'supermemory_search',
-      description: 'Search through memories',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          query: { type: 'string' },
-          limit: { type: 'number' },
-        },
-        required: ['query'],
-      },
-    },
-  ]
+  const toolDefinitions: ToolDefinition[] = TOOL_DEFINITIONS
 
   it('should have valid tool names', () => {
     for (const tool of toolDefinitions) {
@@ -678,6 +752,15 @@ describe('MCP Tool Definitions', () => {
       expect(tool.inputSchema.type).toBe('object')
       expect(tool.inputSchema.properties).toBeDefined()
     }
+  })
+
+  it('should expose idempotent add inputs in the tool schema', () => {
+    const addTool = toolDefinitions.find((tool) => tool.name === 'supermemory_add')
+
+    expect(addTool).toBeDefined()
+    expect(addTool?.inputSchema.properties).toHaveProperty('customId')
+    expect(addTool?.inputSchema.properties).toHaveProperty('idempotencyKey')
+    expect(addTool?.inputSchema.properties).toHaveProperty('upsert')
   })
 
   it('should specify required fields', () => {

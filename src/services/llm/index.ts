@@ -82,6 +82,26 @@ const ENV_VARS = {
   LLM_CACHE_TTL_MS: 'LLM_CACHE_TTL_MS',
 } as const
 
+const PLACEHOLDER_API_KEYS = new Set(['sk-your-openai-api-key-here', 'anthropic-your-api-key-here'])
+
+function getConfiguredEnvValue(name: string): string | undefined {
+  const value = process.env[name]?.trim()
+  if (!value || PLACEHOLDER_API_KEYS.has(value)) {
+    return undefined
+  }
+  return value
+}
+
+function getConfiguredApiKey(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed && !PLACEHOLDER_API_KEYS.has(trimmed)) {
+      return trimmed
+    }
+  }
+  return ''
+}
+
 // ============================================================================
 // Factory Configuration
 // ============================================================================
@@ -148,13 +168,21 @@ export function createLLMProvider(config: LLMFactoryConfig = {}): LLMProvider {
 export function getDefaultProviderType(): LLMProviderType {
   // Check environment variable first
   const envProvider = process.env[ENV_VARS.LLM_PROVIDER]?.toLowerCase()
-  if (envProvider === 'openai' || envProvider === 'anthropic' || envProvider === 'mock') {
+  if (envProvider === 'mock') {
+    return envProvider
+  }
+
+  if (envProvider === 'openai' && getConfiguredEnvValue(ENV_VARS.OPENAI_API_KEY)) {
+    return envProvider
+  }
+
+  if (envProvider === 'anthropic' && getConfiguredEnvValue(ENV_VARS.ANTHROPIC_API_KEY)) {
     return envProvider
   }
 
   // Check for API keys in process.env only
-  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY]
-  const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY]
+  const hasOpenAI = !!getConfiguredEnvValue(ENV_VARS.OPENAI_API_KEY)
+  const hasAnthropic = !!getConfiguredEnvValue(ENV_VARS.ANTHROPIC_API_KEY)
 
   if (hasOpenAI) {
     return 'openai'
@@ -173,7 +201,7 @@ export function getDefaultProviderType(): LLMProviderType {
  * Get OpenAI configuration from environment and provided config
  */
 function getOpenAIConfig(factoryConfig: LLMFactoryConfig): OpenAILLMConfig {
-  const apiKey = factoryConfig.openai?.apiKey ?? process.env[ENV_VARS.OPENAI_API_KEY] ?? appConfig.openaiApiKey ?? ''
+  const apiKey = getConfiguredApiKey(factoryConfig.openai?.apiKey, process.env[ENV_VARS.OPENAI_API_KEY], appConfig.openaiApiKey)
 
   return {
     apiKey,
@@ -191,7 +219,7 @@ function getOpenAIConfig(factoryConfig: LLMFactoryConfig): OpenAILLMConfig {
  * Get Anthropic configuration from environment and provided config
  */
 function getAnthropicConfig(factoryConfig: LLMFactoryConfig): AnthropicLLMConfig {
-  const apiKey = factoryConfig.anthropic?.apiKey ?? process.env[ENV_VARS.ANTHROPIC_API_KEY] ?? ''
+  const apiKey = getConfiguredApiKey(factoryConfig.anthropic?.apiKey, process.env[ENV_VARS.ANTHROPIC_API_KEY])
 
   return {
     apiKey,
@@ -214,8 +242,8 @@ export function isLLMAvailable(): boolean {
   if (!isLLMFeatureEnabled()) {
     return false
   }
-  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY]
-  const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY]
+  const hasOpenAI = !!getConfiguredEnvValue(ENV_VARS.OPENAI_API_KEY)
+  const hasAnthropic = !!getConfiguredEnvValue(ENV_VARS.ANTHROPIC_API_KEY)
   return hasOpenAI || hasAnthropic
 }
 
@@ -230,11 +258,11 @@ export function getAvailableProviders(): LLMProviderType[] {
   }
   const providers: LLMProviderType[] = ['mock']
 
-  if (process.env[ENV_VARS.OPENAI_API_KEY]) {
+  if (getConfiguredEnvValue(ENV_VARS.OPENAI_API_KEY)) {
     providers.push('openai')
   }
 
-  if (process.env[ENV_VARS.ANTHROPIC_API_KEY]) {
+  if (getConfiguredEnvValue(ENV_VARS.ANTHROPIC_API_KEY)) {
     providers.push('anthropic')
   }
 

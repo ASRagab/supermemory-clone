@@ -27,35 +27,56 @@ const boundedMetadataSchema = z
     { message: `Metadata must be at most ${MAX_METADATA_BYTES} bytes (10KB)` }
   )
 
-export const AddContentInputSchema = z.object({
-  content: z
-    .string()
-    .min(1, 'Content is required')
-    .max(MAX_CONTENT_CHARS, `Content must be at most ${MAX_CONTENT_CHARS} characters`),
-  containerTag: z
-    .string()
-    .max(MAX_CONTAINER_TAG_CHARS, `Container tag must be at most ${MAX_CONTAINER_TAG_CHARS} characters`)
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Container tag can only contain alphanumeric characters, underscores, and hyphens')
-    .optional()
-    .describe('Container/namespace for organizing memories'),
-  metadata: boundedMetadataSchema.describe('Additional metadata to attach (max 10KB)'),
-  sourceUrl: z
-    .string()
-    .url()
-    .refine(
-      (url) => {
-        try {
-          const parsed = new URL(url)
-          return ['http:', 'https:'].includes(parsed.protocol)
-        } catch {
-          return false
-        }
-      },
-      { message: 'URL must use http or https protocol' }
-    )
-    .optional(),
-  title: z.string().max(MAX_TITLE_CHARS, `Title must be at most ${MAX_TITLE_CHARS} characters`).optional(),
-})
+export const AddContentInputSchema = z
+  .object({
+    content: z
+      .string()
+      .min(1, 'Content is required')
+      .max(MAX_CONTENT_CHARS, `Content must be at most ${MAX_CONTENT_CHARS} characters`),
+    customId: z
+      .string()
+      .min(1, 'customId cannot be empty')
+      .max(255, 'customId must be at most 255 characters')
+      .optional(),
+    idempotencyKey: z
+      .string()
+      .min(1, 'idempotencyKey cannot be empty')
+      .max(255, 'idempotencyKey must be at most 255 characters')
+      .optional(),
+    containerTag: z
+      .string()
+      .max(MAX_CONTAINER_TAG_CHARS, `Container tag must be at most ${MAX_CONTAINER_TAG_CHARS} characters`)
+      .regex(/^[a-zA-Z0-9_-]+$/, 'Container tag can only contain alphanumeric characters, underscores, and hyphens')
+      .optional()
+      .describe('Container/namespace for organizing memories'),
+    metadata: boundedMetadataSchema.describe('Additional metadata to attach (max 10KB)'),
+    sourceUrl: z
+      .string()
+      .url()
+      .refine(
+        (url) => {
+          try {
+            const parsed = new URL(url)
+            return ['http:', 'https:'].includes(parsed.protocol)
+          } catch {
+            return false
+          }
+        },
+        { message: 'URL must use http or https protocol' }
+      )
+      .optional(),
+    title: z.string().max(MAX_TITLE_CHARS, `Title must be at most ${MAX_TITLE_CHARS} characters`).optional(),
+    upsert: z.boolean().optional().default(false),
+  })
+  .superRefine((input, ctx) => {
+    if (input.customId && input.idempotencyKey && input.customId !== input.idempotencyKey) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'customId and idempotencyKey must match when both are provided',
+        path: ['idempotencyKey'],
+      })
+    }
+  })
 
 export const SearchInputSchema = z.object({
   query: z
@@ -163,10 +184,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       type: 'object',
       properties: {
         content: { type: 'string' },
+        customId: { type: 'string' },
+        idempotencyKey: { type: 'string' },
         containerTag: { type: 'string' },
         metadata: { type: 'object', additionalProperties: true },
         sourceUrl: { type: 'string' },
         title: { type: 'string' },
+        upsert: { type: 'boolean' },
       },
       required: ['content'],
     },
@@ -288,8 +312,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 export interface AddContentResult {
   success: boolean
   documentId?: string
+  customId?: string
+  created?: boolean
+  reused?: boolean
+  updated?: boolean
   memoriesExtracted?: number
   message: string
+  errors?: string[]
 }
 
 export interface SearchResultItem {
@@ -343,8 +372,13 @@ export interface ListResult {
 
 export interface DeleteResult {
   success: boolean
+  documentsDeleted: number
+  memoriesDeleted: number
+  vectorsDeleted: number
+  profileFactsDeleted: number
   deletedCount: number
   message: string
+  errors?: string[]
 }
 
 export interface RememberResult {

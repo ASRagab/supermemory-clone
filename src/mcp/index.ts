@@ -13,6 +13,7 @@
  *   claude mcp add supermemory -- node /path/to/supermemory-clone/dist/mcp/index.js
  */
 
+import '../config/bootstrap-env.js'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
@@ -64,14 +65,26 @@ import { generateId } from '../utils/id.js'
 import { ValidationError } from '../utils/errors.js'
 import { getLogger } from '../utils/logger.js'
 import { getDatabaseUrl } from '../db/client.js'
-import { getPostgresDatabase, type PostgresDatabaseInstance } from '../db/postgres.js'
+import { closePostgresDatabase, getPostgresDatabase, type PostgresDatabaseInstance } from '../db/postgres.js'
 import { documents } from '../db/schema/documents.schema.js'
+import { memories } from '../db/schema/memories.schema.js'
 import { archiveFileWithSuffix, pathExists, readJsonFile } from './legacyState.js'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { initializeAndValidate } from '../startup.js'
+import { createMcpEnvelopeError, createToolResponse, mapErrorToMcpError } from './results.js'
+import { profileRepository } from '../services/profile.repository.js'
 import * as path from 'path'
 
 const logger = getLogger('mcp-server')
+const RECALL_SEMANTIC_SHORTLIST_MULTIPLIER = 5
+const RECALL_SEMANTIC_MIN_SHORTLIST = 25
+const RECALL_SEMANTIC_MAX_SHORTLIST = 50
+const RECALL_SEMANTIC_THRESHOLD = 0.2
+const recallEmbeddingCache = new Map<string, number[]>()
+
+process.env.SUPERMEMORY_PG_POOL_MIN ??= '0'
+process.env.SUPERMEMORY_PG_POOL_MAX ??= '5'
+process.env.SUPERMEMORY_PG_POOL_IDLE_TIMEOUT_MS ??= '10000'
 
 // ============================================================================
 // Server State & Legacy Migration
@@ -188,6 +201,24 @@ function buildDocumentMetadata(base: unknown, extras: Record<string, unknown>): 
   return { ...extras }
 }
 
+function getRecallQueryTokens(queryLower: string): string[] {
+  return Array.from(new Set(queryLower.split(/\W+/).map((token) => token.trim()).filter((token) => token.length >= 2)))
+}
+
+function getKeywordRecallScore(factContent: string, queryLower: string, queryTokens: string[]): number {
+  const contentLower = factContent.toLowerCase()
+  const substringScore = contentLower.includes(queryLower) ? 0.6 : 0
+
+  if (queryTokens.length === 0) {
+    return substringScore
+  }
+
+  const tokenMatches = queryTokens.filter((token) => contentLower.includes(token)).length
+  const overlapScore = (tokenMatches / queryTokens.length) * 0.4
+
+  return Math.min(1, substringScore + overlapScore)
+}
+
 async function migrateLegacyMcpState(state: ServerState): Promise<void> {
   const legacyPath = getLegacyPersistencePath()
 
@@ -300,29 +331,101 @@ function createServerState(): ServerState {
 async function handleAddContent(state: ServerState, args: unknown): Promise<AddContentResult> {
   const input = AddContentInputSchema.parse(args)
 
-  const documentId = generateId()
-  const containerTag = input.containerTag ?? 'default'
+  const customId = input.customId ?? input.idempotencyKey
   const metadata = buildDocumentMetadata(input.metadata, {
     ...(input.title ? { title: input.title } : {}),
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
   })
 
-  await state.db.insert(documents).values({
-    id: documentId,
-    content: input.content,
-    contentType: 'text/plain',
-    status: 'processed',
-    containerTag,
-    metadata,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  })
+  const existingDocument =
+    customId
+      ? await state.db
+          .select({
+            id: documents.id,
+            containerTag: documents.containerTag,
+          })
+          .from(documents)
+          .where(eq(documents.customId, customId))
+          .limit(1)
+          .then((rows) => rows[0] ?? null)
+      : null
+
+  if (existingDocument && !input.upsert) {
+    return {
+      success: true,
+      documentId: existingDocument.id,
+      customId,
+      created: false,
+      reused: true,
+      updated: false,
+      memoriesExtracted: 0,
+      message: `Reused existing document for customId "${customId}"`,
+    }
+  }
+
+  const documentId = existingDocument?.id ?? generateId()
+  const now = new Date()
+  const containerTag = input.containerTag ?? existingDocument?.containerTag ?? 'default'
+
+  if (existingDocument) {
+    await state.db
+      .update(documents)
+      .set({
+        content: input.content,
+        containerTag,
+        metadata,
+        status: 'processed',
+        updatedAt: now,
+      })
+      .where(eq(documents.id, existingDocument.id))
+  } else {
+    await state.db.insert(documents).values({
+      id: documentId,
+      customId: customId ?? null,
+      content: input.content,
+      contentType: 'text/plain',
+      status: 'processed',
+      containerTag,
+      metadata,
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
 
   let memoriesExtracted = 0
   const errors: string[] = []
   let processedMemories: Awaited<ReturnType<MemoryService['processAndStoreMemories']>>['memories'] = []
 
-  // Extract memories with error handling
+  if (existingDocument) {
+    const existingMemories = await state.db
+      .select({ id: memories.id })
+      .from(memories)
+      .where(eq(memories.documentId, existingDocument.id))
+
+    for (const memory of existingMemories) {
+      try {
+        await state.searchService.removeMemory(memory.id)
+      } catch (cleanupError) {
+        const message = cleanupError instanceof Error ? cleanupError.message : 'Unknown search cleanup error'
+        errors.push(`Failed to clear indexed memory ${memory.id}: ${message}`)
+      }
+    }
+
+    await state.db.delete(memories).where(eq(memories.documentId, existingDocument.id))
+
+    const profiles = await profileRepository.listAll()
+    for (const profile of profiles) {
+      const nextStaticFacts = profile.staticFacts.filter((fact) => fact.sourceId !== existingDocument.id)
+      const nextDynamicFacts = profile.dynamicFacts.filter((fact) => fact.sourceId !== existingDocument.id)
+      if (
+        nextStaticFacts.length !== profile.staticFacts.length ||
+        nextDynamicFacts.length !== profile.dynamicFacts.length
+      ) {
+        await profileRepository.updateFacts(profile.containerTag, nextStaticFacts, nextDynamicFacts)
+      }
+    }
+  }
+
   try {
     const processed = await state.memoryService.processAndStoreMemories(input.content, {
       containerTag,
@@ -334,7 +437,6 @@ async function handleAddContent(state: ServerState, args: unknown): Promise<AddC
     errors.push(`Memory extraction failed: ${message}`)
   }
 
-  // Index memories for search with individual error handling
   for (const memory of processedMemories) {
     try {
       await state.searchService.indexMemory(memory)
@@ -345,7 +447,6 @@ async function handleAddContent(state: ServerState, args: unknown): Promise<AddC
     }
   }
 
-  // Extract profile facts if containerTag provided
   if (input.containerTag) {
     try {
       await state.profileService.ingestContent(input.containerTag, input.content, documentId)
@@ -356,15 +457,24 @@ async function handleAddContent(state: ServerState, args: unknown): Promise<AddC
   }
 
   const hasErrors = errors.length > 0
-  const statusMessage = hasErrors
-    ? `Added content with ${memoriesExtracted} memories (${errors.length} errors)`
-    : `Added content with ${memoriesExtracted} extracted memories`
+  const statusMessage = existingDocument
+    ? hasErrors
+      ? `Updated existing document with ${memoriesExtracted} memories (${errors.length} errors)`
+      : `Updated existing document with ${memoriesExtracted} extracted memories`
+    : hasErrors
+      ? `Added content with ${memoriesExtracted} memories (${errors.length} errors)`
+      : `Added content with ${memoriesExtracted} extracted memories`
 
   return {
-    success: true,
+    success: !hasErrors,
     documentId,
+    customId,
+    created: !existingDocument,
+    reused: false,
+    updated: Boolean(existingDocument),
     memoriesExtracted,
     message: statusMessage,
+    ...(hasErrors ? { errors } : {}),
   }
 }
 
@@ -581,6 +691,10 @@ async function handleDelete(state: ServerState, args: unknown): Promise<DeleteRe
   if (!input.confirm) {
     return {
       success: false,
+      documentsDeleted: 0,
+      memoriesDeleted: 0,
+      vectorsDeleted: 0,
+      profileFactsDeleted: 0,
       deletedCount: 0,
       message: 'Deletion not confirmed. Set confirm: true to proceed.',
     }
@@ -589,28 +703,105 @@ async function handleDelete(state: ServerState, args: unknown): Promise<DeleteRe
   if (!input.id && !input.containerTag) {
     return {
       success: false,
+      documentsDeleted: 0,
+      memoriesDeleted: 0,
+      vectorsDeleted: 0,
+      profileFactsDeleted: 0,
       deletedCount: 0,
       message: 'Either id or containerTag must be provided',
     }
   }
 
-  let deletedCount = 0
+  const targetDocuments = await state.db
+    .select({
+      id: documents.id,
+    })
+    .from(documents)
+    .where(input.id ? eq(documents.id, input.id) : eq(documents.containerTag, input.containerTag!))
 
-  if (input.id) {
-    const deleted = await state.db.delete(documents).where(eq(documents.id, input.id)).returning({ id: documents.id })
-    deletedCount = deleted.length
-  } else if (input.containerTag) {
-    const deleted = await state.db
-      .delete(documents)
-      .where(eq(documents.containerTag, input.containerTag))
-      .returning({ id: documents.id })
-    deletedCount = deleted.length
+  if (targetDocuments.length === 0) {
+    return {
+      success: false,
+      documentsDeleted: 0,
+      memoriesDeleted: 0,
+      vectorsDeleted: 0,
+      profileFactsDeleted: 0,
+      deletedCount: 0,
+      message: 'No documents found to delete',
+    }
   }
 
+  const documentIds = targetDocuments.map((document) => document.id)
+  const errors: string[] = []
+  let vectorsDeleted = 0
+
+  const associatedMemories = await state.db
+    .select({ id: memories.id })
+    .from(memories)
+    .where(inArray(memories.documentId, documentIds))
+
+  for (const memory of associatedMemories) {
+    try {
+      const cleanup = await state.searchService.removeMemory(memory.id)
+      vectorsDeleted += cleanup.vectorsDeleted
+    } catch (cleanupError) {
+      const message = cleanupError instanceof Error ? cleanupError.message : 'Unknown vector cleanup error'
+      errors.push(`Failed to clear indexed memory ${memory.id}: ${message}`)
+    }
+  }
+
+  const deletedMemories = await state.db
+    .delete(memories)
+    .where(inArray(memories.documentId, documentIds))
+    .returning({ id: memories.id })
+
+  let profileFactsDeleted = 0
+  const profiles = await profileRepository.listAll()
+  for (const profile of profiles) {
+    const nextStaticFacts = profile.staticFacts.filter((fact) => !documentIds.includes(fact.sourceId ?? ''))
+    const nextDynamicFacts = profile.dynamicFacts.filter((fact) => !documentIds.includes(fact.sourceId ?? ''))
+    const removedFacts =
+      profile.staticFacts.length -
+      nextStaticFacts.length +
+      (profile.dynamicFacts.length - nextDynamicFacts.length)
+
+    if (removedFacts === 0) {
+      continue
+    }
+
+    try {
+      await profileRepository.updateFacts(profile.containerTag, nextStaticFacts, nextDynamicFacts)
+      profileFactsDeleted += removedFacts
+    } catch (profileError) {
+      const message = profileError instanceof Error ? profileError.message : 'Unknown profile cleanup error'
+      errors.push(`Failed to remove profile facts for container ${profile.containerTag}: ${message}`)
+    }
+  }
+
+  const deletedDocuments = await state.db
+    .delete(documents)
+    .where(inArray(documents.id, documentIds))
+    .returning({ id: documents.id })
+
+  const documentsDeleted = deletedDocuments.length
+  const memoriesDeleted = deletedMemories.length
+  const deletedCount = documentsDeleted
+  const hasErrors = errors.length > 0
+  const success = documentsDeleted > 0 && !hasErrors
+
+  const message = success
+    ? `Deleted ${documentsDeleted} document(s), ${memoriesDeleted} derived memory row(s), and ${profileFactsDeleted} profile fact(s)`
+    : `Deleted ${documentsDeleted} document(s) with ${errors.length} cleanup issue(s)`
+
   return {
-    success: deletedCount > 0,
+    success,
+    documentsDeleted,
+    memoriesDeleted,
+    vectorsDeleted,
+    profileFactsDeleted,
     deletedCount,
-    message: deletedCount > 0 ? `Deleted ${deletedCount} document(s)` : 'No documents found to delete',
+    message,
+    ...(hasErrors ? { errors } : {}),
   }
 }
 
@@ -648,11 +839,19 @@ async function handleRemember(state: ServerState, args: unknown): Promise<Rememb
 async function handleRecall(state: ServerState, args: unknown): Promise<RecallResult> {
   const input = RecallInputSchema.parse(args)
   const containerTag = input.containerTag ?? 'default'
-
-  const profile = await state.profileService.getProfile(containerTag)
+  const profile =
+    (await profileRepository.findByContainerTag(containerTag)) ?? {
+      containerTag,
+      staticFacts: [],
+      dynamicFacts: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    }
   const queryLower = input.query.toLowerCase()
+  const queryTokens = getRecallQueryTokens(queryLower)
+  const limit = input.limit ?? 10
 
-  // Hybrid search: combine semantic similarity with keyword matching
   interface ScoredFact {
     id: string
     content: string
@@ -663,91 +862,94 @@ async function handleRecall(state: ServerState, args: unknown): Promise<RecallRe
     similarity: number
   }
 
-  const scoredFacts: ScoredFact[] = []
+  const factCandidates = [
+    ...(input.includeStatic !== false
+      ? profile.staticFacts.map((fact) => ({ fact, type: 'static' as const }))
+      : []),
+    ...(input.includeDynamic !== false
+      ? profile.dynamicFacts.map((fact) => ({ fact, type: 'dynamic' as const }))
+      : []),
+  ]
 
-  // Generate query embedding for semantic search
-  let queryEmbedding: number[] | undefined
-  try {
-    queryEmbedding = await state.embeddingService.generateEmbedding(input.query)
-  } catch (error) {
-    // Fall back to keyword-only matching if embedding fails
-    logger.warn(
-      'Failed to generate query embedding for recall, falling back to keyword search',
-      { query: input.query },
-      error instanceof Error ? error : undefined
-    )
-  }
+  const keywordCandidates = factCandidates.map(({ fact, type }) => ({
+    fact,
+    type,
+    keywordScore: getKeywordRecallScore(fact.content, queryLower, queryTokens),
+  }))
 
-  // Helper to calculate similarity score
-  const calculateScore = async (factContent: string): Promise<number> => {
-    // Keyword score: 0.5 for substring match
-    const keywordScore = factContent.toLowerCase().includes(queryLower) ? 0.5 : 0
+  keywordCandidates.sort((a, b) => {
+    const keywordDiff = b.keywordScore - a.keywordScore
+    if (Math.abs(keywordDiff) > 0.001) return keywordDiff
+    return b.fact.confidence - a.fact.confidence
+  })
 
-    // Semantic score using embeddings
-    let semanticScore = 0
-    if (queryEmbedding) {
-      try {
-        const factEmbedding = await state.embeddingService.generateEmbedding(factContent)
-        semanticScore = cosineSimilarity(queryEmbedding, factEmbedding)
-      } catch {
-        // Ignore embedding errors for individual facts
-      }
-    }
+  const semanticEnabled = !state.embeddingService.isUsingLocalFallback()
+  const shortlistSize = Math.min(
+    Math.max(limit * RECALL_SEMANTIC_SHORTLIST_MULTIPLIER, RECALL_SEMANTIC_MIN_SHORTLIST),
+    RECALL_SEMANTIC_MAX_SHORTLIST,
+    keywordCandidates.length
+  )
 
-    // Combine scores: weight semantic higher if available
-    if (queryEmbedding) {
-      return semanticScore * 0.7 + keywordScore * 0.3
-    }
-    return keywordScore
-  }
+  let semanticScores = new Map<string, number>()
+  if (semanticEnabled && shortlistSize > 0) {
+    try {
+      const queryEmbedding = await state.embeddingService.generateEmbedding(input.query)
+      const semanticShortlist = keywordCandidates.slice(0, shortlistSize)
+      const missingEmbeddings = semanticShortlist
+        .map(({ fact }) => ({
+          cacheKey: `${fact.id}:${fact.content}`,
+          fact,
+        }))
+        .filter(({ cacheKey }) => !recallEmbeddingCache.has(cacheKey))
 
-  // Process static facts
-  if (input.includeStatic !== false) {
-    for (const fact of profile.staticFacts) {
-      const similarity = await calculateScore(fact.content)
-      // Include if similarity > 0.2 (semantic) or has keyword match
-      if (similarity > 0.2 || fact.content.toLowerCase().includes(queryLower)) {
-        scoredFacts.push({
-          id: fact.id,
-          content: fact.content,
-          type: 'static',
-          category: fact.category,
-          confidence: fact.confidence,
-          createdAt: fact.extractedAt.toISOString(),
-          similarity,
+      if (missingEmbeddings.length > 0) {
+        const embeddings = await state.embeddingService.batchEmbed(missingEmbeddings.map(({ fact }) => fact.content))
+        missingEmbeddings.forEach(({ cacheKey }, index) => {
+          const embedding = embeddings[index]
+          if (embedding && embedding.length > 0) {
+            recallEmbeddingCache.set(cacheKey, embedding)
+          }
         })
       }
-    }
-  }
 
-  // Process dynamic facts
-  if (input.includeDynamic !== false) {
-    for (const fact of profile.dynamicFacts) {
-      const similarity = await calculateScore(fact.content)
-      if (similarity > 0.2 || fact.content.toLowerCase().includes(queryLower)) {
-        scoredFacts.push({
-          id: fact.id,
-          content: fact.content,
-          type: 'dynamic',
-          category: fact.category,
-          confidence: fact.confidence,
-          createdAt: fact.extractedAt.toISOString(),
-          similarity,
+      semanticScores = new Map(
+        semanticShortlist.flatMap(({ fact }) => {
+          const embedding = recallEmbeddingCache.get(`${fact.id}:${fact.content}`)
+          return embedding ? [[fact.id, cosineSimilarity(queryEmbedding, embedding)] as const] : []
         })
-      }
+      )
+    } catch (error) {
+      logger.warn(
+        'Failed to generate recall semantic scores, falling back to keyword-only recall',
+        { query: input.query, containerTag },
+        error instanceof Error ? error : undefined
+      )
     }
   }
 
-  // Sort by similarity score (higher is better), then by confidence
+  const scoredFacts: ScoredFact[] = keywordCandidates
+    .map(({ fact, type, keywordScore }) => ({
+      id: fact.id,
+      content: fact.content,
+      type,
+      category: fact.category,
+      confidence: fact.confidence,
+      createdAt: fact.extractedAt.toISOString(),
+      similarity:
+        semanticScores.size > 0 && semanticScores.has(fact.id)
+          ? semanticScores.get(fact.id)! * 0.7 + keywordScore * 0.3
+          : keywordScore,
+    }))
+    .filter((fact) => fact.similarity >= RECALL_SEMANTIC_THRESHOLD || fact.content.toLowerCase().includes(queryLower))
+
   scoredFacts.sort((a, b) => {
     const simDiff = b.similarity - a.similarity
     if (Math.abs(simDiff) > 0.01) return simDiff
     return b.confidence - a.confidence
   })
 
-  const limited = scoredFacts.slice(0, input.limit ?? 10)
+  const limited = scoredFacts.slice(0, limit)
 
-  // Return results without the internal similarity score
   return {
     facts: limited.map(({ similarity: _similarity, ...rest }) => rest),
     query: input.query,
@@ -947,6 +1149,41 @@ function extractContainerTag(args: unknown): string {
   return 'default'
 }
 
+function buildToolResponse(toolName: string, result: unknown) {
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    const typedResult = result as Record<string, unknown>
+    const hasSuccessFlag = typeof typedResult.success === 'boolean'
+    const ok = hasSuccessFlag ? Boolean(typedResult.success) : true
+    const rawErrors = Array.isArray(typedResult.errors)
+      ? typedResult.errors.filter((value): value is string => typeof value === 'string')
+      : []
+    const partial =
+      rawErrors.length > 0 &&
+      (typedResult.documentId !== undefined ||
+        (typeof typedResult.deletedCount === 'number' && typedResult.deletedCount > 0) ||
+        (typeof typedResult.documentsDeleted === 'number' && typedResult.documentsDeleted > 0))
+
+    return createToolResponse({
+      tool: toolName,
+      ok: ok && rawErrors.length === 0,
+      data: result,
+      errors:
+        rawErrors.length > 0
+          ? rawErrors.map((message) => createMcpEnvelopeError('PARTIAL_FAILURE', message))
+          : !ok && typeof typedResult.message === 'string'
+            ? [createMcpEnvelopeError('TOOL_OPERATION_FAILED', typedResult.message)]
+            : [],
+      partial,
+    })
+  }
+
+  return createToolResponse({
+    tool: toolName,
+    ok: true,
+    data: result,
+  })
+}
+
 // ============================================================================
 // Server Setup
 // ============================================================================
@@ -1027,20 +1264,9 @@ async function main() {
           throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`)
       }
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      }
+      return buildToolResponse(name, result)
     } catch (error) {
-      if (error instanceof McpError) {
-        throw error
-      }
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      throw new McpError(ErrorCode.InternalError, message)
+      throw mapErrorToMcpError(error)
     }
   })
 
@@ -1057,7 +1283,11 @@ async function main() {
   })
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
-    const rows = await state.db.select({ id: documents.id, containerTag: documents.containerTag }).from(documents)
+    const rows = await state.db
+      .select({ id: documents.id, containerTag: documents.containerTag })
+      .from(documents)
+      .orderBy(desc(documents.updatedAt))
+      .limit(10)
     const documentIds = rows.map((row) => row.id)
     const containerTags = Array.from(new Set(rows.map((row) => row.containerTag)))
     const resources = generateResourceList(containerTags, documentIds)
@@ -1087,11 +1317,7 @@ async function main() {
         ],
       }
     } catch (error) {
-      if (error instanceof McpError) {
-        throw error
-      }
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      throw new McpError(ErrorCode.InternalError, message)
+      throw mapErrorToMcpError(error)
     }
   })
 
@@ -1100,17 +1326,44 @@ async function main() {
     logger.error('MCP server error', {}, error instanceof Error ? error : undefined)
   }
 
-  // Graceful shutdown
-  process.on('SIGINT', async () => {
-    logger.info('Shutting down (SIGINT)')
-    await server.close()
-    process.exit(0)
+  let shutdownPromise: Promise<void> | null = null
+  const shutdown = async (reason: string, exitCode: number, error?: unknown) => {
+    if (shutdownPromise) {
+      return shutdownPromise
+    }
+
+    shutdownPromise = (async () => {
+      if (error) {
+        logger.error(
+          `Shutting down after ${reason}`,
+          {},
+          error instanceof Error ? error : new Error(String(error))
+        )
+      } else {
+        logger.info(`Shutting down (${reason})`)
+      }
+
+      await Promise.allSettled([server.close(), state.searchService.close(), closePostgresDatabase()])
+      process.exit(exitCode)
+    })()
+
+    return shutdownPromise
+  }
+
+  process.on('SIGINT', () => {
+    void shutdown('SIGINT', 0)
   })
 
-  process.on('SIGTERM', async () => {
-    logger.info('Shutting down (SIGTERM)')
-    await server.close()
-    process.exit(0)
+  process.on('SIGTERM', () => {
+    void shutdown('SIGTERM', 0)
+  })
+
+  process.on('uncaughtException', (error) => {
+    void shutdown('uncaughtException', 1, error)
+  })
+
+  process.on('unhandledRejection', (reason) => {
+    void shutdown('unhandledRejection', 1, reason)
   })
 
   // Start server

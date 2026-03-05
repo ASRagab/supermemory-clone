@@ -7,6 +7,7 @@
  */
 
 import { RateLimitStore, MemoryRateLimitStore, RedisRateLimitStore } from '../api/middleware/rateLimit.js'
+import { createMcpEnvelopeError, createToolResponse } from './results.js'
 
 // ============================================================================
 // Types
@@ -332,17 +333,26 @@ export function getMCPRateLimiter(): MCPRateLimiter {
 export function createRateLimitErrorResponse(
   result: RateLimitResult,
   toolName: string
-): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+) {
   const limitTypeMessage =
     result.limitType === 'global' ? 'Global rate limit exceeded' : `Rate limit exceeded for ${toolName}`
 
-  return {
-    content: [
-      {
-        type: 'text',
-        text: `${limitTypeMessage}. Try again in ${result.resetIn} seconds. (Limit: ${result.limit} requests)`,
-      },
+  return createToolResponse({
+    tool: toolName,
+    ok: false,
+    data: null,
+    errors: [
+      createMcpEnvelopeError(
+        'RATE_LIMIT_EXCEEDED',
+        `${limitTypeMessage}. Try again in ${result.resetIn} seconds. (Limit: ${result.limit} requests)`,
+        {
+          limit: result.limit,
+          limitType: result.limitType ?? 'tool',
+          remaining: result.remaining,
+          resetIn: result.resetIn,
+        },
+        true
+      ),
     ],
-    isError: true,
-  }
+  })
 }

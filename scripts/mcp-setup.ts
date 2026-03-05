@@ -4,6 +4,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import pkg from 'pg';
+import { loadEnvFile } from '../src/config/env.js';
+import {
+  checkClaudeMcpRegistration,
+  type ClaudeMcpScope,
+} from './claude-mcp-config.js';
 
 const { Client } = pkg;
 
@@ -31,16 +36,122 @@ function ask(question: string): Promise<string> {
   });
 }
 
+function validateScope(scope: string): ClaudeMcpScope {
+  if (scope === 'user' || scope === 'project' || scope === 'local') {
+    return scope;
+  }
+
+  throw new Error(`Invalid scope: ${scope} (expected: user, project, or local)`);
+}
+
+function formatRegistrationCommand(scope: ClaudeMcpScope, entryPoint: string): string {
+  return `claude mcp add supermemory --scope ${scope} -- node ${JSON.stringify(entryPoint)}`;
+}
+
+function formatRemovalCommand(scope: ClaudeMcpScope): string {
+  return `claude mcp remove --scope ${scope} supermemory`;
+}
+
+function commandExists(name: string): boolean {
+  try {
+    execSync(`command -v ${name}`, { stdio: 'ignore', shell: '/bin/zsh' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function askScope(): Promise<ClaudeMcpScope> {
+  return ask('\nRegister for "user", "project", or "local" scope? [user] ').then((answer) => {
+    const normalized = answer.toLowerCase();
+    if (!normalized) return 'user';
+    return validateScope(normalized);
+  });
+}
+
+function parseArgs(): {
+  envFile?: string;
+  nonInteractive: boolean;
+  registerMcp: boolean;
+  scope?: ClaudeMcpScope;
+  skipMcp: boolean;
+} {
+  const args = process.argv.slice(2);
+  let envFile: string | undefined;
+  let nonInteractive = false;
+  let registerMcp = false;
+  let scope: ClaudeMcpScope | undefined;
+  let skipMcp = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '--env-file') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error('--env-file requires a value');
+      }
+      envFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--env-file=')) {
+      envFile = arg.slice('--env-file='.length);
+      continue;
+    }
+
+    if (arg === '--scope') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error('--scope requires a value');
+      }
+      scope = validateScope(value.toLowerCase());
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--scope=')) {
+      scope = validateScope(arg.slice('--scope='.length).toLowerCase());
+      continue;
+    }
+
+    if (arg === '--register-mcp') {
+      registerMcp = true;
+      continue;
+    }
+
+    if (arg === '--skip-mcp' || arg === '--skip-claude') {
+      skipMcp = true;
+      continue;
+    }
+
+    if (arg === '--non-interactive') {
+      nonInteractive = true;
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return { envFile, scope, registerMcp, skipMcp, nonInteractive };
+}
+
 async function run(): Promise<void> {
+  const { envFile, nonInteractive, registerMcp, scope, skipMcp } = parseArgs();
   console.log('Supermemory MCP Setup\n');
 
   // Load .env if present
   let env: Record<string, string> = {};
-  if (existsSync('.env')) {
-    env = parseEnv(readFileSync('.env', 'utf-8'));
+  const envResolution = loadEnvFile({ cliEnvFile: envFile });
+  if (envResolution.exists && existsSync(envResolution.path)) {
+    env = parseEnv(readFileSync(envResolution.path, 'utf-8'));
     for (const [k, v] of Object.entries(env)) {
       if (!process.env[k]) process.env[k] = v;
     }
+    console.log(`[OK] Using env file: ${envResolution.path}`);
+  } else if (envResolution.explicit) {
+    console.log(`[WARN] Env file not found at ${envResolution.path}; falling back to current process environment`);
   }
 
   // Step 1: Check for built MCP entry point
@@ -83,31 +194,75 @@ async function run(): Promise<void> {
     console.log('[WARN] DATABASE_URL not set. The MCP server will need it at runtime.');
   }
 
-  // Step 3: Ask for registration scope
-  const scopeAnswer = await ask('\nRegister for "user" (all projects) or "project" (this project only)? [user] ');
-  const scope = scopeAnswer.toLowerCase() === 'project' ? 'project' : 'user';
+  if (!commandExists('claude')) {
+    console.error(
+      '\nCould not find the "claude" CLI.\nInstall Claude Code first: https://docs.anthropic.com/en/docs/claude-code'
+    );
+    process.exit(1);
+  }
 
-  // Step 4: Register with Claude Code
-  const cmd = `claude mcp add supermemory --scope ${scope} -- node ${entryPoint}`;
-  console.log(`\nRunning: ${cmd}\n`);
+  if (skipMcp) {
+    console.log('[WARN] Skipping MCP registration by request');
+    return;
+  }
+
+  let selectedScope = scope;
+  if (!selectedScope && !nonInteractive) {
+    selectedScope = await askScope();
+  }
+
+  if (!selectedScope) {
+    console.log('[WARN] Non-interactive mode requires --scope or --register-mcp to perform Claude MCP registration');
+    return;
+  }
+
+  if (nonInteractive && !registerMcp && !scope) {
+    console.log('[WARN] Non-interactive mode skipped Claude MCP registration because no explicit scope or --register-mcp flag was provided');
+    return;
+  }
+
+  const registrationCheck = checkClaudeMcpRegistration({
+    scope: selectedScope,
+    name: 'supermemory',
+    expectedCommand: 'node',
+    expectedArgs: [entryPoint],
+  });
+
+  if (registrationCheck.status === 'match') {
+    console.log(`[OK] Supermemory is already registered in ${selectedScope} scope with the expected command path`);
+    return;
+  }
+
+  const cmd = formatRegistrationCommand(selectedScope, entryPoint);
+  if (registrationCheck.status === 'mismatch') {
+    const removeCmd = formatRemovalCommand(selectedScope);
+    console.log(`[INFO] Existing ${selectedScope} scope registration does not match the current build output; repairing with: ${removeCmd} && ${cmd}`);
+    try {
+      execSync(removeCmd, { stdio: 'inherit', shell: '/bin/zsh' });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`\nCould not remove the existing ${selectedScope} scope registration: ${msg}`);
+      process.exit(1);
+    }
+  } else {
+    console.log(`[INFO] No ${selectedScope} scope registration found; registering with: ${cmd}`);
+  }
+
   try {
-    execSync(cmd, { stdio: 'inherit' });
+    execSync(`claude mcp add supermemory --scope ${selectedScope} -- node ${JSON.stringify(entryPoint)}`, {
+      stdio: 'inherit',
+      shell: '/bin/zsh',
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes('ENOENT') || msg.includes('not found')) {
-      console.error(
-        '\nCould not find the "claude" CLI.\nInstall Claude Code first: https://docs.anthropic.com/en/docs/claude-code'
-      );
-    } else {
-      console.error(`\nRegistration failed: ${msg}`);
-    }
+    console.error(`\nRegistration failed: ${msg}`);
     process.exit(1);
   }
 
   // Step 5: Success
   console.log('\nSupermemory MCP server registered successfully!');
-  console.log(`Scope: ${scope}`);
-  console.log('\nVerify with:  claude mcp list');
+  console.log(`Scope: ${selectedScope}`);
+  console.log('\nVerify with:  claude mcp get supermemory');
 }
 
 run().catch((error) => {

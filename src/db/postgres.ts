@@ -7,15 +7,31 @@ import * as schema from './schema/index.js'
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 let pool: pkg.Pool | null = null
 
+function parsePoolNumberEnv(name: string, fallback: number): number {
+  const rawValue = process.env[name]
+  if (!rawValue) return fallback
+
+  const parsed = Number.parseInt(rawValue, 10)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+export function getPostgresPoolConfig(): Pick<
+  pkg.PoolConfig,
+  'min' | 'max' | 'idleTimeoutMillis' | 'connectionTimeoutMillis'
+> {
+  return {
+    min: parsePoolNumberEnv('SUPERMEMORY_PG_POOL_MIN', 10),
+    max: parsePoolNumberEnv('SUPERMEMORY_PG_POOL_MAX', 100),
+    idleTimeoutMillis: parsePoolNumberEnv('SUPERMEMORY_PG_POOL_IDLE_TIMEOUT_MS', 30000),
+    connectionTimeoutMillis: parsePoolNumberEnv('SUPERMEMORY_PG_POOL_CONNECTION_TIMEOUT_MS', 2000),
+  }
+}
+
 export function createPostgresDatabase(connectionString: string) {
   // Create connection pool
   pool = new Pool({
     connectionString,
-    // Production-ready pool settings
-    min: 10, // Minimum connections
-    max: 100, // Maximum connections
-    idleTimeoutMillis: 30000, // Close idle connections after 30s
-    connectionTimeoutMillis: 2000, // Timeout for acquiring connection
+    ...getPostgresPoolConfig(),
   })
 
   // Enable pgvector extension on connection

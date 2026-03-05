@@ -141,3 +141,7 @@ A change is done when:
 - `lint`, `typecheck`, and relevant tests pass.
 - Runtime configuration expectations are unchanged or clearly updated in `README.md` and this file.
 - No extra documentation files were introduced.
+
+## Learnings
+
+- **Gotcha**: MCP document cleanup depends on memory-document linkage. If inline ingestion writes `Memory.sourceId` but `src/services/memory.repository.ts` does not persist it into `memories.document_id`, `supermemory_delete` cannot reliably remove derived memories, vectors, or sourced profile facts. Preserve that mapping whenever the inline memory write path changes.

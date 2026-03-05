@@ -1,8 +1,6 @@
 import { z } from 'zod'
-import { config as dotenvConfig } from 'dotenv'
+import './bootstrap-env.js'
 import { ConfigurationError } from '../utils/errors.js'
-
-dotenvConfig()
 
 const configSchema = z.object({
   // OpenAI (optional - local fallback available)

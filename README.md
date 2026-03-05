@@ -42,6 +42,13 @@ You can pass installer flags after `--`, for example:
 curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | bash -s -- -- --non-interactive --skip-api-keys
 ```
 
+Bootstrap supports a safe rerun/update path for existing compatible clones:
+
+```bash
+bash scripts/bootstrap.sh --dir ./supermemory-clone -- --non-interactive --skip-mcp
+bash scripts/bootstrap.sh --dir ./supermemory-clone --update-if-exists -- --non-interactive --skip-mcp
+```
+
 Local clone + install:
 
 ```bash
@@ -50,20 +57,38 @@ cd supermemory-clone
 ./scripts/install.sh
 ```
 
+The default installer path is agent-first. It builds the project, starts PostgreSQL, and leaves the API stopped unless you choose an API-oriented mode.
+
 Prefer reviewing remote scripts before execution:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | less
 ```
 
-The `install` command handles:
+The installer supports explicit modes:
+
+```bash
+./scripts/install.sh                  # same as: install --mode agent
+./scripts/install.sh agent            # agent-first MCP workflow
+./scripts/install.sh api              # REST API workflow
+./scripts/install.sh full             # both surfaces, explicit all-in path
+./scripts/install.sh update --mode api
+./scripts/install.sh agent --env-file /tmp/supermemory-agent.env
+```
+
+Mode behavior:
+
+- `agent`: installs dependencies, creates `.env`, starts PostgreSQL, builds the project, and prepares MCP usage without auto-starting the API.
+- `api`: installs dependencies, creates `.env`, starts PostgreSQL + Redis + API, builds the project, and verifies API health.
+- `full`: explicit all-surfaces install path. In the current implementation it shares the same container startup set as `api` but prints both API and MCP next steps.
+
+The install/update flow handles:
 
 - prerequisite checks (Node/Docker/Compose)
 - `npm install`
 - `.env` creation from `.env.example`
 - optional API key prompts (or you can skip and configure later)
-- Docker startup (`postgres`, `redis`, `api`) + migrations
-- API health verification on `http://localhost:13000/health`
+- mode-aware Docker startup + migrations
 - non-conflicting local host ports by default (`13000`, `15432`, `16379`)
 - build + optional Claude Code MCP registration
 - connectivity check (`npm run doctor`)
@@ -71,19 +96,21 @@ The `install` command handles:
 Installer lifecycle commands:
 
 ```bash
-./scripts/install.sh install      # default if command is omitted
+./scripts/install.sh install      # default if command is omitted; defaults to --mode agent
 ./scripts/install.sh update       # clean reinstall of app components; preserves postgres/redis data and attempts migrations
-./scripts/install.sh uninstall    # removes install artifacts, docker resources, and Claude MCP registrations
+./scripts/install.sh uninstall    # removes generated artifacts and stops local services
+./scripts/install.sh uninstall --purge
 ```
 
 Optional flags:
 
 ```bash
-./scripts/install.sh --skip-api-keys --skip-claude
+./scripts/install.sh --skip-api-keys --skip-mcp
 ./scripts/install.sh update --skip-docker
-./scripts/install.sh install --skip-api-start
-./scripts/install.sh --scope project
-./scripts/install.sh --non-interactive
+./scripts/install.sh install --mode api --skip-api-start
+./scripts/install.sh --register-mcp --scope project
+./scripts/install.sh --non-interactive          # does not register MCP unless --scope or --register-mcp is also passed
+./scripts/install.sh uninstall --purge          # also removes env files, Claude MCP registrations, and docker volumes
 ```
 
 Manual path (if you skip parts of installer):
@@ -96,7 +123,20 @@ npm run build
 npm run doctor
 ```
 
-After `./scripts/install.sh`, the API is already running in Docker and ready to use:
+After the default `./scripts/install.sh` agent install, the API is not running yet. To start the MCP server:
+
+```bash
+npm run mcp
+```
+
+If you want the REST API instead, use API mode:
+
+```bash
+./scripts/install.sh api
+curl http://localhost:13000/health
+```
+
+If you already installed in `api` or `full` mode, the API is running in Docker and ready to use:
 
 ```bash
 curl http://localhost:13000/health
@@ -114,6 +154,23 @@ curl http://localhost:13000/health
 
 Copy `.env.example` to `.env` and set values.
 
+Env file precedence is:
+
+1. CLI `--env-file` for supported scripts
+2. `SUPERMEMORY_ENV_FILE`
+3. `.env.local`
+4. `.env`
+
+The API and MCP runtime honor `SUPERMEMORY_ENV_FILE`, then fall back to `.env.local`, then `.env`.
+
+Examples:
+
+```bash
+SUPERMEMORY_ENV_FILE=~/.config/supermemory/config.env npm run doctor -- --mode agent
+npm run mcp:setup -- --env-file /tmp/supermemory-agent.env
+./scripts/install.sh agent --env-file /tmp/supermemory-agent.env
+```
+
 Required:
 
 - `DATABASE_URL` (must be `postgres://` or `postgresql://` outside tests)
@@ -127,6 +184,7 @@ Optional:
 - `CSRF_SECRET`, `ALLOWED_ORIGINS` (hardening)
 
 No external API keys are required for basic local operation.
+Fresh installs leave provider keys and `LLM_PROVIDER` blank until you set real credentials.
 
 ## Auth and CSRF
 
@@ -156,32 +214,37 @@ Base path: `/api/v1`
 
 ### Quick Setup
 
-`./scripts/install.sh` already attempts Claude Code MCP registration at **user scope** (available across your local projects).
-If you want to override the installer scope (for example, `--scope project`) or choose scope manually, run:
+`./scripts/install.sh agent` is the MCP-first installer path. Interactive installs can register Claude MCP after prompting for a scope. Non-interactive installs do not touch Claude config unless you pass `--scope` or `--register-mcp`.
+If you want to register or repair Claude MCP later, run:
+
+```bash
+npm run mcp:setup
+npm run mcp:setup -- --scope project --non-interactive --register-mcp
+```
+
+### Installation Options
+
+**Option A — Manual registration with the setup helper**
 
 ```bash
 npm run mcp:setup
 ```
 
-### Installation Options
-
-**Option A — Project auto-discovery (recommended for teams)**
-
-The repo ships a `.mcp.json` that Claude Code auto-discovers when you open the
-project. Just make sure the project is built:
+**Option B — Project-scope registration**
 
 ```bash
 npm run build
+npm run mcp:setup -- --scope project --non-interactive --register-mcp
 ```
 
-**Option B — Manual registration**
+**Option C — Direct Claude CLI registration**
 
 ```bash
 npm run build
-claude mcp add supermemory -- node "$(pwd)/dist/mcp/index.js"
+claude mcp add supermemory --scope user -- node "$(pwd)/dist/mcp/index.js"
 ```
 
-**Option C — npx (after package is published)**
+**Option D — npx (after package is published)**
 
 ```bash
 claude mcp add supermemory -- npx supermemory-mcp
@@ -205,8 +268,9 @@ claude mcp add supermemory -- npx supermemory-mcp
 ### Verification
 
 ```bash
-npm run doctor        # checks env, DB, Redis, MCP build & registration
-claude mcp list       # confirm supermemory appears
+npm run doctor -- --mode agent
+npm run doctor -- --mode api
+claude mcp get supermemory
 ```
 
 ### Troubleshooting

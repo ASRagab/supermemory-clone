@@ -254,6 +254,9 @@ export interface ResourceListItem {
   mimeType?: string
 }
 
+export const MAX_LISTED_RESOURCE_CONTAINERS = 5
+export const MAX_LISTED_RESOURCE_DOCUMENTS = 5
+
 /**
  * Generate a list of available resources for a given state
  */
@@ -277,7 +280,7 @@ export function generateResourceList(containerTags: string[], documentIds: strin
   })
 
   // Add profile resources for each container
-  for (const tag of containerTags) {
+  for (const tag of containerTags.slice(0, MAX_LISTED_RESOURCE_CONTAINERS)) {
     resources.push({
       uri: buildResourceUri('profile', { containerTag: tag }),
       name: `Profile: ${tag}`,
@@ -293,8 +296,8 @@ export function generateResourceList(containerTags: string[], documentIds: strin
     })
   }
 
-  // Add document resources (limit to first 50 to avoid overwhelming response)
-  for (const id of documentIds.slice(0, 50)) {
+  // Add only a few recent documents to keep resource discovery bounded.
+  for (const id of documentIds.slice(0, MAX_LISTED_RESOURCE_DOCUMENTS)) {
     resources.push({
       uri: buildResourceUri('document', { id }),
       name: `Document: ${id}`,

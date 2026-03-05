@@ -6,9 +6,13 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
 ACTION="install"
+INSTALL_MODE="agent"
+ENV_FILE=""
+PURGE=0
 SKIP_DOCKER=0
 SKIP_API_KEYS=0
 SKIP_CLAUDE=0
+REGISTER_MCP=0
 NON_INTERACTIVE=0
 SKIP_BUILD=0
 SKIP_API_START=0
@@ -20,26 +24,39 @@ usage() {
 Usage: ./scripts/install.sh [command] [options]
 
 Commands:
-  install               Install or repair local setup (default)
+  install               Install or repair local setup (default, uses --mode agent unless overridden)
   update                Reinstall app components, preserve Postgres/Redis data, and attempt DB migrations
-  uninstall             Remove local install artifacts, docker resources, and Claude MCP registrations
+  uninstall             Remove generated local artifacts and stop project services
+  agent                 Shorthand for: install --mode agent
+  api                   Shorthand for: install --mode api
+  full                  Shorthand for: install --mode full
 
 Options:
+  --mode <mode>         Install/update mode: agent (default), api, or full
+  --env-file <path>     Env file to use (default precedence: SUPERMEMORY_ENV_FILE, .env.local, .env)
   --skip-docker         Skip docker startup (install/update only)
   --skip-api-keys       Do not prompt for API keys (install/update only)
-  --skip-claude         Skip Claude Code MCP registration removal/setup
+  --register-mcp        Explicitly register Claude Code MCP integration
+  --skip-mcp            Skip Claude Code MCP registration/removal
+  --skip-claude         Alias for --skip-mcp
+  --purge               With uninstall, also remove env files, Docker volumes, and Claude MCP registrations
   --skip-build          Skip npm run build (install/update only)
-  --skip-api-start      Skip auto-starting the API container after install/update
+  --skip-api-start      Skip auto-starting the API container after install/update in api/full mode
   --scope <scope>       MCP scope override: user (default), project, or local
   --non-interactive     Use defaults and avoid prompts
   -h, --help            Show this help
 
 Examples:
   ./scripts/install.sh
+  ./scripts/install.sh agent
+  ./scripts/install.sh install --mode api
+  ./scripts/install.sh agent --env-file /tmp/supermemory.env
   ./scripts/install.sh update --skip-claude
-  ./scripts/install.sh install --skip-api-start
+  ./scripts/install.sh agent --non-interactive --register-mcp --scope project
+  ./scripts/install.sh full --skip-api-start
   ./scripts/install.sh --scope project
   ./scripts/install.sh uninstall --non-interactive
+  ./scripts/install.sh uninstall --purge --non-interactive
 USAGE
 }
 
@@ -102,6 +119,59 @@ validate_mcp_scope() {
   esac
 }
 
+validate_install_mode() {
+  local mode="$1"
+  case "$mode" in
+    agent|api|full)
+      return 0
+      ;;
+    *)
+      fail "Invalid install mode: $mode (expected: agent, api, or full)"
+      ;;
+  esac
+}
+
+resolve_path() {
+  local candidate="$1"
+  if [[ "$candidate" = /* ]]; then
+    printf '%s\n' "$candidate"
+  else
+    printf '%s\n' "$REPO_ROOT/$candidate"
+  fi
+}
+
+resolve_default_env_file() {
+  if [[ -n "${SUPERMEMORY_ENV_FILE:-}" ]]; then
+    resolve_path "$SUPERMEMORY_ENV_FILE"
+    return 0
+  fi
+
+  if [[ -f "$REPO_ROOT/.env.local" ]]; then
+    printf '%s\n' "$REPO_ROOT/.env.local"
+    return 0
+  fi
+
+  printf '%s\n' "$REPO_ROOT/.env"
+}
+
+ensure_env_file_path() {
+  if [[ -n "$ENV_FILE" ]]; then
+    ENV_FILE="$(resolve_path "$ENV_FILE")"
+  else
+    ENV_FILE="$(resolve_default_env_file)"
+  fi
+
+  export SUPERMEMORY_ENV_FILE="$ENV_FILE"
+}
+
+compose_cmd() {
+  local -a cmd=(docker compose)
+  if [[ -f "$ENV_FILE" ]]; then
+    cmd+=(--env-file "$ENV_FILE")
+  fi
+  "${cmd[@]}" "$@"
+}
+
 prompt_mcp_scope() {
   local answer
   read -r -p "MCP registration scope [user/project/local] (user): " answer
@@ -118,7 +188,7 @@ prompt_mcp_scope() {
 set_env_value() {
   local key="$1"
   local value="$2"
-  local file=".env"
+  local file="$ENV_FILE"
   local tmp_file
   tmp_file="$(mktemp)"
 
@@ -135,8 +205,43 @@ set_env_value() {
   fi
 }
 
+generate_local_secret() {
+  node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+}
+
+scrub_placeholder_env_values() {
+  local openai_key
+  local anthropic_key
+  local llm_provider
+
+  openai_key="$(read_env_value "OPENAI_API_KEY")"
+  anthropic_key="$(read_env_value "ANTHROPIC_API_KEY")"
+  llm_provider="$(read_env_value "LLM_PROVIDER")"
+
+  if [[ "$openai_key" == "sk-your-openai-api-key-here" ]]; then
+    set_env_value "OPENAI_API_KEY" ""
+    openai_key=""
+  fi
+
+  if [[ "$anthropic_key" == "anthropic-your-api-key-here" ]]; then
+    set_env_value "ANTHROPIC_API_KEY" ""
+    anthropic_key=""
+  fi
+
+  if [[ -z "$openai_key" && -z "$anthropic_key" ]]; then
+    if [[ "$llm_provider" == "openai" || "$llm_provider" == "anthropic" ]]; then
+      set_env_value "LLM_PROVIDER" ""
+    fi
+
+    if [[ "$(read_env_value "LLM_MODEL")" == "gpt-5.1-nano" || "$(read_env_value "LLM_MODEL")" == "claude-4-5-haiku-20251001" ]]; then
+      set_env_value "LLM_MODEL" ""
+    fi
+  fi
+}
+
 ensure_env_defaults() {
   local created_env="$1"
+  local csrf_secret
 
   if [[ "$created_env" -eq 1 ]]; then
     set_env_value "DATABASE_URL" "postgresql://supermemory:supermemory_secret@localhost:15432/supermemory"
@@ -145,42 +250,59 @@ ensure_env_defaults() {
     set_env_value "API_HOST_PORT" "13000"
     set_env_value "POSTGRES_HOST_PORT" "15432"
     set_env_value "REDIS_HOST_PORT" "16379"
+    set_env_value "CSRF_SECRET" "$(generate_local_secret)"
     return
   fi
 
-  if ! grep -q "^API_HOST_PORT=" .env; then
+  if ! grep -q "^API_HOST_PORT=" "$ENV_FILE"; then
     set_env_value "API_HOST_PORT" "13000"
   fi
 
-  if ! grep -q "^POSTGRES_HOST_PORT=" .env; then
+  if ! grep -q "^POSTGRES_HOST_PORT=" "$ENV_FILE"; then
     set_env_value "POSTGRES_HOST_PORT" "15432"
   fi
 
-  if ! grep -q "^REDIS_HOST_PORT=" .env; then
+  if ! grep -q "^REDIS_HOST_PORT=" "$ENV_FILE"; then
     set_env_value "REDIS_HOST_PORT" "16379"
+  fi
+
+  csrf_secret="$(read_env_value "CSRF_SECRET")"
+  if [[ -z "$csrf_secret" ]]; then
+    set_env_value "CSRF_SECRET" "$(generate_local_secret)"
   fi
 }
 
 read_env_value() {
   local key="$1"
-  awk -F= -v k="$key" '$1 == k { print substr($0, index($0, "=") + 1) }' .env | tail -n 1
+  awk -F= -v k="$key" '$1 == k { print substr($0, index($0, "=") + 1) }' "$ENV_FILE" | tail -n 1
 }
 
 migrate_legacy_default_ports() {
-  if grep -q "^DATABASE_URL=postgresql://supermemory:supermemory_secret@localhost:5432/supermemory$" .env; then
+  if grep -q "^DATABASE_URL=postgresql://supermemory:supermemory_secret@localhost:5432/supermemory$" "$ENV_FILE"; then
     set_env_value "DATABASE_URL" "postgresql://supermemory:supermemory_secret@localhost:15432/supermemory"
     log "INFO" "Updated DATABASE_URL from localhost:5432 to localhost:15432"
   fi
 
-  if grep -q "^REDIS_URL=redis://localhost:6379$" .env; then
+  if grep -q "^REDIS_URL=redis://localhost:6379$" "$ENV_FILE"; then
     set_env_value "REDIS_URL" "redis://localhost:16379"
     log "INFO" "Updated REDIS_URL from localhost:6379 to localhost:16379"
   fi
 
-  if grep -q "^API_PORT=3000$" .env; then
+  if grep -q "^API_PORT=3000$" "$ENV_FILE"; then
     set_env_value "API_PORT" "13000"
     log "INFO" "Updated API_PORT from 3000 to 13000"
   fi
+}
+
+load_env_file_into_shell() {
+  if [[ ! -f "$ENV_FILE" ]]; then
+    return 0
+  fi
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
 }
 
 wait_for_container_health() {
@@ -205,29 +327,42 @@ wait_for_container_health() {
 }
 
 start_compose_services() {
-  if docker compose up -d postgres redis; then
+  if compose_cmd up -d postgres redis; then
     return 0
   fi
 
   log "WARN" "docker compose up failed, attempting one cleanup+retry"
-  docker compose down >/dev/null 2>&1 || true
+  compose_cmd down >/dev/null 2>&1 || true
   docker rm -f supermemory-postgres supermemory-redis >/dev/null 2>&1 || true
   docker network rm supermemory-network >/dev/null 2>&1 || true
 
-  docker compose up -d postgres redis
+  compose_cmd up -d postgres redis
+}
+
+start_postgres_service() {
+  if compose_cmd up -d postgres; then
+    return 0
+  fi
+
+  log "WARN" "docker compose up postgres failed, attempting one cleanup+retry"
+  compose_cmd down >/dev/null 2>&1 || true
+  docker rm -f supermemory-postgres >/dev/null 2>&1 || true
+  docker network rm supermemory-network >/dev/null 2>&1 || true
+
+  compose_cmd up -d postgres
 }
 
 start_api_stack() {
-  if docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis; then
+  if compose_cmd -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d api postgres redis; then
     return 0
   fi
 
   log "WARN" "docker compose (api stack) up failed, attempting one cleanup+retry"
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml down >/dev/null 2>&1 || true
+  compose_cmd -f docker-compose.yml -f docker-compose.prod.yml down >/dev/null 2>&1 || true
   docker rm -f supermemory-api supermemory-postgres supermemory-redis >/dev/null 2>&1 || true
   docker network rm supermemory-network >/dev/null 2>&1 || true
 
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis
+  compose_cmd -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d api postgres redis
 }
 
 verify_api_health() {
@@ -293,7 +428,7 @@ configure_api_keys() {
     set_env_value "LLM_MODEL" ""
   fi
 
-  log "OK" "Saved API key/provider configuration to .env"
+  log "OK" "Saved API key/provider configuration to $ENV_FILE"
 }
 
 configure_claude_mcp() {
@@ -309,15 +444,23 @@ configure_claude_mcp() {
 
   local should_register=0
   local selected_scope="$MCP_SCOPE"
+  local register_command
+  printf -v register_command 'claude mcp add supermemory --scope %q -- node %q' "$selected_scope" "$REPO_ROOT/dist/mcp/index.js"
 
   if [[ "$NON_INTERACTIVE" -eq 1 ]]; then
-    should_register=1
+    if [[ "$REGISTER_MCP" -eq 1 || "$MCP_SCOPE_EXPLICIT" -eq 1 ]]; then
+      should_register=1
+    else
+      log "INFO" "Skipped Claude Code MCP registration in non-interactive mode. Pass --register-mcp or --scope to opt in"
+      return 0
+    fi
   else
     if [[ "$MCP_SCOPE_EXPLICIT" -eq 0 ]]; then
       selected_scope="$(prompt_mcp_scope)"
+      printf -v register_command 'claude mcp add supermemory --scope %q -- node %q' "$selected_scope" "$REPO_ROOT/dist/mcp/index.js"
     fi
 
-    if confirm "Register MCP server with Claude Code in ${selected_scope} scope?" "y"; then
+    if [[ "$REGISTER_MCP" -eq 1 ]] || confirm "Register MCP server with Claude Code in ${selected_scope} scope?" "y"; then
       should_register=1
     fi
   fi
@@ -327,11 +470,37 @@ configure_claude_mcp() {
     return 0
   fi
 
-  if [[ "$MCP_SCOPE_EXPLICIT" -eq 0 ]] && claude mcp list 2>/dev/null | grep -q "supermemory"; then
-    log "OK" "Claude Code MCP server 'supermemory' already registered"
+  if npx tsx scripts/claude-mcp-config.ts check --scope "$selected_scope" --name supermemory --command node --arg "$REPO_ROOT/dist/mcp/index.js" --project-dir "$REPO_ROOT" >/dev/null 2>&1; then
+    log "OK" "Claude Code MCP server 'supermemory' already matches ${selected_scope} scope and command path"
     return 0
+  else
+    local inspect_rc=$?
+    local repair_required=0
+    case "$inspect_rc" in
+      10)
+        log "INFO" "No Claude Code MCP registration found in ${selected_scope} scope"
+        ;;
+      11)
+        log "INFO" "Existing Claude Code MCP registration in ${selected_scope} scope does not match the current command path"
+        repair_required=1
+        ;;
+      *)
+        log "WARN" "Could not inspect existing Claude Code MCP registration cleanly. Continuing with registration attempt"
+        ;;
+    esac
+
+    if [[ "$repair_required" -eq 1 ]]; then
+      local remove_command
+      printf -v remove_command 'claude mcp remove --scope %q supermemory' "$selected_scope"
+      log "INFO" "Removing stale Claude Code MCP registration with: $remove_command"
+      if ! claude mcp remove --scope "$selected_scope" supermemory; then
+        log "WARN" "Could not remove existing Claude Code MCP registration in ${selected_scope} scope"
+        return 0
+      fi
+    fi
   fi
 
+  log "INFO" "Registering Claude Code MCP server with: $register_command"
   if claude mcp add supermemory --scope "$selected_scope" -- node "$REPO_ROOT/dist/mcp/index.js"; then
     log "OK" "Registered MCP server with Claude Code (${selected_scope} scope)"
   else
@@ -362,11 +531,13 @@ remove_claude_mcp() {
 
 run_migrations_strict() {
   log "INFO" "Running database migrations"
+  load_env_file_into_shell
   ./scripts/migrations/run_migrations.sh
 }
 
 run_migrations_best_effort() {
   log "INFO" "Attempting database migrations for update"
+  load_env_file_into_shell
   if ./scripts/migrations/run_migrations.sh; then
     log "OK" "Migration attempt completed"
   else
@@ -388,7 +559,7 @@ remove_local_runtime_artifacts_for_update() {
 
 remove_local_install_artifacts() {
   local path
-  for path in node_modules dist coverage .env; do
+  for path in node_modules dist coverage; do
     if [[ -e "$path" ]]; then
       rm -rf "$path"
       log "OK" "Removed $path"
@@ -398,24 +569,83 @@ remove_local_install_artifacts() {
   done
 }
 
-remove_docker_resources() {
+trash_user_owned_path() {
+  local path="$1"
+
+  if [[ ! -e "$path" ]]; then
+    log "INFO" "$path not present; skipping"
+    return 0
+  fi
+
+  if command_exists trash; then
+    trash "$path"
+    log "OK" "Moved $path to trash"
+  else
+    rm -rf "$path"
+    log "OK" "Removed $path"
+  fi
+}
+
+remove_user_env_files() {
+  local candidate
+  local -a paths_to_remove=()
+
+  if [[ -n "$ENV_FILE" ]]; then
+    paths_to_remove+=("$ENV_FILE")
+  fi
+
+  paths_to_remove+=("$REPO_ROOT/.env" "$REPO_ROOT/.env.local")
+
+  declare -A seen=()
+  for candidate in "${paths_to_remove[@]}"; do
+    if [[ -n "$candidate" && -z "${seen[$candidate]+x}" ]]; then
+      seen[$candidate]=1
+      trash_user_owned_path "$candidate"
+    fi
+  done
+}
+
+stop_docker_services() {
   if ! command_exists docker; then
-    log "WARN" "Docker not found. Skipping docker resource cleanup"
+    log "WARN" "Docker not found. Skipping docker service shutdown"
     return 0
   fi
 
   if docker compose version >/dev/null 2>&1; then
-    if docker compose down --volumes --remove-orphans >/dev/null 2>&1; then
-      log "OK" "Removed docker compose services, network, and attached volumes"
-    else
-      log "WARN" "docker compose down failed; attempting targeted cleanup"
-    fi
+    compose_cmd -f docker-compose.yml -f docker-compose.prod.yml stop api postgres redis >/dev/null 2>&1 || true
+    compose_cmd stop postgres redis >/dev/null 2>&1 || true
   else
-    log "WARN" "Docker Compose plugin not found. Attempting targeted cleanup"
+    log "WARN" "Docker Compose plugin not found. Attempting targeted container stop"
   fi
 
   local container
-  for container in supermemory-postgres supermemory-redis; do
+  for container in supermemory-api supermemory-postgres supermemory-redis; do
+    if docker stop "$container" >/dev/null 2>&1; then
+      log "OK" "Stopped container $container"
+    else
+      log "INFO" "Container $container not present"
+    fi
+  done
+}
+
+purge_docker_resources() {
+  if ! command_exists docker; then
+    log "WARN" "Docker not found. Skipping docker purge"
+    return 0
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    if compose_cmd -f docker-compose.yml -f docker-compose.prod.yml down --volumes --remove-orphans >/dev/null 2>&1; then
+      log "OK" "Removed docker compose services, network, and attached volumes"
+    else
+      log "WARN" "docker compose down failed; attempting targeted purge"
+    fi
+  else
+    log "WARN" "Docker Compose plugin not found. Attempting targeted purge"
+  fi
+
+  local container
+  for container in supermemory-api supermemory-postgres supermemory-redis; do
     if docker rm -f "$container" >/dev/null 2>&1; then
       log "OK" "Removed container $container"
     else
@@ -448,19 +678,6 @@ remove_docker_resources() {
       log "INFO" "Network $network not present"
     fi
   done
-
-  local image
-  for image in pgvector/pgvector:pg16 redis:7-alpine; do
-    if docker image inspect "$image" >/dev/null 2>&1; then
-      if docker image rm "$image" >/dev/null 2>&1; then
-        log "OK" "Removed image $image"
-      else
-        log "WARN" "Could not remove image $image (it may be shared with other projects)"
-      fi
-    else
-      log "INFO" "Image $image not present"
-    fi
-  done
 }
 
 validate_prerequisites() {
@@ -479,13 +696,17 @@ validate_prerequisites() {
 
 ensure_env_file() {
   local created_env=0
-  if [[ ! -f .env ]]; then
-    cp .env.example .env
+  mkdir -p "$(dirname "$ENV_FILE")"
+
+  if [[ ! -f "$ENV_FILE" ]]; then
+    cp .env.example "$ENV_FILE"
     created_env=1
-    log "OK" "Created .env from .env.example"
+    log "OK" "Created $ENV_FILE from .env.example"
   fi
 
   ensure_env_defaults "$created_env"
+  scrub_placeholder_env_values
+  load_env_file_into_shell
 
   if [[ "$ACTION" == "install" ]]; then
     migrate_legacy_default_ports
@@ -493,12 +714,12 @@ ensure_env_file() {
 }
 
 run_install_or_update_flow() {
-  local mode="$1"
+  local action="$1"
 
-  log "INFO" "Starting Supermemory ${mode} setup"
+  log "INFO" "Starting Supermemory ${action} setup (${INSTALL_MODE} mode)"
   validate_prerequisites
 
-  if [[ "$mode" == "update" ]]; then
+  if [[ "$action" == "update" ]]; then
     log "INFO" "Update mode performs a clean reinstall of app components"
     remove_local_runtime_artifacts_for_update
   fi
@@ -508,6 +729,7 @@ run_install_or_update_flow() {
 
   ensure_env_file
   configure_api_keys
+  load_env_file_into_shell
 
   local api_port
   local api_host_port
@@ -523,26 +745,35 @@ run_install_or_update_flow() {
   fi
 
   if [[ "$SKIP_DOCKER" -eq 0 ]]; then
-    if [[ "$SKIP_API_START" -eq 0 ]]; then
-      log "INFO" "Starting Docker services: postgres, redis, api"
-      start_api_stack
-      wait_for_container_health "supermemory-postgres" 120
-      wait_for_container_health "supermemory-redis" 60
-      verify_api_health "$api_host_port"
-      api_started=1
-    else
-      log "INFO" "Starting Docker services: postgres, redis"
-      start_compose_services
-      wait_for_container_health "supermemory-postgres" 120
-      wait_for_container_health "supermemory-redis" 60
-    fi
+    case "$INSTALL_MODE" in
+      agent)
+        log "INFO" "Starting Docker services: postgres"
+        start_postgres_service
+        wait_for_container_health "supermemory-postgres" 120
+        ;;
+      api|full)
+        if [[ "$SKIP_API_START" -eq 0 ]]; then
+          log "INFO" "Starting Docker services: postgres, redis, api"
+          start_api_stack
+          wait_for_container_health "supermemory-postgres" 120
+          wait_for_container_health "supermemory-redis" 60
+          verify_api_health "$api_host_port"
+          api_started=1
+        else
+          log "INFO" "Starting Docker services: postgres, redis"
+          start_compose_services
+          wait_for_container_health "supermemory-postgres" 120
+          wait_for_container_health "supermemory-redis" 60
+        fi
+        ;;
+    esac
 
-    if [[ "$mode" == "update" ]]; then
+    if [[ "$action" == "update" ]]; then
       run_migrations_best_effort
     else
       run_migrations_strict
     fi
-  elif [[ "$mode" == "update" ]]; then
+  elif [[ "$action" == "update" ]]; then
     run_migrations_best_effort
   else
     log "WARN" "Skipped Docker startup and migrations"
@@ -558,23 +789,53 @@ run_install_or_update_flow() {
   configure_claude_mcp
 
   local connectivity_ok=0
-  if npm run doctor; then
+  if npm run doctor -- --env-file "$ENV_FILE" --mode "$INSTALL_MODE"; then
     connectivity_ok=1
     log "OK" "Connectivity checks passed"
   else
     log "WARN" "Connectivity checks found issues. Review output above"
   fi
 
-  if [[ "$SKIP_DOCKER" -eq 1 && "$SKIP_API_START" -eq 0 ]]; then
-    log "WARN" "--skip-docker prevents API auto-start. Start the stack manually when ready"
+  if [[ "$SKIP_DOCKER" -eq 1 ]]; then
+    case "$INSTALL_MODE" in
+      agent)
+        log "WARN" "--skip-docker prevents Postgres startup. Start Postgres manually before using MCP or the API"
+        ;;
+      api|full)
+        if [[ "$SKIP_API_START" -eq 0 ]]; then
+          log "WARN" "--skip-docker prevents API auto-start. Start the stack manually when ready"
+        fi
+        ;;
+    esac
   fi
 
-  if [[ "$api_started" -eq 1 ]]; then
-    cat <<GUIDE
+  case "$INSTALL_MODE" in
+    agent)
+      cat <<GUIDE
 
 Setup complete.
 
-Basic usage flow:
+Agent-first usage flow:
+  1) Start the MCP server:
+       npm run mcp
+     or during development:
+       npm run mcp:dev
+  2) Verify local prerequisites:
+       docker compose ps postgres
+       npm run doctor -- --env-file ${ENV_FILE} --mode agent
+  3) If you want the REST API later:
+       ./scripts/install.sh api --skip-claude --env-file ${ENV_FILE}
+
+This mode does not start the API container by default.
+GUIDE
+      ;;
+    api)
+      if [[ "$api_started" -eq 1 ]]; then
+        cat <<GUIDE
+
+Setup complete.
+
+API usage flow:
   1) Verify health:
        curl http://localhost:${api_host_port}/health
   2) Add a document:
@@ -590,35 +851,64 @@ If you want to run the API in local watch mode instead of Docker:
   - Then use:
       curl http://localhost:${api_port}/health
 GUIDE
-  else
-    cat <<GUIDE
+      else
+        cat <<GUIDE
 
 Setup complete.
 
-Basic usage flow:
-  1) Start the API:
-       npm run dev
+API mode is installed, but the API was not auto-started.
+
+Next steps:
+  1) Start the stack:
+       docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis
   2) Verify health:
        curl http://localhost:${api_port}/health
-  3) Add a document:
-       curl -X POST http://localhost:${api_port}/api/v1/documents -H "Content-Type: application/json" -d '{"content":"My first memory"}'
-  4) Search:
-       curl -X POST http://localhost:${api_port}/api/v1/search -H "Content-Type: application/json" -d '{"query":"first memory"}'
 GUIDE
-  fi
+      fi
+      ;;
+    full)
+      if [[ "$api_started" -eq 1 ]]; then
+        cat <<GUIDE
+
+Setup complete.
+
+Full install usage flow:
+  1) Verify API health:
+       curl http://localhost:${api_host_port}/health
+  2) Use the REST API:
+       curl -X POST http://localhost:${api_host_port}/api/v1/documents -H "Content-Type: application/json" -d '{"content":"My first memory"}'
+  3) Use MCP from a coding agent:
+       npm run mcp
+     or:
+       npm run mcp:dev
+GUIDE
+      else
+        cat <<GUIDE
+
+Setup complete.
+
+Full mode is installed. Start whichever surface you need next:
+  - API stack:
+      docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis
+  - MCP server:
+      npm run mcp
+GUIDE
+      fi
+      ;;
+  esac
 
   cat <<GUIDE
 
 If you skipped API keys:
-  - Edit .env and set OPENAI_API_KEY and/or ANTHROPIC_API_KEY
+  - Edit ${ENV_FILE} and set OPENAI_API_KEY and/or ANTHROPIC_API_KEY
   - Then rerun connectivity checks:
-      npm run doctor
+      npm run doctor -- --env-file ${ENV_FILE} --mode ${INSTALL_MODE}
 
 If you skipped Docker:
   - Start services manually, then run:
       docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis
       ./scripts/migrations/run_migrations.sh
-      npm run doctor
+      npm run doctor -- --mode ${INSTALL_MODE}
 GUIDE
 
   if [[ "$connectivity_ok" -ne 1 ]]; then
@@ -627,15 +917,29 @@ GUIDE
 }
 
 run_uninstall_flow() {
-  log "INFO" "Starting Supermemory uninstall"
-  remove_claude_mcp
-  remove_docker_resources
+  if [[ "$PURGE" -eq 1 ]]; then
+    log "INFO" "Starting Supermemory uninstall with purge"
+  else
+    log "INFO" "Starting Supermemory uninstall"
+  fi
+
+  stop_docker_services
   remove_local_install_artifacts
-  log "OK" "Uninstall cleanup completed"
+
+  if [[ "$PURGE" -eq 1 ]]; then
+    remove_claude_mcp
+    purge_docker_resources
+    remove_user_env_files
+    log "OK" "Uninstall purge completed"
+  else
+    log "INFO" "Preserved env files, Docker volumes, and Claude MCP registrations. Re-run with uninstall --purge to remove them"
+    log "OK" "Uninstall cleanup completed"
+  fi
 }
 
 parse_args() {
   local action_explicit=0
+  local install_mode_explicit=0
 
   while [[ "$#" -gt 0 ]]; do
     local arg="$1"
@@ -647,17 +951,63 @@ parse_args() {
         ACTION="$arg"
         action_explicit=1
         ;;
+      agent|api|full)
+        if [[ "$action_explicit" -eq 0 ]]; then
+          ACTION="install"
+          action_explicit=1
+        elif [[ "$ACTION" != "install" && "$ACTION" != "update" ]]; then
+          fail "Install modes can only be used with install or update"
+        fi
+
+        if [[ "$install_mode_explicit" -eq 1 ]]; then
+          fail "Only one install mode is allowed (agent, api, or full)"
+        fi
+
+        INSTALL_MODE="$arg"
+        install_mode_explicit=1
+        ;;
+      --mode)
+        shift
+        if [[ "$#" -eq 0 ]]; then
+          fail "Missing value for --mode (expected: agent, api, or full)"
+        fi
+        INSTALL_MODE="${1,,}"
+        validate_install_mode "$INSTALL_MODE"
+        install_mode_explicit=1
+        ;;
+      --mode=*)
+        INSTALL_MODE="${arg#*=}"
+        INSTALL_MODE="${INSTALL_MODE,,}"
+        validate_install_mode "$INSTALL_MODE"
+        install_mode_explicit=1
+        ;;
+      --env-file)
+        shift
+        if [[ "$#" -eq 0 ]]; then
+          fail "Missing value for --env-file"
+        fi
+        ENV_FILE="$1"
+        ;;
+      --env-file=*)
+        ENV_FILE="${arg#*=}"
+        ;;
       --skip-docker)
         SKIP_DOCKER=1
         ;;
       --skip-api-keys)
         SKIP_API_KEYS=1
         ;;
-      --skip-claude)
+      --register-mcp)
+        REGISTER_MCP=1
+        ;;
+      --skip-mcp|--skip-claude)
         SKIP_CLAUDE=1
         ;;
       --skip-build)
         SKIP_BUILD=1
+        ;;
+      --purge)
+        PURGE=1
         ;;
       --skip-api-start)
         SKIP_API_START=1
@@ -694,6 +1044,12 @@ parse_args() {
 
 main() {
   parse_args "$@"
+  ensure_env_file_path
+  validate_install_mode "$INSTALL_MODE"
+
+  if [[ "$PURGE" -eq 1 && "$ACTION" != "uninstall" ]]; then
+    fail "--purge is only supported with uninstall"
+  fi
 
   case "$ACTION" in
     install)

@@ -1,12 +1,14 @@
 #!/usr/bin/env tsx
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { execSync } from 'node:child_process';
 import pkg from 'pg';
 import Redis from 'ioredis';
+import { loadEnvFile } from '../src/config/env.js';
+import { findClaudeMcpRegistrations } from './claude-mcp-config.js';
 
 const { Client } = pkg;
 type RedisLike = {
+  on(event: 'error', listener: (error: unknown) => void): void;
   ping(): Promise<string>;
   quit(): Promise<'OK' | void>;
 };
@@ -16,6 +18,8 @@ type CheckResult = {
   level: 'error' | 'warn' | 'info';
   message: string;
 };
+
+type DoctorMode = 'agent' | 'api' | 'full';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -45,20 +49,123 @@ function printResult(result: CheckResult): void {
   console.log(`[${prefix}] ${result.message}`);
 }
 
-async function run(): Promise<void> {
-  const results: CheckResult[] = [];
+function validateMode(mode: string): DoctorMode {
+  if (mode === 'agent' || mode === 'api' || mode === 'full') {
+    return mode;
+  }
 
-  if (!existsSync('.env')) {
+  throw new Error(`Invalid mode: ${mode} (expected: agent, api, or full)`);
+}
+
+function getApiHealthUrl(env: Record<string, string>): string {
+  const apiHostPort = env.API_HOST_PORT || env.API_PORT || '13000';
+  return `http://127.0.0.1:${apiHostPort}/health`;
+}
+
+async function checkApiHealth(env: Record<string, string>): Promise<CheckResult> {
+  const healthUrl = getApiHealthUrl(env);
+  let lastError = 'unknown error';
+
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    try {
+      const response = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
+      if (response.ok) {
+        return { ok: true, level: 'info', message: `API health endpoint reachable: ${healthUrl}` };
+      }
+
+      lastError = `returned HTTP ${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+
+    if (attempt < 10) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+
+  return {
+    ok: false,
+    level: 'error',
+    message: `API health check failed: ${healthUrl} (${lastError})`,
+  };
+}
+
+function parseArgs(): { envFile?: string; mode: DoctorMode } {
+  const args = process.argv.slice(2);
+  let envFile: string | undefined;
+  let mode: DoctorMode = 'agent';
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '--env-file') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error('--env-file requires a value');
+      }
+      envFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--env-file=')) {
+      envFile = arg.slice('--env-file='.length);
+      continue;
+    }
+
+    if (arg === '--mode') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error('--mode requires a value');
+      }
+      mode = validateMode(value.toLowerCase());
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--mode=')) {
+      mode = validateMode(arg.slice('--mode='.length).toLowerCase());
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return { envFile, mode };
+}
+
+async function run(): Promise<void> {
+  const { envFile, mode } = parseArgs();
+  const results: CheckResult[] = [];
+  const envResolution = loadEnvFile({ cliEnvFile: envFile });
+
+  if (!envResolution.exists || !existsSync(envResolution.path)) {
     results.push({
       ok: false,
       level: 'error',
-      message: '.env is missing (run `npm run setup` first)',
+      message: `${envResolution.path} is missing (run \`npm run setup\` first or pass \`--env-file\`)`,
     });
     printResult(results[0]);
     process.exit(1);
   }
 
-  const env = parseEnv(await readFile('.env', 'utf-8'));
+  results.push({
+    ok: true,
+    level: 'info',
+    message: `Using env file: ${envResolution.path}`,
+  });
+  results.push({
+    ok: true,
+    level: 'info',
+    message: `Doctor mode: ${mode}`,
+  });
+
+  const env = parseEnv(await readFile(envResolution.path, 'utf-8'));
+  const openaiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY || '';
+  const anthropicKey = env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+  const llmProvider = env.LLM_PROVIDER || process.env.LLM_PROVIDER || '';
+  const hasOpenAIKey = !!openaiKey && !openaiKey.startsWith('sk-your-');
+  const hasAnthropicKey = !!anthropicKey && anthropicKey !== 'anthropic-your-api-key-here';
 
   const databaseUrl = env.DATABASE_URL || process.env.DATABASE_URL || '';
   const hasValidDatabaseUrl =
@@ -134,6 +241,7 @@ async function run(): Promise<void> {
       options: { maxRetriesPerRequest: number }
     ) => RedisLike;
     const redis = new RedisClientConstructor(redisUrl, { maxRetriesPerRequest: 1 });
+    redis.on('error', () => undefined);
     try {
       const pong = await redis.ping();
       results.push({
@@ -152,14 +260,48 @@ async function run(): Promise<void> {
     }
   }
 
-  // MCP build check
-  if (existsSync('dist/mcp/index.js')) {
+  const hasMcpBuild = existsSync('dist/mcp/index.js');
+  const hasApiBuild = existsSync('dist/index.js');
+
+  if (mode === 'agent' || mode === 'full') {
+    if (hasMcpBuild) {
+      results.push({ ok: true, level: 'info', message: 'MCP server build exists (dist/mcp/index.js)' });
+    } else {
+      results.push({
+        ok: false,
+        level: 'error',
+        message: 'MCP server build is missing for agent/full mode (run `npm run build` first)',
+      });
+    }
+  } else if (hasMcpBuild) {
     results.push({ ok: true, level: 'info', message: 'MCP server build exists (dist/mcp/index.js)' });
   } else {
     results.push({
       ok: true,
       level: 'warn',
-      message: 'MCP server not built (run `npm run build` first)',
+      message: 'MCP server build not found (optional for API-only validation)',
+    });
+  }
+
+  if (mode === 'api' || mode === 'full') {
+    if (hasApiBuild) {
+      results.push({ ok: true, level: 'info', message: 'API server build exists (dist/index.js)' });
+    } else {
+      results.push({
+        ok: false,
+        level: 'error',
+        message: 'API server build is missing for api/full mode (run `npm run build` first)',
+      });
+    }
+
+    results.push(await checkApiHealth(env));
+  } else if (hasApiBuild) {
+    results.push({ ok: true, level: 'info', message: 'API server build exists (dist/index.js)' });
+  } else {
+    results.push({
+      ok: true,
+      level: 'warn',
+      message: 'API server build not found (optional for agent-only validation)',
     });
   }
 
@@ -177,38 +319,46 @@ async function run(): Promise<void> {
       results.push({ ok: false, level: 'warn', message: '.mcp.json exists but is not valid JSON' });
     }
   } else {
-    results.push({ ok: true, level: 'warn', message: '.mcp.json not found (optional for Claude Code auto-discovery)' });
+    results.push({ ok: true, level: 'warn', message: '.mcp.json not found (optional for project-scope Claude auto-discovery)' });
   }
 
   // Claude Code MCP registration check
   try {
-    const mcpList = execSync('claude mcp list 2>/dev/null', { encoding: 'utf-8', timeout: 5000 });
-    if (mcpList.includes('supermemory')) {
-      results.push({ ok: true, level: 'info', message: 'MCP server registered in Claude Code' });
+    const registrations = findClaudeMcpRegistrations('supermemory');
+    if (registrations.length > 0) {
+      const scopes = [...new Set(registrations.map((entry) => entry.scope))].join(', ');
+      results.push({ ok: true, level: 'info', message: `MCP server registered in Claude Code (${scopes} scope)` });
     } else {
       results.push({
         ok: true,
         level: 'warn',
-        message: 'MCP server not registered in Claude Code (run `npm run mcp:setup`)',
+        message: 'MCP server not registered in Claude Code (optional; run `npm run mcp:setup` if you want Claude integration)',
       });
     }
   } catch {
     results.push({
       ok: true,
       level: 'warn',
-      message: 'Claude Code CLI not available (optional for MCP registration check)',
+      message: 'Claude Code config could not be inspected (optional for MCP registration check)',
     });
   }
 
   // Embedding API key check
-  const openaiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY || '';
-  if (openaiKey && !openaiKey.startsWith('sk-your-')) {
+  if (hasOpenAIKey) {
     results.push({ ok: true, level: 'info', message: 'OPENAI_API_KEY is configured' });
+  } else if (hasAnthropicKey) {
+    results.push({ ok: true, level: 'info', message: 'ANTHROPIC_API_KEY is configured' });
+  } else if (llmProvider === 'openai' || llmProvider === 'anthropic') {
+    results.push({
+      ok: true,
+      level: 'warn',
+      message: `LLM_PROVIDER=${llmProvider} is set but no real provider key is configured; local fallback behavior will be used`,
+    });
   } else {
     results.push({
       ok: true,
       level: 'warn',
-      message: 'OPENAI_API_KEY not set (embeddings and LLM features will be unavailable)',
+      message: 'No provider API keys are configured (embeddings and LLM features will use local fallback behavior)',
     });
   }
 

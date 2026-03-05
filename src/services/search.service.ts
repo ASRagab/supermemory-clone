@@ -73,6 +73,13 @@ class InMemoryMemoryGraph {
     return Array.from(this.memories.values())
   }
 
+  removeMemory(memoryId: string): { removed: boolean; chunkCount: number } {
+    const removed = this.memories.delete(memoryId)
+    const chunkCount = this.getChunks(memoryId).length
+    this.chunksByMemoryId.delete(memoryId)
+    return { removed, chunkCount }
+  }
+
   searchByTag(containerTag: string): Memory[] {
     return Array.from(this.memories.values()).filter((m) => m.containerTag === containerTag)
   }
@@ -436,18 +443,30 @@ export class SearchService {
   /**
    * Remove a memory from the index
    */
-  async removeMemory(memoryId: string): Promise<boolean> {
+  async removeMemory(memoryId: string): Promise<{ removed: boolean; vectorsDeleted: number }> {
     // Remove from vector store
     const deleted = await this.vectorStore.delete({ ids: [memoryId] })
 
     // Also remove any chunks associated with this memory
     const chunks = this.memoryGraph.getChunks(memoryId)
+    let chunkDeleted = 0
     if (chunks.length > 0) {
       const chunkIds = chunks.map((c) => c.id)
-      await this.vectorStore.delete({ ids: chunkIds })
+      chunkDeleted = await this.vectorStore.delete({ ids: chunkIds })
     }
 
-    return deleted > 0
+    const removedFromGraph = this.memoryGraph.removeMemory(memoryId)
+
+    return {
+      removed: deleted > 0 || chunkDeleted > 0 || removedFromGraph.removed || removedFromGraph.chunkCount > 0,
+      vectorsDeleted: deleted + chunkDeleted,
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.vectorStore.close()
+    this.memoryGraph.clear()
+    this.initialized = false
   }
 
   // Private methods

@@ -38,4 +38,17 @@ describe('LLM feature flags', () => {
 
     expect(getAvailableProviders()).toEqual(['mock'])
   })
+
+  it('should treat placeholder OpenAI keys as unavailable', async () => {
+    process.env.MEMORY_ENABLE_LLM = 'true'
+    delete process.env.ANTHROPIC_API_KEY
+    process.env.OPENAI_API_KEY = 'sk-your-openai-api-key-here'
+    process.env.LLM_PROVIDER = 'openai'
+
+    const { getAvailableProviders, getDefaultProviderType, isLLMAvailable } = await import('../../../src/services/llm/index.js')
+
+    expect(isLLMAvailable()).toBe(false)
+    expect(getAvailableProviders()).toEqual(['mock'])
+    expect(getDefaultProviderType()).toBe('mock')
+  })
 })
