@@ -29,7 +29,7 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
 fi
 
 # Database URL from environment or default
-DATABASE_URL="${DATABASE_URL:-postgresql://supermemory:supermemory_secret@localhost:5432/supermemory}"
+DATABASE_URL="${DATABASE_URL:-postgresql://supermemory:supermemory_secret@localhost:15432/supermemory}"
 
 # Check if DATABASE_URL is set
 if [ -z "$DATABASE_URL" ]; then

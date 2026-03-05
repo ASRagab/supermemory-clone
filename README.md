@@ -24,34 +24,72 @@ It stores documents, extracts memories, indexes embeddings, and serves search/pr
 ## Requirements
 
 - Node.js >= 20
+- Docker + Docker Compose
 - PostgreSQL with pgvector
 - Redis (optional but recommended for async workers)
 
 ## Quick Start (Turnkey)
 
+`curl | bash` bootstrap:
+
 ```bash
-git clone <repo-url>
-cd supermemory-clone
-npm install
-npm run setup
-
-# Start dependencies (minimum: postgres)
-docker compose up -d postgres redis
-
-# Apply SQL migrations
-./scripts/migrations/run_migrations.sh
-
-# Validate env + connectivity
-npm run doctor
-
-# Start API
-npm run dev
+curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | bash
 ```
 
-Health check:
+You can pass installer flags after `--`, for example:
 
 ```bash
-curl http://localhost:3000/health
+curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | bash -s -- -- --non-interactive --skip-api-keys
+```
+
+Local clone + install:
+
+```bash
+git clone https://github.com/ASRagab/supermemory-clone.git
+cd supermemory-clone
+./scripts/install.sh
+```
+
+Prefer reviewing remote scripts before execution:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | less
+```
+
+The installer handles:
+
+- prerequisite checks (Node/Docker/Compose)
+- `npm install`
+- `.env` creation from `.env.example`
+- optional API key prompts (or you can skip and configure later)
+- Docker startup (`postgres`, `redis`) + migrations
+- non-conflicting local host ports by default (`13000`, `15432`, `16379`)
+- build + optional Claude Code MCP registration
+- connectivity check (`npm run doctor`)
+
+Optional installer flags:
+
+```bash
+./scripts/install.sh --skip-api-keys --skip-claude
+./scripts/install.sh --skip-docker
+./scripts/install.sh --non-interactive
+```
+
+Manual path (if you skip parts of installer):
+
+```bash
+cp .env.example .env
+docker compose up -d postgres redis
+./scripts/migrations/run_migrations.sh
+npm run build
+npm run doctor
+```
+
+Start and verify the API:
+
+```bash
+npm run dev
+curl http://localhost:13000/health
 ```
 
 ## Configuration
@@ -100,7 +138,8 @@ Base path: `/api/v1`
 
 ### Quick Setup
 
-Run the one-command setup (builds if needed and registers with Claude Code):
+`./scripts/install.sh` already attempts project-scope Claude Code MCP registration.
+If you want to run MCP setup manually:
 
 ```bash
 npm run mcp:setup

@@ -16,6 +16,7 @@
     "mcp:dev": "tsx src/mcp/index.ts",
     "mcp:setup": "tsx scripts/mcp-setup.ts",
     "setup": "tsx scripts/setup.ts",
+    "setup:turnkey": "bash scripts/install.sh",
     "doctor": "tsx scripts/doctor.ts",
     "test": "vitest",
     "test:run": "vitest run",
