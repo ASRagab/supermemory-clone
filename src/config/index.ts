@@ -1,8 +1,8 @@
-import { z } from 'zod';
-import { config as dotenvConfig } from 'dotenv';
-import { ConfigurationError } from '../utils/errors.js';
+import { z } from 'zod'
+import { config as dotenvConfig } from 'dotenv'
+import { ConfigurationError } from '../utils/errors.js'
 
-dotenvConfig();
+dotenvConfig()
 
 const configSchema = z.object({
   // OpenAI (optional - local fallback available)
@@ -11,10 +11,7 @@ const configSchema = z.object({
   embeddingDimensions: z.coerce.number().default(1536),
 
   // LLM Provider Configuration
-  llmProvider: z
-    .enum(['openai', 'anthropic', 'mock'])
-    .optional()
-    .describe('LLM provider for memory extraction'),
+  llmProvider: z.enum(['openai', 'anthropic', 'mock']).optional().describe('LLM provider for memory extraction'),
   anthropicApiKey: z.string().optional(),
   llmModel: z.string().optional().describe('Override default model for LLM extraction'),
   llmMaxTokens: z.coerce.number().default(2000),
@@ -31,9 +28,7 @@ const configSchema = z.object({
   llmCacheTtlMs: z.coerce.number().default(900000), // 15 minutes
 
   // Database
-  databaseUrl: z
-    .string()
-    .default('postgresql://supermemory:supermemory_secret@localhost:5432/supermemory'),
+  databaseUrl: z.string().default('postgresql://supermemory:supermemory_secret@localhost:5432/supermemory'),
 
   // Vector Store
   vectorStoreProvider: z.enum(['memory', 'sqlite-vss', 'chroma']).default('memory'),
@@ -60,12 +55,12 @@ const configSchema = z.object({
 
   // Logging
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-});
+})
 
-export type Config = z.infer<typeof configSchema>;
+export type Config = z.infer<typeof configSchema>
 
 function isPostgresDatabaseUrl(url: string): boolean {
-  return url.startsWith('postgresql://') || url.startsWith('postgres://');
+  return url.startsWith('postgresql://') || url.startsWith('postgres://')
 }
 
 function loadConfig(): Config {
@@ -101,25 +96,25 @@ function loadConfig(): Config {
     rateLimitRequests: process.env.RATE_LIMIT_REQUESTS,
     rateLimitWindowMs: process.env.RATE_LIMIT_WINDOW_MS,
     logLevel: process.env.LOG_LEVEL,
-  });
+  })
 
   if (!result.success) {
-    console.error('Configuration validation failed:');
+    console.error('Configuration validation failed:')
     result.error.issues.forEach((issue) => {
-      console.error(`  - ${issue.path.join('.')}: ${issue.message}`);
-    });
-    const fieldErrors: Record<string, string[]> = {};
+      console.error(`  - ${issue.path.join('.')}: ${issue.message}`)
+    })
+    const fieldErrors: Record<string, string[]> = {}
     result.error.issues.forEach((issue) => {
-      const path = issue.path.join('.') || '_root';
+      const path = issue.path.join('.') || '_root'
       if (!fieldErrors[path]) {
-        fieldErrors[path] = [];
+        fieldErrors[path] = []
       }
-      fieldErrors[path].push(issue.message);
-    });
-    throw new ConfigurationError('Invalid configuration', undefined, { fieldErrors });
+      fieldErrors[path].push(issue.message)
+    })
+    throw new ConfigurationError('Invalid configuration', undefined, { fieldErrors })
   }
 
-  const config = result.data;
+  const config = result.data
 
   if (process.env.NODE_ENV !== 'test' && !isPostgresDatabaseUrl(config.databaseUrl)) {
     throw new ConfigurationError(
@@ -132,10 +127,10 @@ function loadConfig(): Config {
           ],
         },
       }
-    );
+    )
   }
 
-  return config;
+  return config
 }
 
-export const config = loadConfig();
+export const config = loadConfig()

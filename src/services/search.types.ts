@@ -4,31 +4,31 @@
  * Type definitions for vector embedding and hybrid search functionality.
  */
 
-import type { Memory } from './memory.types.js';
+import type { Memory } from './memory.types.js'
 
 // Re-export Memory for convenience
-export type { Memory };
+export type { Memory }
 
 /**
  * Search mode determines how results are retrieved
  */
-export type SearchMode = 'vector' | 'memory' | 'fulltext' | 'hybrid';
+export type SearchMode = 'vector' | 'memory' | 'fulltext' | 'hybrid'
 
 /**
  * Metadata filters for search queries
  */
 export interface MetadataFilter {
-  key: string;
-  value: string | number | boolean;
-  operator?: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'startsWith';
+  key: string
+  value: string | number | boolean
+  operator?: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'startsWith'
 }
 
 /**
  * Date range filter for search
  */
 export interface DateRangeFilter {
-  from?: Date;
-  to?: Date;
+  from?: Date
+  to?: Date
 }
 
 /**
@@ -36,31 +36,31 @@ export interface DateRangeFilter {
  */
 export interface SearchOptions {
   /** Search mode: vector, memory, fulltext, or hybrid (default: hybrid) */
-  searchMode: SearchMode;
+  searchMode: SearchMode
 
   /** Maximum number of results to return (default: 10) */
-  limit: number;
+  limit: number
 
   /** Minimum similarity threshold for results (0-1, default: 0.7) */
-  threshold: number;
+  threshold: number
 
   /** Whether to apply cross-encoder reranking (default: false) */
-  rerank: boolean;
+  rerank: boolean
 
   /** Whether to expand/rewrite query for better recall (default: false) */
-  rewriteQuery: boolean;
+  rewriteQuery: boolean
 
   /** Metadata filters to apply */
-  filters?: MetadataFilter[];
+  filters?: MetadataFilter[]
 
   /** Date range filter */
-  dateRange?: DateRangeFilter;
+  dateRange?: DateRangeFilter
 
   /** Include chunk content in results */
-  includeContent?: boolean;
+  includeContent?: boolean
 
   /** Include embedding vectors in results (for debugging) */
-  includeEmbeddings?: boolean;
+  includeEmbeddings?: boolean
 }
 
 /**
@@ -74,19 +74,19 @@ export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   rewriteQuery: false,
   includeContent: true,
   includeEmbeddings: false,
-};
+}
 
 /**
  * Document chunk for vector search
  */
 export interface Chunk {
-  id: string;
-  memoryId: string;
-  content: string;
-  chunkIndex: number;
-  embedding?: number[];
-  metadata?: Record<string, unknown>;
-  createdAt: Date;
+  id: string
+  memoryId: string
+  content: string
+  chunkIndex: number
+  embedding?: number[]
+  metadata?: Record<string, unknown>
+  createdAt: Date
 }
 
 /**
@@ -94,28 +94,28 @@ export interface Chunk {
  */
 export interface SearchResult {
   /** Unique identifier */
-  id: string;
+  id: string
 
   /** The memory object if from memory search */
-  memory?: Memory;
+  memory?: Memory
 
   /** The chunk object if from vector search */
-  chunk?: Chunk;
+  chunk?: Chunk
 
   /** Cosine similarity score (0-1) */
-  similarity: number;
+  similarity: number
 
   /** Combined metadata from memory and chunk */
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown>
 
   /** Last update timestamp */
-  updatedAt: Date;
+  updatedAt: Date
 
   /** Source of the result */
-  source: 'vector' | 'memory' | 'fulltext' | 'hybrid';
+  source: 'vector' | 'memory' | 'fulltext' | 'hybrid'
 
   /** Reranking score if reranking was applied */
-  rerankScore?: number;
+  rerankScore?: number
 }
 
 /**
@@ -123,22 +123,22 @@ export interface SearchResult {
  */
 export interface SearchResponse {
   /** Search results */
-  results: SearchResult[];
+  results: SearchResult[]
 
   /** Total count of matching items (before limit) */
-  totalCount: number;
+  totalCount: number
 
   /** Query used for search (may be rewritten) */
-  query: string;
+  query: string
 
   /** Original query if rewriting was applied */
-  originalQuery?: string;
+  originalQuery?: string
 
   /** Time taken for search in milliseconds */
-  searchTimeMs: number;
+  searchTimeMs: number
 
   /** Search options used */
-  options: SearchOptions;
+  options: SearchOptions
 }
 
 /**
@@ -146,43 +146,43 @@ export interface SearchResponse {
  */
 export interface EmbeddingConfig {
   /** Model name (e.g., 'text-embedding-3-small') */
-  model: string;
+  model: string
 
   /** Dimension of the embedding vectors */
-  dimensions: number;
+  dimensions: number
 
   /** Whether this is a local fallback model */
-  isLocal: boolean;
+  isLocal: boolean
 
   /** Maximum tokens per request */
-  maxTokens?: number;
+  maxTokens?: number
 
   /** Batch size for batch embedding */
-  batchSize?: number;
+  batchSize?: number
 }
 
 /**
  * Embedding provider types
  */
-export type EmbeddingProvider = 'openai' | 'local';
+export type EmbeddingProvider = 'openai' | 'local'
 
 /**
  * Vector similarity metrics
  */
-export type SimilarityMetric = 'cosine' | 'euclidean' | 'dotProduct';
+export type SimilarityMetric = 'cosine' | 'euclidean' | 'dotProduct'
 
 /**
  * Reranking options
  */
 export interface RerankOptions {
   /** Maximum number of results to rerank */
-  topK: number;
+  topK: number
 
   /** Model to use for reranking */
-  model?: string;
+  model?: string
 
   /** Whether to return original scores alongside rerank scores */
-  returnOriginalScores?: boolean;
+  returnOriginalScores?: boolean
 }
 
 /**
@@ -190,31 +190,31 @@ export interface RerankOptions {
  */
 export interface QueryRewriteOptions {
   /** Number of query variations to generate */
-  numVariations?: number;
+  numVariations?: number
 
   /** Whether to include synonyms */
-  includeSynonyms?: boolean;
+  includeSynonyms?: boolean
 
   /** Whether to expand abbreviations */
-  expandAbbreviations?: boolean;
+  expandAbbreviations?: boolean
 
   /** Additional context for query rewriting */
-  context?: string;
+  context?: string
 }
 
 /**
  * Vector store entry for similarity search
  */
 export interface VectorEntry {
-  id: string;
-  embedding: number[];
-  metadata: Record<string, unknown>;
+  id: string
+  embedding: number[]
+  metadata: Record<string, unknown>
 }
 
 /**
  * Similarity search result from vector store
  */
 export interface VectorSearchResult {
-  entry: VectorEntry;
-  similarity: number;
+  entry: VectorEntry
+  similarity: number
 }

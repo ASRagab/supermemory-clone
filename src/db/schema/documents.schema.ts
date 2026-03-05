@@ -1,15 +1,5 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  text,
-  jsonb,
-  timestamp,
-  index,
-  check,
-  integer,
-} from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { pgTable, uuid, varchar, text, jsonb, timestamp, index, check, integer } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 export const documents = pgTable(
   'documents',
@@ -53,7 +43,7 @@ export const documents = pgTable(
       sql`${table.contentType} IN ('text/plain', 'text/markdown', 'text/html', 'application/pdf', 'application/json', 'image/png', 'image/jpeg', 'audio/mp3', 'video/mp4')`
     ),
   ]
-);
+)
 
-export type Document = typeof documents.$inferSelect;
-export type NewDocument = typeof documents.$inferInsert;
+export type Document = typeof documents.$inferSelect
+export type NewDocument = typeof documents.$inferInsert

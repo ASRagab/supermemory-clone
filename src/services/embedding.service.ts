@@ -5,12 +5,8 @@
  * with fallback to local embeddings.
  */
 
-import type { EmbeddingConfig, EmbeddingProvider } from './search.types.js';
-import {
-  ValidationError,
-  EmbeddingError,
-  ExternalServiceError,
-} from '../utils/errors.js';
+import type { EmbeddingConfig, EmbeddingProvider } from './search.types.js'
+import { ValidationError, EmbeddingError, ExternalServiceError } from '../utils/errors.js'
 
 /**
  * Configuration for embedding models
@@ -30,19 +26,19 @@ const EMBEDDING_CONFIGS: Record<EmbeddingProvider, EmbeddingConfig> = {
     maxTokens: 512,
     batchSize: 50,
   },
-};
+}
 
 /**
  * Simple hash function for consistent local embeddings
  */
 function hashCode(str: string): number {
-  let hash = 0;
+  let hash = 0
   for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    const char = str.charCodeAt(i)
+    hash = (hash << 5) - hash + char
+    hash = hash & hash // Convert to 32-bit integer
   }
-  return hash;
+  return hash
 }
 
 /**
@@ -50,18 +46,18 @@ function hashCode(str: string): number {
  */
 function seededRandom(seed: number): () => number {
   return function (): number {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
-  };
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    return seed / 0x7fffffff
+  }
 }
 
 /**
  * Normalize a vector to unit length (L2 normalization)
  */
 function normalizeVector(vector: number[]): number[] {
-  const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
-  if (magnitude === 0) return vector;
-  return vector.map((val) => val / magnitude);
+  const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0))
+  if (magnitude === 0) return vector
+  return vector.map((val) => val / magnitude)
 }
 
 /**
@@ -74,66 +70,66 @@ function generateLocalEmbedding(text: string, dimensions: number = 384): number[
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
-    .filter((t) => t.length > 0);
+    .filter((t) => t.length > 0)
 
   // Initialize embedding vector
-  const embedding = new Array(dimensions).fill(0);
+  const embedding = new Array(dimensions).fill(0)
 
   // Combine token-based features with random projection
-  const tokenWeights = new Map<string, number>();
+  const tokenWeights = new Map<string, number>()
 
   // Calculate term frequency
   for (const token of tokens) {
-    tokenWeights.set(token, (tokenWeights.get(token) || 0) + 1);
+    tokenWeights.set(token, (tokenWeights.get(token) || 0) + 1)
   }
 
   // Apply TF weighting and random projection
   for (const [token, count] of tokenWeights.entries()) {
-    const tf = Math.log(1 + count);
-    const tokenHash = hashCode(token);
-    const tokenRandom = seededRandom(tokenHash);
+    const tf = Math.log(1 + count)
+    const tokenHash = hashCode(token)
+    const tokenRandom = seededRandom(tokenHash)
 
     // Project each token into the embedding space
     for (let i = 0; i < dimensions; i++) {
-      embedding[i] += tf * (tokenRandom() * 2 - 1);
+      embedding[i] += tf * (tokenRandom() * 2 - 1)
     }
   }
 
   // Add positional information
   for (let i = 0; i < Math.min(tokens.length, 50); i++) {
-    const token = tokens[i];
-    if (!token) continue;
-    const posWeight = 1 / (1 + i * 0.1);
-    const tokenHash = hashCode(token + ':' + i);
-    const posRandom = seededRandom(tokenHash);
+    const token = tokens[i]
+    if (!token) continue
+    const posWeight = 1 / (1 + i * 0.1)
+    const tokenHash = hashCode(token + ':' + i)
+    const posRandom = seededRandom(tokenHash)
 
     for (let j = 0; j < dimensions; j++) {
-      embedding[j] += posWeight * (posRandom() * 2 - 1) * 0.1;
+      embedding[j] += posWeight * (posRandom() * 2 - 1) * 0.1
     }
   }
 
   // Normalize to unit vector
-  return normalizeVector(embedding);
+  return normalizeVector(embedding)
 }
 
 /**
  * Embedding Service class
  */
 export class EmbeddingService {
-  private readonly apiKey: string | undefined;
-  private readonly baseUrl: string;
-  private readonly config: EmbeddingConfig;
-  private readonly provider: EmbeddingProvider;
+  private readonly apiKey: string | undefined
+  private readonly baseUrl: string
+  private readonly config: EmbeddingConfig
+  private readonly provider: EmbeddingProvider
 
   constructor(options?: { apiKey?: string; baseUrl?: string; provider?: EmbeddingProvider }) {
-    this.apiKey = options?.apiKey || process.env.OPENAI_API_KEY;
-    this.baseUrl = options?.baseUrl || 'https://api.openai.com/v1';
-    this.provider = options?.provider || (this.apiKey ? 'openai' : 'local');
-    this.config = EMBEDDING_CONFIGS[this.provider];
+    this.apiKey = options?.apiKey || process.env.OPENAI_API_KEY
+    this.baseUrl = options?.baseUrl || 'https://api.openai.com/v1'
+    this.provider = options?.provider || (this.apiKey ? 'openai' : 'local')
+    this.config = EMBEDDING_CONFIGS[this.provider]
 
     if (!this.apiKey && this.provider === 'openai') {
-      console.warn('[EmbeddingService] No OpenAI API key found, falling back to local embeddings');
-      this.provider = 'local';
+      console.warn('[EmbeddingService] No OpenAI API key found, falling back to local embeddings')
+      this.provider = 'local'
     }
   }
 
@@ -141,21 +137,21 @@ export class EmbeddingService {
    * Get the current embedding configuration
    */
   getConfig(): EmbeddingConfig {
-    return { ...this.config };
+    return { ...this.config }
   }
 
   /**
    * Get the embedding dimensions
    */
   getDimensions(): number {
-    return EMBEDDING_CONFIGS[this.provider].dimensions;
+    return EMBEDDING_CONFIGS[this.provider].dimensions
   }
 
   /**
    * Check if using local fallback
    */
   isUsingLocalFallback(): boolean {
-    return this.provider === 'local';
+    return this.provider === 'local'
   }
 
   /**
@@ -165,22 +161,22 @@ export class EmbeddingService {
     if (!text || text.trim().length === 0) {
       throw new ValidationError('Text cannot be empty', {
         text: ['Text is required and cannot be empty'],
-      });
+      })
     }
 
     // Truncate if too long
-    const maxChars = (this.config.maxTokens || 8191) * 4; // Rough estimate
-    const truncatedText = text.length > maxChars ? text.slice(0, maxChars) : text;
+    const maxChars = (this.config.maxTokens || 8191) * 4 // Rough estimate
+    const truncatedText = text.length > maxChars ? text.slice(0, maxChars) : text
 
     if (this.provider === 'local') {
-      return this.generateLocalEmbedding(truncatedText);
+      return this.generateLocalEmbedding(truncatedText)
     }
 
     try {
-      return await this.generateOpenAIEmbedding(truncatedText);
+      return await this.generateOpenAIEmbedding(truncatedText)
     } catch (error) {
-      console.warn('[EmbeddingService] OpenAI embedding failed, falling back to local:', error);
-      return this.generateLocalEmbedding(truncatedText);
+      console.warn('[EmbeddingService] OpenAI embedding failed, falling back to local:', error)
+      return this.generateLocalEmbedding(truncatedText)
     }
   }
 
@@ -189,92 +185,83 @@ export class EmbeddingService {
    */
   async batchEmbed(texts: string[]): Promise<number[][]> {
     if (!texts || texts.length === 0) {
-      return [];
+      return []
     }
 
     // Filter empty texts and track indices
-    const validTexts: { text: string; originalIndex: number }[] = [];
+    const validTexts: { text: string; originalIndex: number }[] = []
     for (let i = 0; i < texts.length; i++) {
-      const text = texts[i];
+      const text = texts[i]
       if (text && text.trim().length > 0) {
-        validTexts.push({ text, originalIndex: i });
+        validTexts.push({ text, originalIndex: i })
       }
     }
 
     if (validTexts.length === 0) {
-      return texts.map(() => []);
+      return texts.map(() => [])
     }
 
     // Truncate texts
-    const maxChars = (this.config.maxTokens || 8191) * 4;
-    const truncatedTexts = validTexts.map(({ text }) =>
-      text.length > maxChars ? text.slice(0, maxChars) : text
-    );
+    const maxChars = (this.config.maxTokens || 8191) * 4
+    const truncatedTexts = validTexts.map(({ text }) => (text.length > maxChars ? text.slice(0, maxChars) : text))
 
     if (this.provider === 'local') {
-      const embeddings = truncatedTexts.map((text) => this.generateLocalEmbedding(text));
+      const embeddings = truncatedTexts.map((text) => this.generateLocalEmbedding(text))
       return this.reconstructBatch(
         embeddings,
         validTexts.map((v) => v.originalIndex),
         texts.length
-      );
+      )
     }
 
     try {
-      const batchSize = this.config.batchSize || 100;
-      const allEmbeddings: number[][] = [];
+      const batchSize = this.config.batchSize || 100
+      const allEmbeddings: number[][] = []
 
       // Process in batches
       for (let i = 0; i < truncatedTexts.length; i += batchSize) {
-        const batch = truncatedTexts.slice(i, i + batchSize);
-        const batchEmbeddings = await this.generateOpenAIBatchEmbedding(batch);
-        allEmbeddings.push(...batchEmbeddings);
+        const batch = truncatedTexts.slice(i, i + batchSize)
+        const batchEmbeddings = await this.generateOpenAIBatchEmbedding(batch)
+        allEmbeddings.push(...batchEmbeddings)
       }
 
       return this.reconstructBatch(
         allEmbeddings,
         validTexts.map((v) => v.originalIndex),
         texts.length
-      );
+      )
     } catch (error) {
-      console.warn(
-        '[EmbeddingService] OpenAI batch embedding failed, falling back to local:',
-        error
-      );
-      const embeddings = truncatedTexts.map((text) => this.generateLocalEmbedding(text));
+      console.warn('[EmbeddingService] OpenAI batch embedding failed, falling back to local:', error)
+      const embeddings = truncatedTexts.map((text) => this.generateLocalEmbedding(text))
       return this.reconstructBatch(
         embeddings,
         validTexts.map((v) => v.originalIndex),
         texts.length
-      );
+      )
     }
   }
 
   /**
    * Reconstruct batch with empty embeddings for filtered entries
    */
-  private reconstructBatch(
-    embeddings: number[][],
-    validIndices: number[],
-    totalLength: number
-  ): number[][] {
-    const result: number[][] = new Array(totalLength).fill(null).map(() => []);
+  private reconstructBatch(embeddings: number[][], validIndices: number[], totalLength: number): number[][] {
+    const result: number[][] = new Array(totalLength).fill(null).map(() => [])
     for (let i = 0; i < validIndices.length; i++) {
-      const idx = validIndices[i];
-      const emb = embeddings[i];
+      const idx = validIndices[i]
+      const emb = embeddings[i]
       if (idx !== undefined && emb !== undefined) {
-        result[idx] = emb;
+        result[idx] = emb
       }
     }
-    return result;
+    return result
   }
 
   /**
    * Generate local embedding (wrapper for static function)
    */
   private generateLocalEmbedding(text: string): number[] {
-    const dimensions = EMBEDDING_CONFIGS.local.dimensions;
-    return generateLocalEmbedding(text, dimensions);
+    const dimensions = EMBEDDING_CONFIGS.local.dimensions
+    return generateLocalEmbedding(text, dimensions)
   }
 
   /**
@@ -292,29 +279,27 @@ export class EmbeddingService {
         input: text,
         encoding_format: 'float',
       }),
-    });
+    })
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new ExternalServiceError(
-        'OpenAI',
-        `OpenAI API error: ${error}`,
-        response.status,
-        { model: this.config.model, endpoint: 'embeddings' }
-      );
+      const error = await response.text()
+      throw new ExternalServiceError('OpenAI', `OpenAI API error: ${error}`, response.status, {
+        model: this.config.model,
+        endpoint: 'embeddings',
+      })
     }
 
     const data = (await response.json()) as {
-      data: Array<{ embedding: number[] }>;
-    };
+      data: Array<{ embedding: number[] }>
+    }
 
-    const firstResult = data.data[0];
+    const firstResult = data.data[0]
     if (!firstResult) {
       throw new EmbeddingError('No embedding returned from OpenAI API', 'openai', {
         model: this.config.model,
-      });
+      })
     }
-    return firstResult.embedding;
+    return firstResult.embedding
   }
 
   /**
@@ -332,25 +317,23 @@ export class EmbeddingService {
         input: texts,
         encoding_format: 'float',
       }),
-    });
+    })
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new ExternalServiceError(
-        'OpenAI',
-        `OpenAI API batch embedding error: ${error}`,
-        response.status,
-        { model: this.config.model, batchSize: texts.length }
-      );
+      const error = await response.text()
+      throw new ExternalServiceError('OpenAI', `OpenAI API batch embedding error: ${error}`, response.status, {
+        model: this.config.model,
+        batchSize: texts.length,
+      })
     }
 
     const data = (await response.json()) as {
-      data: Array<{ embedding: number[]; index: number }>;
-    };
+      data: Array<{ embedding: number[]; index: number }>
+    }
 
     // Sort by index to maintain order
-    const sorted = data.data.sort((a, b) => a.index - b.index);
-    return sorted.map((item) => item.embedding);
+    const sorted = data.data.sort((a, b) => a.index - b.index)
+    return sorted.map((item) => item.embedding)
   }
 }
 
@@ -361,61 +344,61 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
     throw new ValidationError(`Vector dimension mismatch: ${a.length} vs ${b.length}`, {
       vectorA: [`Expected dimension ${b.length}, got ${a.length}`],
-    });
+    })
   }
 
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
+  let dotProduct = 0
+  let normA = 0
+  let normB = 0
 
   for (let i = 0; i < a.length; i++) {
-    const aVal = a[i] ?? 0;
-    const bVal = b[i] ?? 0;
-    dotProduct += aVal * bVal;
-    normA += aVal * aVal;
-    normB += bVal * bVal;
+    const aVal = a[i] ?? 0
+    const bVal = b[i] ?? 0
+    dotProduct += aVal * bVal
+    normA += aVal * aVal
+    normB += bVal * bVal
   }
 
-  const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
-  if (magnitude === 0) return 0;
+  const magnitude = Math.sqrt(normA) * Math.sqrt(normB)
+  if (magnitude === 0) return 0
 
-  return dotProduct / magnitude;
+  return dotProduct / magnitude
 }
 
 /**
  * Create a default embedding service instance
  */
 export function createEmbeddingService(options?: {
-  apiKey?: string;
-  baseUrl?: string;
-  provider?: EmbeddingProvider;
+  apiKey?: string
+  baseUrl?: string
+  provider?: EmbeddingProvider
 }): EmbeddingService {
-  return new EmbeddingService(options);
+  return new EmbeddingService(options)
 }
 
 // Lazy singleton instance
-let _embeddingService: EmbeddingService | null = null;
+let _embeddingService: EmbeddingService | null = null
 
 /**
  * Get the singleton embedding service instance (created lazily)
  */
 export function getEmbeddingService(): EmbeddingService {
   if (!_embeddingService) {
-    _embeddingService = new EmbeddingService();
+    _embeddingService = new EmbeddingService()
   }
-  return _embeddingService;
+  return _embeddingService
 }
 
 /**
  * Reset the singleton instance (useful for testing)
  */
 export function resetEmbeddingService(): void {
-  _embeddingService = null;
+  _embeddingService = null
 }
 
 // Export default instance (lazy getter for backwards compatibility)
 export const embeddingService = new Proxy({} as EmbeddingService, {
   get(_, prop) {
-    return getEmbeddingService()[prop as keyof EmbeddingService];
+    return getEmbeddingService()[prop as keyof EmbeddingService]
   },
-});
+})

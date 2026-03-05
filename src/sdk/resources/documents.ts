@@ -3,8 +3,8 @@
  * Provides CRUD operations for documents
  */
 
-import { APIResource } from './base.js';
-import { APIPromise } from '../http.js';
+import { APIResource } from './base.js'
+import { APIPromise } from '../http.js'
 import type {
   RequestOptions,
   DocumentListParams,
@@ -21,7 +21,7 @@ import type {
   DocumentListProcessingResponse,
   DocumentUploadFileParams,
   DocumentUploadFileResponse,
-} from '../types.js';
+} from '../types.js'
 
 export class Documents extends APIResource {
   /**
@@ -34,7 +34,7 @@ export class Documents extends APIResource {
   get(id: string, options?: RequestOptions): APIPromise<DocumentGetResponse> {
     return this.client.get<DocumentGetResponse>(`/v3/documents/${encodeURIComponent(id)}`, {
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -44,14 +44,11 @@ export class Documents extends APIResource {
    * @param options - Request options
    * @returns Paginated list of documents
    */
-  list(
-    body?: DocumentListParams | null,
-    options?: RequestOptions
-  ): APIPromise<DocumentListResponse> {
+  list(body?: DocumentListParams | null, options?: RequestOptions): APIPromise<DocumentListResponse> {
     return this._post<DocumentListResponse>('/v3/documents/list', {
       body: body || {},
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -65,7 +62,7 @@ export class Documents extends APIResource {
     return this._post<DocumentAddResponse>('/v3/add', {
       body,
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -75,14 +72,11 @@ export class Documents extends APIResource {
    * @param options - Request options
    * @returns Results for each document including any failures
    */
-  batchAdd(
-    body: DocumentBatchAddParams,
-    options?: RequestOptions
-  ): APIPromise<DocumentBatchAddResponse> {
+  batchAdd(body: DocumentBatchAddParams, options?: RequestOptions): APIPromise<DocumentBatchAddResponse> {
     return this._post<DocumentBatchAddResponse>('/v3/documents/batch', {
       body,
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -93,15 +87,11 @@ export class Documents extends APIResource {
    * @param options - Request options
    * @returns Updated document status
    */
-  update(
-    id: string,
-    body?: DocumentUpdateParams | null,
-    options?: RequestOptions
-  ): APIPromise<DocumentUpdateResponse> {
+  update(id: string, body?: DocumentUpdateParams | null, options?: RequestOptions): APIPromise<DocumentUpdateResponse> {
     return this._patch<DocumentUpdateResponse>(`/v3/documents/${encodeURIComponent(id)}`, {
       body: body || {},
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -113,7 +103,7 @@ export class Documents extends APIResource {
   delete(id: string, options?: RequestOptions): APIPromise<void> {
     return this.client.delete<void>(`/v3/documents/${encodeURIComponent(id)}`, {
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -123,14 +113,11 @@ export class Documents extends APIResource {
    * @param options - Request options
    * @returns Count and IDs of deleted documents
    */
-  deleteBulk(
-    body?: DocumentDeleteBulkParams | null,
-    options?: RequestOptions
-  ): APIPromise<DocumentDeleteBulkResponse> {
+  deleteBulk(body?: DocumentDeleteBulkParams | null, options?: RequestOptions): APIPromise<DocumentDeleteBulkResponse> {
     return this._post<DocumentDeleteBulkResponse>('/v3/documents/delete', {
       body: body || {},
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -142,7 +129,7 @@ export class Documents extends APIResource {
   listProcessing(options?: RequestOptions): APIPromise<DocumentListProcessingResponse> {
     return this.client.get<DocumentListProcessingResponse>('/v3/documents/processing', {
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -152,28 +139,25 @@ export class Documents extends APIResource {
    * @param options - Request options
    * @returns Created document ID and status
    */
-  uploadFile(
-    body: DocumentUploadFileParams,
-    options?: RequestOptions
-  ): APIPromise<DocumentUploadFileResponse> {
-    const { file, containerTag, customId, metadata } = body;
+  uploadFile(body: DocumentUploadFileParams, options?: RequestOptions): APIPromise<DocumentUploadFileResponse> {
+    const { file, containerTag, customId, metadata } = body
 
     // Build additional form fields
-    const additionalFields: Record<string, string> = {};
+    const additionalFields: Record<string, string> = {}
     if (containerTag) {
-      additionalFields.containerTag = containerTag;
+      additionalFields.containerTag = containerTag
     }
     if (customId) {
-      additionalFields.customId = customId;
+      additionalFields.customId = customId
     }
     if (metadata) {
-      additionalFields.metadata = JSON.stringify(metadata);
+      additionalFields.metadata = JSON.stringify(metadata)
     }
 
     return this.client.uploadFile<DocumentUploadFileResponse>('/v3/documents/upload', file, {
       fieldName: 'file',
       additionalFields,
       requestOptions: options,
-    });
+    })
   }
 }

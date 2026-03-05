@@ -20,8 +20,16 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATIONS_DIR="$SCRIPT_DIR"
 
+# Load .env from project root if available
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
+
 # Database URL from environment or default
-DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/supermemory}"
+DATABASE_URL="${DATABASE_URL:-postgresql://supermemory:supermemory_secret@localhost:5432/supermemory}"
 
 # Check if DATABASE_URL is set
 if [ -z "$DATABASE_URL" ]; then
@@ -114,7 +122,6 @@ run_migration() {
 run_all_migrations() {
     local migrations=(
         "001_create_pgvector_extension.sql"
-        "002_create_memory_embeddings_table.sql"
         "003_create_hnsw_index.sql"
     )
 

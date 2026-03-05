@@ -1,7 +1,7 @@
-import * as crypto from 'node:crypto';
-import { getLogger } from '../utils/logger.js';
+import * as crypto from 'node:crypto'
+import { getLogger } from '../utils/logger.js'
 
-const logger = getLogger('csrf-service');
+const logger = getLogger('csrf-service')
 
 /**
  * CSRF Token Service
@@ -18,40 +18,41 @@ const logger = getLogger('csrf-service');
  */
 
 export interface CsrfToken {
-  token: string;
-  signature: string;
-  expiresAt: number;
-  sessionId?: string;
+  token: string
+  signature: string
+  expiresAt: number
+  sessionId?: string
 }
 
 export interface CsrfConfig {
-  secret: string;
-  tokenLength: number;
-  expirationMs: number;
+  secret: string
+  tokenLength: number
+  expirationMs: number
 }
 
 /** Maximum number of tokens to store before evicting oldest */
-const MAX_TOKENS = 10000;
+const MAX_TOKENS = 10000
 
 export class CsrfService {
-  private readonly secret: Buffer;
-  private readonly tokenLength: number;
-  private readonly expirationMs: number;
-  private readonly tokenStore: Map<string, CsrfToken>;
+  private readonly secret: Buffer
+  private readonly tokenLength: number
+  private readonly expirationMs: number
+  private readonly tokenStore: Map<string, CsrfToken>
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(config: CsrfConfig) {
     // Ensure secret is at least 32 bytes for security
     if (config.secret.length < 32) {
-      throw new Error('CSRF secret must be at least 32 characters');
+      throw new Error('CSRF secret must be at least 32 characters')
     }
 
-    this.secret = Buffer.from(config.secret, 'utf8');
-    this.tokenLength = config.tokenLength;
-    this.expirationMs = config.expirationMs;
-    this.tokenStore = new Map();
+    this.secret = Buffer.from(config.secret, 'utf8')
+    this.tokenLength = config.tokenLength
+    this.expirationMs = config.expirationMs
+    this.tokenStore = new Map()
 
     // Cleanup expired tokens periodically
-    setInterval(() => this.cleanupExpiredTokens(), 60000); // Every minute
+    this.cleanupTimer = setInterval(() => this.cleanupExpiredTokens(), 60000) // Every minute
   }
 
   /**
@@ -62,35 +63,35 @@ export class CsrfService {
    */
   generateToken(sessionId?: string): CsrfToken {
     // Generate random token using crypto.randomBytes
-    const tokenBytes = crypto.randomBytes(this.tokenLength);
-    const token = tokenBytes.toString('base64url');
+    const tokenBytes = crypto.randomBytes(this.tokenLength)
+    const token = tokenBytes.toString('base64url')
 
     // Create expiration timestamp
-    const expiresAt = Date.now() + this.expirationMs;
+    const expiresAt = Date.now() + this.expirationMs
 
     // Sign the token using HMAC-SHA256
-    const signature = this.signToken(token, expiresAt, sessionId);
+    const signature = this.signToken(token, expiresAt, sessionId)
 
     const csrfToken: CsrfToken = {
       token,
       signature,
       expiresAt,
       sessionId,
-    };
+    }
 
     // Enforce token store limit to prevent DoS
     if (this.tokenStore.size >= MAX_TOKENS) {
       // LRU eviction: remove oldest token (first entry in Map)
-      const firstKey = this.tokenStore.keys().next().value;
+      const firstKey = this.tokenStore.keys().next().value
       if (firstKey) {
-        this.tokenStore.delete(firstKey);
+        this.tokenStore.delete(firstKey)
       }
     }
 
     // Store token for validation
-    this.tokenStore.set(token, csrfToken);
+    this.tokenStore.set(token, csrfToken)
 
-    return csrfToken;
+    return csrfToken
   }
 
   /**
@@ -103,27 +104,27 @@ export class CsrfService {
    */
   validateToken(token: string, signature: string, sessionId?: string): boolean {
     // Retrieve stored token
-    const storedToken = this.tokenStore.get(token);
+    const storedToken = this.tokenStore.get(token)
 
     if (!storedToken) {
-      return false;
+      return false
     }
 
     // Check expiration
     if (Date.now() > storedToken.expiresAt) {
-      this.tokenStore.delete(token);
-      return false;
+      this.tokenStore.delete(token)
+      return false
     }
 
     // Verify session association if provided
     if (sessionId && storedToken.sessionId !== sessionId) {
-      return false;
+      return false
     }
 
     // Verify signature using constant-time comparison
-    const expectedSignature = this.signToken(token, storedToken.expiresAt, storedToken.sessionId);
+    const expectedSignature = this.signToken(token, storedToken.expiresAt, storedToken.sessionId)
 
-    return this.constantTimeCompare(signature, expectedSignature);
+    return this.constantTimeCompare(signature, expectedSignature)
   }
 
   /**
@@ -135,10 +136,10 @@ export class CsrfService {
    */
   rotateToken(oldToken: string, sessionId?: string): CsrfToken {
     // Invalidate old token
-    this.tokenStore.delete(oldToken);
+    this.tokenStore.delete(oldToken)
 
     // Generate new token
-    return this.generateToken(sessionId);
+    return this.generateToken(sessionId)
   }
 
   /**
@@ -150,17 +151,17 @@ export class CsrfService {
    * @returns HMAC signature
    */
   private signToken(token: string, expiresAt: number, sessionId?: string): string {
-    const hmac = crypto.createHmac('sha256', this.secret);
+    const hmac = crypto.createHmac('sha256', this.secret)
 
     // Include token, expiration, and optional session in signature
-    hmac.update(token);
-    hmac.update(String(expiresAt));
+    hmac.update(token)
+    hmac.update(String(expiresAt))
 
     if (sessionId) {
-      hmac.update(sessionId);
+      hmac.update(sessionId)
     }
 
-    return hmac.digest('base64url');
+    return hmac.digest('base64url')
   }
 
   /**
@@ -171,53 +172,62 @@ export class CsrfService {
    * @returns True if strings are equal
    */
   private constantTimeCompare(a: string, b: string): boolean {
-    if (a.length !== b.length) return false;
+    if (a.length !== b.length) return false
 
     try {
-      return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+      return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'))
     } catch {
-      return false;
+      return false
     }
   }
 
   private cleanupExpiredTokens(): void {
-    const now = Date.now();
-    let cleanedCount = 0;
+    const now = Date.now()
+    let cleanedCount = 0
 
     for (const [token, csrfToken] of this.tokenStore) {
       if (now > csrfToken.expiresAt) {
-        this.tokenStore.delete(token);
-        cleanedCount++;
+        this.tokenStore.delete(token)
+        cleanedCount++
       }
     }
 
     if (cleanedCount > 0) {
-      logger.debug('Cleaned up expired tokens', { cleanedCount });
+      logger.debug('Cleaned up expired tokens', { cleanedCount })
     }
   }
 
   /** Get token count (for monitoring) */
   getTokenCount(): number {
-    return this.tokenStore.size;
+    return this.tokenStore.size
   }
 
   /** Clear all tokens (for testing) */
   clearTokens(): void {
-    this.tokenStore.clear();
+    this.tokenStore.clear()
+  }
+
+  /** Release resources */
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer)
+      this.cleanupTimer = null
+    }
+    this.tokenStore.clear()
   }
 }
 
 /** Create a CSRF service instance with default or custom configuration */
 export function createCsrfService(config?: Partial<CsrfConfig>): CsrfService {
-  const secret = config?.secret || process.env.CSRF_SECRET || generateDefaultSecret();
+  const secret = config?.secret || process.env.CSRF_SECRET || generateDefaultSecret()
 
   const defaultConfig: CsrfConfig = {
     secret,
     tokenLength: 32, // 32 bytes = 256 bits
     expirationMs: 60 * 60 * 1000, // 1 hour
-  };
+  }
 
-  return new CsrfService({ ...defaultConfig, ...config });
+  return new CsrfService({ ...defaultConfig, ...config })
 }
 
 /** Generate a default secret for development. WARNING: Never use in production. */
@@ -225,9 +235,9 @@ function generateDefaultSecret(): string {
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
       'CSRF_SECRET environment variable must be set in production. Generate a secure secret using: openssl rand -base64 48'
-    );
+    )
   }
 
-  logger.warn('Using generated CSRF secret for development - set CSRF_SECRET in production');
-  return crypto.randomBytes(48).toString('base64');
+  logger.warn('Using generated CSRF secret for development - set CSRF_SECRET in production')
+  return crypto.randomBytes(48).toString('base64')
 }

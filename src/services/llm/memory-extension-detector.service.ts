@@ -13,13 +13,13 @@
  * Target: <$0.60/month with typical usage
  */
 
-import { getLogger } from '../../utils/logger.js';
-import { createHash } from 'crypto';
-import type { Memory } from '../../types/index.js';
-import { getLLMProvider, isLLMAvailable } from './index.js';
-import { LLMError } from './base.js';
+import { getLogger } from '../../utils/logger.js'
+import { createHash } from 'crypto'
+import type { Memory } from '../../types/index.js'
+import { getLLMProvider, isLLMAvailable } from './index.js'
+import { LLMError } from './base.js'
 
-const logger = getLogger('ExtensionDetector');
+const logger = getLogger('ExtensionDetector')
 
 // ============================================================================
 // Prompt Templates
@@ -49,10 +49,10 @@ Respond with ONLY a JSON object:
   "isExtension": boolean,
   "confidence": 0.0-1.0,
   "reason": "brief explanation"
-}`;
+}`
 
 export function buildExtensionUserPrompt(newContent: string, existingContent: string): string {
-  return `Compare these statements:\n\nOLD: "${existingContent}"\nNEW: "${newContent}"\n\nDoes NEW extend OLD? Respond with JSON only.`;
+  return `Compare these statements:\n\nOLD: "${existingContent}"\nNEW: "${newContent}"\n\nDoes NEW extend OLD? Respond with JSON only.`
 }
 
 // ============================================================================
@@ -60,33 +60,33 @@ export function buildExtensionUserPrompt(newContent: string, existingContent: st
 // ============================================================================
 
 export interface ExtensionResult {
-  isExtension: boolean;
-  confidence: number;
-  reason: string;
-  cached: boolean;
-  usedLLM: boolean;
+  isExtension: boolean
+  confidence: number
+  reason: string
+  cached: boolean
+  usedLLM: boolean
 }
 
 export interface ExtensionDetectorConfig {
   /** Minimum confidence for extension (0-1) */
-  minConfidence?: number;
+  minConfidence?: number
   /** Whether to enable caching */
-  enableCache?: boolean;
+  enableCache?: boolean
   /** Cache TTL in milliseconds */
-  cacheTTLMs?: number;
+  cacheTTLMs?: number
   /** Maximum cache size */
-  maxCacheSize?: number;
+  maxCacheSize?: number
   /** Whether to fallback to heuristics on errors */
-  fallbackToHeuristics?: boolean;
+  fallbackToHeuristics?: boolean
   /** Minimum word overlap ratio to even check (0-1) */
-  minOverlapForCheck?: number;
+  minOverlapForCheck?: number
 }
 
 interface CacheEntry {
-  isExtension: boolean;
-  confidence: number;
-  reason: string;
-  timestamp: number;
+  isExtension: boolean
+  confidence: number
+  reason: string
+  timestamp: number
 }
 
 // ============================================================================
@@ -97,15 +97,15 @@ const EXTENSION_INDICATORS = [
   /\b(also|additionally|furthermore|moreover|in addition|plus|and|as well)\b/i,
   /\b(more specifically|more detail|to elaborate|to expand|to clarify)\b/i,
   /\b(including|such as|for example|e\.g\.|specifically)\b/i,
-];
+]
 
 // ============================================================================
 // Memory Extension Detector Service
 // ============================================================================
 
 export class MemoryExtensionDetectorService {
-  private config: Required<ExtensionDetectorConfig>;
-  private cache: Map<string, CacheEntry> = new Map();
+  private config: Required<ExtensionDetectorConfig>
+  private cache: Map<string, CacheEntry> = new Map()
   private stats = {
     totalChecks: 0,
     llmChecks: 0,
@@ -114,7 +114,7 @@ export class MemoryExtensionDetectorService {
     extensionsFound: 0,
     errors: 0,
     totalCost: 0,
-  };
+  }
 
   constructor(config: ExtensionDetectorConfig = {}) {
     this.config = {
@@ -124,12 +124,12 @@ export class MemoryExtensionDetectorService {
       maxCacheSize: config.maxCacheSize ?? 500,
       fallbackToHeuristics: config.fallbackToHeuristics ?? true,
       minOverlapForCheck: config.minOverlapForCheck ?? 0.15,
-    };
+    }
 
     logger.info('Extension detector initialized', {
       cacheEnabled: this.config.enableCache,
       fallbackEnabled: this.config.fallbackToHeuristics,
-    });
+    })
   }
 
   // ============================================================================
@@ -144,55 +144,55 @@ export class MemoryExtensionDetectorService {
    * @returns Extension detection result
    */
   async checkExtension(newMemory: Memory, existingMemory: Memory): Promise<ExtensionResult> {
-    this.stats.totalChecks++;
+    this.stats.totalChecks++
 
     // Quick filter: check word overlap first
-    const overlap = this.calculateWordOverlap(newMemory.content, existingMemory.content);
+    const overlap = this.calculateWordOverlap(newMemory.content, existingMemory.content)
     if (overlap < this.config.minOverlapForCheck) {
-      logger.debug('Skipping extension check due to low overlap', { overlap });
+      logger.debug('Skipping extension check due to low overlap', { overlap })
       return {
         isExtension: false,
         confidence: 0,
         reason: 'Insufficient content overlap',
         cached: false,
         usedLLM: false,
-      };
+      }
     }
 
     // Quick filter: if new content is contained in old, it's not an extension
     if (this.isSubstring(newMemory.content, existingMemory.content)) {
-      logger.debug('New content is substring of old, not an extension');
+      logger.debug('New content is substring of old, not an extension')
       return {
         isExtension: false,
         confidence: 0.8,
         reason: 'New content is already contained in existing memory',
         cached: false,
         usedLLM: false,
-      };
+      }
     }
 
     // Check cache
     if (this.config.enableCache) {
-      const cached = this.getCached(newMemory.content, existingMemory.content);
+      const cached = this.getCached(newMemory.content, existingMemory.content)
       if (cached) {
-        this.stats.cacheHits++;
-        logger.debug('Cache hit for extension check');
+        this.stats.cacheHits++
+        logger.debug('Cache hit for extension check')
         return {
           ...cached,
           cached: true,
           usedLLM: false,
-        };
+        }
       }
     }
 
     // Try LLM detection if available
     if (isLLMAvailable()) {
       try {
-        const result = await this.detectWithLLM(newMemory, existingMemory);
-        this.stats.llmChecks++;
+        const result = await this.detectWithLLM(newMemory, existingMemory)
+        this.stats.llmChecks++
 
         if (result.isExtension) {
-          this.stats.extensionsFound++;
+          this.stats.extensionsFound++
         }
 
         // Cache the result
@@ -202,65 +202,63 @@ export class MemoryExtensionDetectorService {
             confidence: result.confidence,
             reason: result.reason,
             timestamp: Date.now(),
-          });
+          })
         }
 
         return {
           ...result,
           cached: false,
           usedLLM: true,
-        };
+        }
       } catch (error) {
-        this.stats.errors++;
+        this.stats.errors++
         logger.warn('LLM extension detection failed, falling back to heuristics', {
           error: error instanceof Error ? error.message : String(error),
-        });
+        })
 
         if (!this.config.fallbackToHeuristics) {
-          throw error;
+          throw error
         }
       }
     }
 
     // Fallback to heuristics
-    const heuristicResult = this.detectWithHeuristics(newMemory, existingMemory);
-    this.stats.heuristicChecks++;
+    const heuristicResult = this.detectWithHeuristics(newMemory, existingMemory)
+    this.stats.heuristicChecks++
 
     if (heuristicResult.isExtension) {
-      this.stats.extensionsFound++;
+      this.stats.extensionsFound++
     }
 
     return {
       ...heuristicResult,
       cached: false,
       usedLLM: false,
-    };
+    }
   }
 
   /**
    * Get detection statistics
    */
   getStats() {
-    const cacheHitRate =
-      this.stats.totalChecks > 0 ? (this.stats.cacheHits / this.stats.totalChecks) * 100 : 0;
+    const cacheHitRate = this.stats.totalChecks > 0 ? (this.stats.cacheHits / this.stats.totalChecks) * 100 : 0
 
-    const extensionRate =
-      this.stats.totalChecks > 0 ? (this.stats.extensionsFound / this.stats.totalChecks) * 100 : 0;
+    const extensionRate = this.stats.totalChecks > 0 ? (this.stats.extensionsFound / this.stats.totalChecks) * 100 : 0
 
     return {
       ...this.stats,
       cacheHitRate: parseFloat(cacheHitRate.toFixed(2)),
       extensionRate: parseFloat(extensionRate.toFixed(2)),
       cacheSize: this.cache.size,
-    };
+    }
   }
 
   /**
    * Clear the cache
    */
   clearCache(): void {
-    this.cache.clear();
-    logger.info('Extension cache cleared');
+    this.cache.clear()
+    logger.info('Extension cache cleared')
   }
 
   // ============================================================================
@@ -271,40 +269,38 @@ export class MemoryExtensionDetectorService {
     newMemory: Memory,
     existingMemory: Memory
   ): Promise<{
-    isExtension: boolean;
-    confidence: number;
-    reason: string;
+    isExtension: boolean
+    confidence: number
+    reason: string
   }> {
-    const provider = getLLMProvider();
+    const provider = getLLMProvider()
 
     try {
       const response = await provider.generateJson(
         EXTENSION_DETECTOR_SYSTEM_PROMPT,
         buildExtensionUserPrompt(newMemory.content, existingMemory.content)
-      );
+      )
 
-      const parsed = this.parseJsonResponse(response.rawResponse, response.provider);
+      const parsed = this.parseJsonResponse(response.rawResponse, response.provider)
 
       // Estimate cost
-      const inputCost = ((response.tokensUsed?.prompt ?? 0) / 1000000) * 0.25;
-      const outputCost = ((response.tokensUsed?.completion ?? 0) / 1000000) * 1.25;
-      this.stats.totalCost += inputCost + outputCost;
+      const inputCost = ((response.tokensUsed?.prompt ?? 0) / 1000000) * 0.25
+      const outputCost = ((response.tokensUsed?.completion ?? 0) / 1000000) * 1.25
+      this.stats.totalCost += inputCost + outputCost
 
       logger.debug('LLM extension detection successful', {
         isExtension: parsed.isExtension,
         confidence: parsed.confidence,
         tokensUsed: response.tokensUsed?.total ?? 0,
         cost: inputCost + outputCost,
-      });
+      })
 
-      return parsed;
+      return parsed
     } catch (error) {
       if (error instanceof LLMError) {
-        throw error;
+        throw error
       }
-      throw new Error(
-        `LLM extension detection failed: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`LLM extension detection failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -312,21 +308,21 @@ export class MemoryExtensionDetectorService {
     rawResponse: string,
     provider: 'openai' | 'anthropic' | 'mock'
   ): {
-    isExtension: boolean;
-    confidence: number;
-    reason: string;
+    isExtension: boolean
+    confidence: number
+    reason: string
   } {
-    const trimmed = rawResponse.trim();
-    const jsonMatch = trimmed.startsWith('{') ? trimmed : trimmed.match(/\{[\s\S]*\}/)?.[0];
+    const trimmed = rawResponse.trim()
+    const jsonMatch = trimmed.startsWith('{') ? trimmed : trimmed.match(/\{[\s\S]*\}/)?.[0]
     if (!jsonMatch) {
-      throw LLMError.invalidResponse(provider, 'No JSON object found in response');
+      throw LLMError.invalidResponse(provider, 'No JSON object found in response')
     }
 
-    let parsed: unknown;
+    let parsed: unknown
     try {
-      parsed = JSON.parse(jsonMatch);
+      parsed = JSON.parse(jsonMatch)
     } catch {
-      throw LLMError.invalidResponse(provider, 'Invalid JSON response');
+      throw LLMError.invalidResponse(provider, 'Invalid JSON response')
     }
 
     if (
@@ -336,24 +332,24 @@ export class MemoryExtensionDetectorService {
       !('confidence' in parsed) ||
       !('reason' in parsed)
     ) {
-      throw LLMError.invalidResponse(provider, 'Missing required fields in JSON response');
+      throw LLMError.invalidResponse(provider, 'Missing required fields in JSON response')
     }
 
-    const isExtension = (parsed as { isExtension: boolean }).isExtension;
-    const confidence = (parsed as { confidence: number }).confidence;
-    const reason = (parsed as { reason: string }).reason;
+    const isExtension = (parsed as { isExtension: boolean }).isExtension
+    const confidence = (parsed as { confidence: number }).confidence
+    const reason = (parsed as { reason: string }).reason
 
     if (typeof isExtension !== 'boolean') {
-      throw LLMError.invalidResponse(provider, 'Invalid isExtension in response');
+      throw LLMError.invalidResponse(provider, 'Invalid isExtension in response')
     }
     if (typeof confidence !== 'number' || Number.isNaN(confidence)) {
-      throw LLMError.invalidResponse(provider, 'Invalid confidence in response');
+      throw LLMError.invalidResponse(provider, 'Invalid confidence in response')
     }
     if (typeof reason !== 'string') {
-      throw LLMError.invalidResponse(provider, 'Invalid reason in response');
+      throw LLMError.invalidResponse(provider, 'Invalid reason in response')
     }
 
-    return { isExtension, confidence, reason };
+    return { isExtension, confidence, reason }
   }
 
   // ============================================================================
@@ -364,24 +360,24 @@ export class MemoryExtensionDetectorService {
     newMemory: Memory,
     existingMemory: Memory
   ): {
-    isExtension: boolean;
-    confidence: number;
-    reason: string;
+    isExtension: boolean
+    confidence: number
+    reason: string
   } {
-    const newLower = newMemory.content.toLowerCase();
-    const existingLower = existingMemory.content.toLowerCase();
+    const newLower = newMemory.content.toLowerCase()
+    const existingLower = existingMemory.content.toLowerCase()
 
     // Calculate metrics
-    const overlap = this.calculateWordOverlap(newLower, existingLower);
-    const hasMoreDetail = newMemory.content.length > existingMemory.content.length * 0.8;
-    const newContentInOld = existingLower.includes(newLower.slice(0, 20));
+    const overlap = this.calculateWordOverlap(newLower, existingLower)
+    const hasMoreDetail = newMemory.content.length > existingMemory.content.length * 0.8
+    const newContentInOld = existingLower.includes(newLower.slice(0, 20))
 
     // Check for extension indicators
-    let hasExtensionIndicator = false;
+    let hasExtensionIndicator = false
     for (const pattern of EXTENSION_INDICATORS) {
       if (pattern.test(newLower)) {
-        hasExtensionIndicator = true;
-        break;
+        hasExtensionIndicator = true
+        break
       }
     }
 
@@ -392,21 +388,21 @@ export class MemoryExtensionDetectorService {
       overlap > 0.2 && // Sufficient overlap
       !newContentInOld && // Not contained
       ((overlap < 0.9 && hasMoreDetail) || // More detail with reasonable overlap
-        hasExtensionIndicator); // Extension indicators override overlap threshold
+        hasExtensionIndicator) // Extension indicators override overlap threshold
 
-    const confidence = isExtension ? Math.min(0.65, overlap + 0.2) : 0.3;
+    const confidence = isExtension ? Math.min(0.65, overlap + 0.2) : 0.3
 
-    let reason = 'No extension detected via heuristics';
+    let reason = 'No extension detected via heuristics'
     if (isExtension) {
       if (hasExtensionIndicator) {
-        reason = 'Contains extension indicators and adds detail (via pattern matching)';
+        reason = 'Contains extension indicators and adds detail (via pattern matching)'
       } else {
-        reason = 'Adds detail without contradicting (via pattern matching)';
+        reason = 'Adds detail without contradicting (via pattern matching)'
       }
     } else if (newContentInOld) {
-      reason = 'New content already contained in existing memory';
+      reason = 'New content already contained in existing memory'
     } else if (overlap < 0.2) {
-      reason = 'Insufficient overlap between memories';
+      reason = 'Insufficient overlap between memories'
     }
 
     logger.debug('Heuristic extension detection', {
@@ -414,13 +410,13 @@ export class MemoryExtensionDetectorService {
       confidence,
       overlap,
       hasMoreDetail,
-    });
+    })
 
     return {
       isExtension,
       confidence,
       reason,
-    };
+    }
   }
 
   // ============================================================================
@@ -433,27 +429,27 @@ export class MemoryExtensionDetectorService {
         .toLowerCase()
         .split(/\s+/)
         .filter((w) => w.length > 3)
-    );
+    )
     const words2 = new Set(
       text2
         .toLowerCase()
         .split(/\s+/)
         .filter((w) => w.length > 3)
-    );
+    )
 
-    const intersection = new Set([...words1].filter((x) => words2.has(x)));
-    const union = new Set([...words1, ...words2]);
+    const intersection = new Set([...words1].filter((x) => words2.has(x)))
+    const union = new Set([...words1, ...words2])
 
-    return union.size > 0 ? intersection.size / union.size : 0;
+    return union.size > 0 ? intersection.size / union.size : 0
   }
 
   private isSubstring(shorter: string, longer: string): boolean {
-    const shortNorm = shorter.trim().toLowerCase();
-    const longNorm = longer.trim().toLowerCase();
+    const shortNorm = shorter.trim().toLowerCase()
+    const longNorm = longer.trim().toLowerCase()
 
     // Check if significant portion of shorter is in longer
-    const significantPortion = shortNorm.slice(0, Math.min(50, shortNorm.length));
-    return longNorm.includes(significantPortion);
+    const significantPortion = shortNorm.slice(0, Math.min(50, shortNorm.length))
+    return longNorm.includes(significantPortion)
   }
 
   // ============================================================================
@@ -465,41 +461,41 @@ export class MemoryExtensionDetectorService {
     const normalized = [content1, content2]
       .map((c) => c.substring(0, 200).trim().toLowerCase())
       .sort()
-      .join('|||');
-    return createHash('sha256').update(normalized).digest('hex');
+      .join('|||')
+    return createHash('sha256').update(normalized).digest('hex')
   }
 
   private getCached(content1: string, content2: string): CacheEntry | null {
-    const key = this.getCacheKey(content1, content2);
-    const entry = this.cache.get(key);
+    const key = this.getCacheKey(content1, content2)
+    const entry = this.cache.get(key)
 
     if (!entry) {
-      return null;
+      return null
     }
 
     // Check if expired
-    const age = Date.now() - entry.timestamp;
+    const age = Date.now() - entry.timestamp
     if (age > this.config.cacheTTLMs) {
-      this.cache.delete(key);
-      return null;
+      this.cache.delete(key)
+      return null
     }
 
-    return entry;
+    return entry
   }
 
   private setCached(content1: string, content2: string, entry: CacheEntry): void {
     // Enforce cache size limit
     if (this.cache.size >= this.config.maxCacheSize) {
-      const entries = Array.from(this.cache.entries());
-      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-      const toRemove = entries.slice(0, Math.floor(this.config.maxCacheSize * 0.1));
+      const entries = Array.from(this.cache.entries())
+      entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
+      const toRemove = entries.slice(0, Math.floor(this.config.maxCacheSize * 0.1))
       for (const [key] of toRemove) {
-        this.cache.delete(key);
+        this.cache.delete(key)
       }
     }
 
-    const key = this.getCacheKey(content1, content2);
-    this.cache.set(key, entry);
+    const key = this.getCacheKey(content1, content2)
+    this.cache.set(key, entry)
   }
 }
 
@@ -507,23 +503,21 @@ export class MemoryExtensionDetectorService {
 // Singleton Instance
 // ============================================================================
 
-let _instance: MemoryExtensionDetectorService | null = null;
+let _instance: MemoryExtensionDetectorService | null = null
 
 /**
  * Get the singleton instance
  */
-export function getMemoryExtensionDetector(
-  config?: ExtensionDetectorConfig
-): MemoryExtensionDetectorService {
+export function getMemoryExtensionDetector(config?: ExtensionDetectorConfig): MemoryExtensionDetectorService {
   if (!_instance) {
-    _instance = new MemoryExtensionDetectorService(config);
+    _instance = new MemoryExtensionDetectorService(config)
   }
-  return _instance;
+  return _instance
 }
 
 /**
  * Reset the singleton (for testing)
  */
 export function resetMemoryExtensionDetector(): void {
-  _instance = null;
+  _instance = null
 }

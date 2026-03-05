@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "supermemory": {
-      "command": "node",
-      "args": ["dist/mcp/index.js"],
-      "cwd": "${PROJECT_ROOT}"
-    }
-  }
-}

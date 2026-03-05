@@ -3,8 +3,8 @@
  * Provides CRUD operations for memories (conversation-oriented storage)
  */
 
-import { APIResource } from './base.js';
-import { APIPromise } from '../http.js';
+import { APIResource } from './base.js'
+import { APIPromise } from '../http.js'
 import type {
   RequestOptions,
   MemoryListParams,
@@ -20,7 +20,7 @@ import type {
   MemoryUpdateMemoryResponse,
   MemoryUploadFileParams,
   MemoryUploadFileResponse,
-} from '../types.js';
+} from '../types.js'
 
 export class Memories extends APIResource {
   /**
@@ -33,7 +33,7 @@ export class Memories extends APIResource {
   get(id: string, options?: RequestOptions): APIPromise<MemoryGetResponse> {
     return this.client.get<MemoryGetResponse>(`/v4/memories/${encodeURIComponent(id)}`, {
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -47,7 +47,7 @@ export class Memories extends APIResource {
     return this._post<MemoryListResponse>('/v4/memories/list', {
       body: body || {},
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -61,7 +61,7 @@ export class Memories extends APIResource {
     return this._post<MemoryAddResponse>('/v4/memories', {
       body,
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -72,15 +72,11 @@ export class Memories extends APIResource {
    * @param options - Request options
    * @returns Updated memory status
    */
-  update(
-    id: string,
-    body?: MemoryUpdateParams | null,
-    options?: RequestOptions
-  ): APIPromise<MemoryUpdateResponse> {
+  update(id: string, body?: MemoryUpdateParams | null, options?: RequestOptions): APIPromise<MemoryUpdateResponse> {
     return this._patch<MemoryUpdateResponse>(`/v4/memories/${encodeURIComponent(id)}`, {
       body: body || {},
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -92,7 +88,7 @@ export class Memories extends APIResource {
   delete(id: string, options?: RequestOptions): APIPromise<void> {
     return this.client.delete<void>(`/v4/memories/${encodeURIComponent(id)}`, {
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -106,7 +102,7 @@ export class Memories extends APIResource {
     return this._post<MemoryForgetResponse>('/v4/memories/forget', {
       body,
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -116,14 +112,11 @@ export class Memories extends APIResource {
    * @param options - Request options
    * @returns New memory version details
    */
-  updateMemory(
-    body: MemoryUpdateMemoryParams,
-    options?: RequestOptions
-  ): APIPromise<MemoryUpdateMemoryResponse> {
+  updateMemory(body: MemoryUpdateMemoryParams, options?: RequestOptions): APIPromise<MemoryUpdateMemoryResponse> {
     return this._post<MemoryUpdateMemoryResponse>('/v4/memories/update', {
       body,
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -133,28 +126,25 @@ export class Memories extends APIResource {
    * @param options - Request options
    * @returns Created memory ID and status
    */
-  uploadFile(
-    body: MemoryUploadFileParams,
-    options?: RequestOptions
-  ): APIPromise<MemoryUploadFileResponse> {
-    const { file, containerTag, customId, metadata } = body;
+  uploadFile(body: MemoryUploadFileParams, options?: RequestOptions): APIPromise<MemoryUploadFileResponse> {
+    const { file, containerTag, customId, metadata } = body
 
     // Build additional form fields
-    const additionalFields: Record<string, string> = {};
+    const additionalFields: Record<string, string> = {}
     if (containerTag) {
-      additionalFields.containerTag = containerTag;
+      additionalFields.containerTag = containerTag
     }
     if (customId) {
-      additionalFields.customId = customId;
+      additionalFields.customId = customId
     }
     if (metadata) {
-      additionalFields.metadata = JSON.stringify(metadata);
+      additionalFields.metadata = JSON.stringify(metadata)
     }
 
     return this.client.uploadFile<MemoryUploadFileResponse>('/v4/memories/upload', file, {
       fieldName: 'file',
       additionalFields,
       requestOptions: options,
-    });
+    })
   }
 }

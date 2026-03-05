@@ -5,7 +5,7 @@
  * memory extraction and classification.
  */
 
-import type { MemoryType } from '../../types/index.js';
+import type { MemoryType } from '../../types/index.js'
 
 // ============================================================================
 // Memory Extraction Prompts
@@ -37,7 +37,7 @@ Guidelines:
 - Be precise and avoid vague statements
 - Include relevant context in the memory itself
 - Higher confidence for explicit statements, lower for inferences
-- Extract multiple memories from complex sentences`;
+- Extract multiple memories from complex sentences`
 
 /**
  * Few-shot examples for memory extraction
@@ -131,7 +131,7 @@ Output:
       "keywords": ["stanford", "education"]
     }
   ]
-}`;
+}`
 
 /**
  * Generate the user prompt for memory extraction
@@ -139,31 +139,31 @@ Output:
 export function generateExtractionPrompt(
   text: string,
   options?: {
-    containerTag?: string;
-    context?: string;
-    maxMemories?: number;
-    minConfidence?: number;
+    containerTag?: string
+    context?: string
+    maxMemories?: number
+    minConfidence?: number
   }
 ): string {
-  let prompt = `Extract memories from the following text. Return a JSON object with a "memories" array.\n\n`;
+  let prompt = `Extract memories from the following text. Return a JSON object with a "memories" array.\n\n`
 
   if (options?.containerTag) {
-    prompt += `Container/Category: ${options.containerTag}\n`;
+    prompt += `Container/Category: ${options.containerTag}\n`
   }
 
   if (options?.context) {
-    prompt += `Additional Context: ${options.context}\n`;
+    prompt += `Additional Context: ${options.context}\n`
   }
 
   if (options?.maxMemories) {
-    prompt += `Maximum memories to extract: ${options.maxMemories}\n`;
+    prompt += `Maximum memories to extract: ${options.maxMemories}\n`
   }
 
   if (options?.minConfidence) {
-    prompt += `Minimum confidence threshold: ${options.minConfidence}\n`;
+    prompt += `Minimum confidence threshold: ${options.minConfidence}\n`
   }
 
-  prompt += `\nText to analyze:\n"""\n${text}\n"""\n\n`;
+  prompt += `\nText to analyze:\n"""\n${text}\n"""\n\n`
   prompt += `Respond with ONLY a valid JSON object in this exact format:
 {
   "memories": [
@@ -175,9 +175,9 @@ export function generateExtractionPrompt(
       "keywords": ["string"]
     }
   ]
-}`;
+}`
 
-  return prompt;
+  return prompt
 }
 
 // ============================================================================
@@ -204,7 +204,7 @@ Guidelines:
 - "updates" and "supersedes" should mark the old memory for supersession
 - "contradicts" does NOT mean the old memory should be removed (both may be valid)
 - Consider temporal context when detecting updates
-- Be conservative - prefer no relationship over a weak one`;
+- Be conservative - prefer no relationship over a weak one`
 
 /**
  * Few-shot examples for relationship detection
@@ -264,7 +264,7 @@ Output:
     }
   ],
   "supersededMemoryIds": ["old3", "old4"]
-}`;
+}`
 
 /**
  * Generate the user prompt for relationship detection
@@ -273,21 +273,21 @@ export function generateRelationshipPrompt(
   newMemory: { id: string; content: string; type: MemoryType },
   existingMemories: Array<{ id: string; content: string; type: MemoryType }>,
   options?: {
-    maxRelationships?: number;
-    minConfidence?: number;
+    maxRelationships?: number
+    minConfidence?: number
   }
 ): string {
-  let prompt = `Analyze the relationship between the NEW memory and EXISTING memories.\n\n`;
+  let prompt = `Analyze the relationship between the NEW memory and EXISTING memories.\n\n`
 
-  prompt += `NEW Memory:\n${JSON.stringify(newMemory, null, 2)}\n\n`;
-  prompt += `EXISTING Memories:\n${JSON.stringify(existingMemories, null, 2)}\n\n`;
+  prompt += `NEW Memory:\n${JSON.stringify(newMemory, null, 2)}\n\n`
+  prompt += `EXISTING Memories:\n${JSON.stringify(existingMemories, null, 2)}\n\n`
 
   if (options?.minConfidence) {
-    prompt += `Only include relationships with confidence >= ${options.minConfidence}\n`;
+    prompt += `Only include relationships with confidence >= ${options.minConfidence}\n`
   }
 
   if (options?.maxRelationships) {
-    prompt += `Return at most ${options.maxRelationships} relationships\n`;
+    prompt += `Return at most ${options.maxRelationships} relationships\n`
   }
 
   prompt += `\nRespond with ONLY a valid JSON object in this exact format:
@@ -302,9 +302,9 @@ export function generateRelationshipPrompt(
     }
   ],
   "supersededMemoryIds": ["string - ids of memories that should be marked as outdated"]
-}`;
+}`
 
-  return prompt;
+  return prompt
 }
 
 // ============================================================================
@@ -312,57 +312,61 @@ export function generateRelationshipPrompt(
 // ============================================================================
 
 /**
+ * Normalize LLM JSON responses by stripping markdown fences and common wrappers.
+ */
+export function normalizeJsonResponse(response: string): string {
+  const trimmed = response.trim()
+
+  // Prefer fenced JSON blocks when present (allows explanatory prose around JSON).
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim()
+  }
+
+  // Fallback: extract the outermost JSON object if surrounded by extra text.
+  const firstBrace = trimmed.indexOf('{')
+  const lastBrace = trimmed.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1).trim()
+  }
+
+  return trimmed
+}
+
+/**
  * Parse and validate extraction response from LLM
  */
 export function parseExtractionResponse(response: string): {
   memories: Array<{
-    content: string;
-    type: MemoryType;
-    confidence: number;
-    entities: Array<{ name: string; type: string }>;
-    keywords: string[];
-  }>;
+    content: string
+    type: MemoryType
+    confidence: number
+    entities: Array<{ name: string; type: string }>
+    keywords: string[]
+  }>
 } {
-  // Clean up response - remove markdown code blocks if present
-  let cleaned = response.trim();
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.slice(7);
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.slice(3);
-  }
-  if (cleaned.endsWith('```')) {
-    cleaned = cleaned.slice(0, -3);
-  }
-  cleaned = cleaned.trim();
+  const cleaned = normalizeJsonResponse(response)
 
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned)
 
     if (!parsed.memories || !Array.isArray(parsed.memories)) {
-      throw new Error('Response missing memories array');
+      throw new Error('Response missing memories array')
     }
 
     // Validate and clean each memory
-    const validTypes: MemoryType[] = [
-      'fact',
-      'event',
-      'preference',
-      'skill',
-      'relationship',
-      'context',
-      'note',
-    ];
+    const validTypes: MemoryType[] = ['fact', 'event', 'preference', 'skill', 'relationship', 'context', 'note']
 
     const memories = parsed.memories
       .filter((m: unknown) => {
-        if (!m || typeof m !== 'object') return false;
-        const mem = m as Record<string, unknown>;
+        if (!m || typeof m !== 'object') return false
+        const mem = m as Record<string, unknown>
         return (
           typeof mem.content === 'string' &&
           mem.content.length > 0 &&
           typeof mem.type === 'string' &&
           validTypes.includes(mem.type as MemoryType)
-        );
+        )
       })
       .map((m: Record<string, unknown>) => ({
         content: String(m.content).trim(),
@@ -370,20 +374,15 @@ export function parseExtractionResponse(response: string): {
         confidence: typeof m.confidence === 'number' ? Math.max(0, Math.min(1, m.confidence)) : 0.5,
         entities: Array.isArray(m.entities)
           ? m.entities.filter(
-              (e: unknown) =>
-                e && typeof e === 'object' && 'name' in (e as object) && 'type' in (e as object)
+              (e: unknown) => e && typeof e === 'object' && 'name' in (e as object) && 'type' in (e as object)
             )
           : [],
-        keywords: Array.isArray(m.keywords)
-          ? m.keywords.filter((k: unknown) => typeof k === 'string')
-          : [],
-      }));
+        keywords: Array.isArray(m.keywords) ? m.keywords.filter((k: unknown) => typeof k === 'string') : [],
+      }))
 
-    return { memories };
+    return { memories }
   } catch (error) {
-    throw new Error(
-      `Failed to parse extraction response: ${error instanceof Error ? error.message : String(error)}`
-    );
+    throw new Error(`Failed to parse extraction response: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -392,61 +391,48 @@ export function parseExtractionResponse(response: string): {
  */
 export function parseRelationshipResponse(response: string): {
   relationships: Array<{
-    sourceMemoryId: string;
-    targetMemoryId: string;
-    type: string;
-    confidence: number;
-    reason: string;
-  }>;
-  supersededMemoryIds: string[];
+    sourceMemoryId: string
+    targetMemoryId: string
+    type: string
+    confidence: number
+    reason: string
+  }>
+  supersededMemoryIds: string[]
 } {
-  // Clean up response
-  let cleaned = response.trim();
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.slice(7);
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.slice(3);
-  }
-  if (cleaned.endsWith('```')) {
-    cleaned = cleaned.slice(0, -3);
-  }
-  cleaned = cleaned.trim();
+  const cleaned = normalizeJsonResponse(response)
 
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned)
 
-    const validTypes = ['updates', 'extends', 'derives', 'contradicts', 'related', 'supersedes'];
+    const validTypes = ['updates', 'extends', 'derives', 'contradicts', 'related', 'supersedes']
 
     const relationships = Array.isArray(parsed.relationships)
       ? parsed.relationships
           .filter((r: unknown) => {
-            if (!r || typeof r !== 'object') return false;
-            const rel = r as Record<string, unknown>;
+            if (!r || typeof r !== 'object') return false
+            const rel = r as Record<string, unknown>
             return (
               typeof rel.sourceMemoryId === 'string' &&
               typeof rel.targetMemoryId === 'string' &&
               typeof rel.type === 'string' &&
               validTypes.includes(rel.type)
-            );
+            )
           })
           .map((r: Record<string, unknown>) => ({
             sourceMemoryId: String(r.sourceMemoryId),
             targetMemoryId: String(r.targetMemoryId),
             type: String(r.type),
-            confidence:
-              typeof r.confidence === 'number' ? Math.max(0, Math.min(1, r.confidence)) : 0.5,
+            confidence: typeof r.confidence === 'number' ? Math.max(0, Math.min(1, r.confidence)) : 0.5,
             reason: typeof r.reason === 'string' ? r.reason : 'No reason provided',
           }))
-      : [];
+      : []
 
     const supersededMemoryIds = Array.isArray(parsed.supersededMemoryIds)
       ? parsed.supersededMemoryIds.filter((id: unknown) => typeof id === 'string')
-      : [];
+      : []
 
-    return { relationships, supersededMemoryIds };
+    return { relationships, supersededMemoryIds }
   } catch (error) {
-    throw new Error(
-      `Failed to parse relationship response: ${error instanceof Error ? error.message : String(error)}`
-    );
+    throw new Error(`Failed to parse relationship response: ${error instanceof Error ? error.message : String(error)}`)
   }
 }

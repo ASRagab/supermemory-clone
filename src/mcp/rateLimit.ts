@@ -6,11 +6,7 @@
  * and global limits per containerTag.
  */
 
-import {
-  RateLimitStore,
-  MemoryRateLimitStore,
-  RedisRateLimitStore,
-} from '../api/middleware/rateLimit.js';
+import { RateLimitStore, MemoryRateLimitStore, RedisRateLimitStore } from '../api/middleware/rateLimit.js'
 
 // ============================================================================
 // Types
@@ -21,15 +17,15 @@ import {
  */
 export interface RateLimitResult {
   /** Whether the request is allowed */
-  allowed: boolean;
+  allowed: boolean
   /** Remaining requests in the current window */
-  remaining: number;
+  remaining: number
   /** Seconds until the limit resets */
-  resetIn: number;
+  resetIn: number
   /** The limit that applies */
-  limit: number;
+  limit: number
   /** Which limit was hit (if any) */
-  limitType?: 'tool' | 'global';
+  limitType?: 'tool' | 'global'
 }
 
 /**
@@ -37,16 +33,16 @@ export interface RateLimitResult {
  */
 export interface RateLimitConfig {
   /** Maximum requests allowed */
-  maxRequests: number;
+  maxRequests: number
   /** Time window in milliseconds */
-  windowMs: number;
+  windowMs: number
 }
 
 /**
  * Tool-specific rate limit configurations
  */
 export interface ToolLimits {
-  [toolName: string]: RateLimitConfig;
+  [toolName: string]: RateLimitConfig
 }
 
 // ============================================================================
@@ -103,7 +99,7 @@ const DEFAULT_TOOL_LIMITS: ToolLimits = {
     maxRequests: 20,
     windowMs: 60 * 1000, // 20 req/min
   },
-};
+}
 
 /**
  * Global rate limit per containerTag
@@ -112,7 +108,7 @@ const DEFAULT_TOOL_LIMITS: ToolLimits = {
 const DEFAULT_GLOBAL_LIMIT: RateLimitConfig = {
   maxRequests: 1000,
   windowMs: 15 * 60 * 1000, // 1000 req/15min
-};
+}
 
 // ============================================================================
 // MCPRateLimiter Class
@@ -129,24 +125,24 @@ const DEFAULT_GLOBAL_LIMIT: RateLimitConfig = {
  * supporting both in-memory (single instance) and Redis (distributed).
  */
 export class MCPRateLimiter {
-  private store: RateLimitStore;
-  private toolLimits: ToolLimits;
-  private globalLimit: RateLimitConfig;
-  private readonly keyPrefix = 'mcp:';
+  private store: RateLimitStore
+  private toolLimits: ToolLimits
+  private globalLimit: RateLimitConfig
+  private readonly keyPrefix = 'mcp:'
 
   constructor(options?: {
-    store?: RateLimitStore;
-    toolLimits?: { [toolName: string]: RateLimitConfig };
-    globalLimit?: Partial<RateLimitConfig>;
+    store?: RateLimitStore
+    toolLimits?: { [toolName: string]: RateLimitConfig }
+    globalLimit?: Partial<RateLimitConfig>
   }) {
     // Initialize store - use Redis if available, fallback to memory
-    this.store = options?.store ?? this.createDefaultStore();
+    this.store = options?.store ?? this.createDefaultStore()
 
     // Merge tool limits with defaults
-    this.toolLimits = { ...DEFAULT_TOOL_LIMITS };
+    this.toolLimits = { ...DEFAULT_TOOL_LIMITS }
     if (options?.toolLimits) {
       for (const [key, value] of Object.entries(options.toolLimits)) {
-        this.toolLimits[key] = value;
+        this.toolLimits[key] = value
       }
     }
 
@@ -154,7 +150,7 @@ export class MCPRateLimiter {
     this.globalLimit = {
       ...DEFAULT_GLOBAL_LIMIT,
       ...options?.globalLimit,
-    };
+    }
   }
 
   /**
@@ -163,9 +159,9 @@ export class MCPRateLimiter {
    */
   private createDefaultStore(): RateLimitStore {
     if (process.env.REDIS_URL) {
-      return new RedisRateLimitStore();
+      return new RedisRateLimitStore()
     }
-    return new MemoryRateLimitStore();
+    return new MemoryRateLimitStore()
   }
 
   /**
@@ -178,14 +174,14 @@ export class MCPRateLimiter {
         maxRequests: 100,
         windowMs: 60 * 1000, // Default: 100 req/min
       }
-    );
+    )
   }
 
   /**
    * Get the global rate limit configuration
    */
   getGlobalLimit(): RateLimitConfig {
-    return this.globalLimit;
+    return this.globalLimit
   }
 
   /**
@@ -196,16 +192,16 @@ export class MCPRateLimiter {
    * @returns Rate limit result with allowed status and metadata
    */
   async checkLimit(containerTag: string, toolName: string): Promise<RateLimitResult> {
-    const now = Date.now();
-    const tag = containerTag || 'default';
+    const now = Date.now()
+    const tag = containerTag || 'default'
 
     // Check tool-specific limit first
-    const toolLimit = this.getToolLimit(toolName);
-    const toolKey = `${this.keyPrefix}tool:${tag}:${toolName}`;
-    const toolEntry = await this.store.increment(toolKey, toolLimit.windowMs);
+    const toolLimit = this.getToolLimit(toolName)
+    const toolKey = `${this.keyPrefix}tool:${tag}:${toolName}`
+    const toolEntry = await this.store.increment(toolKey, toolLimit.windowMs)
 
-    const toolRemaining = Math.max(0, toolLimit.maxRequests - toolEntry.count);
-    const toolResetIn = Math.ceil((toolEntry.resetTime - now) / 1000);
+    const toolRemaining = Math.max(0, toolLimit.maxRequests - toolEntry.count)
+    const toolResetIn = Math.ceil((toolEntry.resetTime - now) / 1000)
 
     if (toolEntry.count > toolLimit.maxRequests) {
       return {
@@ -214,15 +210,15 @@ export class MCPRateLimiter {
         resetIn: toolResetIn,
         limit: toolLimit.maxRequests,
         limitType: 'tool',
-      };
+      }
     }
 
     // Check global limit
-    const globalKey = `${this.keyPrefix}global:${tag}`;
-    const globalEntry = await this.store.increment(globalKey, this.globalLimit.windowMs);
+    const globalKey = `${this.keyPrefix}global:${tag}`
+    const globalEntry = await this.store.increment(globalKey, this.globalLimit.windowMs)
 
-    const globalRemaining = Math.max(0, this.globalLimit.maxRequests - globalEntry.count);
-    const globalResetIn = Math.ceil((globalEntry.resetTime - now) / 1000);
+    const globalRemaining = Math.max(0, this.globalLimit.maxRequests - globalEntry.count)
+    const globalResetIn = Math.ceil((globalEntry.resetTime - now) / 1000)
 
     if (globalEntry.count > this.globalLimit.maxRequests) {
       return {
@@ -231,7 +227,7 @@ export class MCPRateLimiter {
         resetIn: globalResetIn,
         limit: this.globalLimit.maxRequests,
         limitType: 'global',
-      };
+      }
     }
 
     // Request is allowed - return the more restrictive remaining count
@@ -240,7 +236,7 @@ export class MCPRateLimiter {
       remaining: Math.min(toolRemaining, globalRemaining),
       resetIn: Math.min(toolResetIn, globalResetIn),
       limit: toolLimit.maxRequests,
-    };
+    }
   }
 
   /**
@@ -251,32 +247,32 @@ export class MCPRateLimiter {
    * @returns Current rate limit status
    */
   async getStatus(containerTag: string, toolName: string): Promise<RateLimitResult> {
-    const now = Date.now();
-    const tag = containerTag || 'default';
+    const now = Date.now()
+    const tag = containerTag || 'default'
 
     // Get tool-specific status
-    const toolLimit = this.getToolLimit(toolName);
-    const toolKey = `${this.keyPrefix}tool:${tag}:${toolName}`;
-    const toolEntry = await this.store.get(toolKey);
+    const toolLimit = this.getToolLimit(toolName)
+    const toolKey = `${this.keyPrefix}tool:${tag}:${toolName}`
+    const toolEntry = await this.store.get(toolKey)
 
-    let toolRemaining = toolLimit.maxRequests;
-    let toolResetIn = 0;
+    let toolRemaining = toolLimit.maxRequests
+    let toolResetIn = 0
 
     if (toolEntry && toolEntry.resetTime > now) {
-      toolRemaining = Math.max(0, toolLimit.maxRequests - toolEntry.count);
-      toolResetIn = Math.ceil((toolEntry.resetTime - now) / 1000);
+      toolRemaining = Math.max(0, toolLimit.maxRequests - toolEntry.count)
+      toolResetIn = Math.ceil((toolEntry.resetTime - now) / 1000)
     }
 
     // Get global status
-    const globalKey = `${this.keyPrefix}global:${tag}`;
-    const globalEntry = await this.store.get(globalKey);
+    const globalKey = `${this.keyPrefix}global:${tag}`
+    const globalEntry = await this.store.get(globalKey)
 
-    let globalRemaining = this.globalLimit.maxRequests;
-    let globalResetIn = 0;
+    let globalRemaining = this.globalLimit.maxRequests
+    let globalResetIn = 0
 
     if (globalEntry && globalEntry.resetTime > now) {
-      globalRemaining = Math.max(0, this.globalLimit.maxRequests - globalEntry.count);
-      globalResetIn = Math.ceil((globalEntry.resetTime - now) / 1000);
+      globalRemaining = Math.max(0, this.globalLimit.maxRequests - globalEntry.count)
+      globalResetIn = Math.ceil((globalEntry.resetTime - now) / 1000)
     }
 
     // Check if either limit is exceeded (or at capacity - next request would be blocked)
@@ -288,21 +284,17 @@ export class MCPRateLimiter {
         resetIn: toolResetIn,
         limit: toolLimit.maxRequests,
         limitType: 'tool',
-      };
+      }
     }
 
-    if (
-      globalEntry &&
-      globalEntry.count >= this.globalLimit.maxRequests &&
-      globalEntry.resetTime > now
-    ) {
+    if (globalEntry && globalEntry.count >= this.globalLimit.maxRequests && globalEntry.resetTime > now) {
       return {
         allowed: false,
         remaining: 0,
         resetIn: globalResetIn,
         limit: this.globalLimit.maxRequests,
         limitType: 'global',
-      };
+      }
     }
 
     return {
@@ -310,7 +302,7 @@ export class MCPRateLimiter {
       remaining: Math.min(toolRemaining, globalRemaining),
       resetIn: Math.max(toolResetIn, globalResetIn),
       limit: toolLimit.maxRequests,
-    };
+    }
   }
 }
 
@@ -318,16 +310,16 @@ export class MCPRateLimiter {
 // Singleton Instance
 // ============================================================================
 
-let rateLimiterInstance: MCPRateLimiter | null = null;
+let rateLimiterInstance: MCPRateLimiter | null = null
 
 /**
  * Get or create the global MCP rate limiter instance
  */
 export function getMCPRateLimiter(): MCPRateLimiter {
   if (!rateLimiterInstance) {
-    rateLimiterInstance = new MCPRateLimiter();
+    rateLimiterInstance = new MCPRateLimiter()
   }
-  return rateLimiterInstance;
+  return rateLimiterInstance
 }
 
 /**
@@ -342,9 +334,7 @@ export function createRateLimitErrorResponse(
   toolName: string
 ): { content: Array<{ type: 'text'; text: string }>; isError: true } {
   const limitTypeMessage =
-    result.limitType === 'global'
-      ? 'Global rate limit exceeded'
-      : `Rate limit exceeded for ${toolName}`;
+    result.limitType === 'global' ? 'Global rate limit exceeded' : `Rate limit exceeded for ${toolName}`
 
   return {
     content: [
@@ -354,5 +344,5 @@ export function createRateLimitErrorResponse(
       },
     ],
     isError: true,
-  };
+  }
 }

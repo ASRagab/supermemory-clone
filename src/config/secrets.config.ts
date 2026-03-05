@@ -7,21 +7,21 @@
 
 /** Secret definition with validation rules */
 export interface SecretDefinition {
-  envVar: string;
-  description: string;
-  required: boolean;
-  format?: 'api_key' | 'database_url' | 'jwt' | 'password' | 'generic';
-  minLength?: number;
-  rotationDays?: number;
-  defaultValue?: string;
-  validate?: (value: string) => { valid: boolean; error?: string };
+  envVar: string
+  description: string
+  required: boolean
+  format?: 'api_key' | 'database_url' | 'jwt' | 'password' | 'generic'
+  minLength?: number
+  rotationDays?: number
+  defaultValue?: string
+  validate?: (value: string) => { valid: boolean; error?: string }
 }
 
 /** Secret category for organization */
 export interface SecretCategory {
-  name: string;
-  description: string;
-  secrets: SecretDefinition[];
+  name: string
+  description: string
+  secrets: SecretDefinition[]
 }
 
 export const DATABASE_SECRETS: SecretCategory = {
@@ -43,7 +43,7 @@ export const DATABASE_SECRETS: SecretCategory = {
       defaultValue: 'redis://localhost:6379',
     },
   ],
-};
+}
 
 export const ENCRYPTION_SECRETS: SecretCategory = {
   name: 'Encryption',
@@ -65,7 +65,7 @@ export const ENCRYPTION_SECRETS: SecretCategory = {
       minLength: 24,
     },
   ],
-};
+}
 
 export const API_SECRETS: SecretCategory = {
   name: 'API',
@@ -79,9 +79,9 @@ export const API_SECRETS: SecretCategory = {
       rotationDays: 365,
       validate: (value: string) => {
         if (value.startsWith('sk-ant-')) {
-          return { valid: true };
+          return { valid: true }
         }
-        return { valid: false, error: 'Must start with sk-ant-' };
+        return { valid: false, error: 'Must start with sk-ant-' }
       },
     },
     {
@@ -92,13 +92,13 @@ export const API_SECRETS: SecretCategory = {
       rotationDays: 365,
       validate: (value: string) => {
         if (value.startsWith('sk-')) {
-          return { valid: true };
+          return { valid: true }
         }
-        return { valid: false, error: 'Must start with sk-' };
+        return { valid: false, error: 'Must start with sk-' }
       },
     },
   ],
-};
+}
 
 export const AUTH_SECRETS: SecretCategory = {
   name: 'Authentication',
@@ -129,7 +129,7 @@ export const AUTH_SECRETS: SecretCategory = {
       rotationDays: 90,
     },
   ],
-};
+}
 
 export const SESSION_SECRETS: SecretCategory = {
   name: 'Session',
@@ -144,7 +144,7 @@ export const SESSION_SECRETS: SecretCategory = {
       rotationDays: 90,
     },
   ],
-};
+}
 
 export const ALL_SECRET_CATEGORIES: SecretCategory[] = [
   DATABASE_SECRETS,
@@ -152,15 +152,15 @@ export const ALL_SECRET_CATEGORIES: SecretCategory[] = [
   API_SECRETS,
   AUTH_SECRETS,
   SESSION_SECRETS,
-];
+]
 
 /** Rotation policy definition */
 export interface RotationPolicy {
-  secretName: string;
-  intervalDays: number;
-  autoRotate: boolean;
-  gracePeriodDays: number;
-  notifyBeforeDays: number;
+  secretName: string
+  intervalDays: number
+  autoRotate: boolean
+  gracePeriodDays: number
+  notifyBeforeDays: number
 }
 
 export const ROTATION_POLICIES: RotationPolicy[] = [
@@ -199,71 +199,69 @@ export const ROTATION_POLICIES: RotationPolicy[] = [
     gracePeriodDays: 14,
     notifyBeforeDays: 7,
   },
-];
+]
 
 /** Get all required secrets */
 export function getRequiredSecrets(): SecretDefinition[] {
-  return ALL_SECRET_CATEGORIES.flatMap((cat) => cat.secrets.filter((s) => s.required));
+  return ALL_SECRET_CATEGORIES.flatMap((cat) => cat.secrets.filter((s) => s.required))
 }
 
 /** Get all optional secrets */
 export function getOptionalSecrets(): SecretDefinition[] {
-  return ALL_SECRET_CATEGORIES.flatMap((cat) => cat.secrets.filter((s) => !s.required));
+  return ALL_SECRET_CATEGORIES.flatMap((cat) => cat.secrets.filter((s) => !s.required))
 }
 
 /** Get all secrets (required + optional) */
 export function getAllSecrets(): SecretDefinition[] {
-  return ALL_SECRET_CATEGORIES.flatMap((cat) => cat.secrets);
+  return ALL_SECRET_CATEGORIES.flatMap((cat) => cat.secrets)
 }
 
 /** Get secret definition by environment variable name */
 export function getSecretDefinition(envVar: string): SecretDefinition | undefined {
   for (const category of ALL_SECRET_CATEGORIES) {
-    const secret = category.secrets.find((s) => s.envVar === envVar);
-    if (secret) return secret;
+    const secret = category.secrets.find((s) => s.envVar === envVar)
+    if (secret) return secret
   }
-  return undefined;
+  return undefined
 }
 
 /** Get rotation policy for a secret */
 export function getRotationPolicy(secretName: string): RotationPolicy | undefined {
-  return ROTATION_POLICIES.find((p) => p.secretName === secretName);
+  return ROTATION_POLICIES.find((p) => p.secretName === secretName)
 }
 
 /** Check if a secret is due for rotation */
 export function isRotationDue(secretName: string, lastRotated: Date): boolean {
-  const policy = getRotationPolicy(secretName);
+  const policy = getRotationPolicy(secretName)
   if (!policy) {
-    return false;
+    return false
   }
 
-  const now = new Date();
-  const daysSinceRotation =
-    (now.getTime() - lastRotated.getTime()) / (1000 * 60 * 60 * 24);
+  const now = new Date()
+  const daysSinceRotation = (now.getTime() - lastRotated.getTime()) / (1000 * 60 * 60 * 24)
 
-  return daysSinceRotation >= policy.intervalDays;
+  return daysSinceRotation >= policy.intervalDays
 }
 
 /** Check if rotation warning should be shown */
 export function shouldWarnRotation(secretName: string, lastRotated: Date): boolean {
-  const policy = getRotationPolicy(secretName);
+  const policy = getRotationPolicy(secretName)
   if (!policy) {
-    return false;
+    return false
   }
 
-  const now = new Date();
-  const daysSinceRotation =
-    (now.getTime() - lastRotated.getTime()) / (1000 * 60 * 60 * 24);
-  const daysUntilRotation = policy.intervalDays - daysSinceRotation;
+  const now = new Date()
+  const daysSinceRotation = (now.getTime() - lastRotated.getTime()) / (1000 * 60 * 60 * 24)
+  const daysUntilRotation = policy.intervalDays - daysSinceRotation
 
-  return daysUntilRotation <= policy.notifyBeforeDays && daysUntilRotation > 0;
+  return daysUntilRotation <= policy.notifyBeforeDays && daysUntilRotation > 0
 }
 
 export interface EncryptionKeyConfig {
-  kdf: 'pbkdf2' | 'scrypt' | 'argon2';
-  iterations: number;
-  keyLength: number;
-  digest: 'sha256' | 'sha512';
+  kdf: 'pbkdf2' | 'scrypt' | 'argon2'
+  iterations: number
+  keyLength: number
+  digest: 'sha256' | 'sha512'
 }
 
 /** Default encryption key configuration (OWASP 2023 recommendations) */
@@ -272,7 +270,7 @@ export const DEFAULT_ENCRYPTION_CONFIG: EncryptionKeyConfig = {
   iterations: 600000, // OWASP 2023 recommendation for PBKDF2-SHA512
   keyLength: 32, // 256 bits
   digest: 'sha512',
-};
+}
 
 /** Alternative encryption configs for different security levels */
 export const ENCRYPTION_CONFIGS = {
@@ -290,4 +288,4 @@ export const ENCRYPTION_CONFIGS = {
     keyLength: 32,
     digest: 'sha256' as const,
   },
-} as const;
+} as const

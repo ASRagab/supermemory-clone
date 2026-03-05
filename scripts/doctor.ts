@@ -1,16 +1,25 @@
 #!/usr/bin/env tsx
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { execSync } from 'node:child_process';
 import pkg from 'pg';
 import Redis from 'ioredis';
 
 const { Client } = pkg;
+type RedisLike = {
+  ping(): Promise<string>;
+  quit(): Promise<'OK' | void>;
+};
 
 type CheckResult = {
   ok: boolean;
   level: 'error' | 'warn' | 'info';
   message: string;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
 
 function parseEnv(raw: string): Record<string, string> {
   const env: Record<string, string> = {};
@@ -27,7 +36,12 @@ function parseEnv(raw: string): Record<string, string> {
 }
 
 function printResult(result: CheckResult): void {
-  const prefix = result.level === 'error' ? 'FAIL' : result.level === 'warn' ? 'WARN' : 'OK';
+  const levelPrefix: Record<CheckResult['level'], string> = {
+    error: 'FAIL',
+    warn: 'WARN',
+    info: 'OK',
+  };
+  const prefix = levelPrefix[result.level];
   console.log(`[${prefix}] ${result.message}`);
 }
 
@@ -47,9 +61,11 @@ async function run(): Promise<void> {
   const env = parseEnv(await readFile('.env', 'utf-8'));
 
   const databaseUrl = env.DATABASE_URL || process.env.DATABASE_URL || '';
+  const hasValidDatabaseUrl =
+    databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://');
   if (!databaseUrl) {
     results.push({ ok: false, level: 'error', message: 'DATABASE_URL is not set' });
-  } else if (!databaseUrl.startsWith('postgres://') && !databaseUrl.startsWith('postgresql://')) {
+  } else if (!hasValidDatabaseUrl) {
     results.push({
       ok: false,
       level: 'error',
@@ -86,7 +102,7 @@ async function run(): Promise<void> {
     results.push({ ok: true, level: 'info', message: `API_PORT=${apiPort}` });
   }
 
-  if (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://')) {
+  if (hasValidDatabaseUrl) {
     const client = new Client({ connectionString: databaseUrl });
     try {
       await client.connect();
@@ -113,7 +129,11 @@ async function run(): Promise<void> {
       message: 'REDIS_URL is unset; queue workers disabled, inline ingestion fallback will be used',
     });
   } else {
-    const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
+    const RedisClientConstructor = Redis as unknown as new (
+      url: string,
+      options: { maxRetriesPerRequest: number }
+    ) => RedisLike;
+    const redis = new RedisClientConstructor(redisUrl, { maxRetriesPerRequest: 1 });
     try {
       const pong = await redis.ping();
       results.push({
@@ -130,6 +150,66 @@ async function run(): Promise<void> {
     } finally {
       await redis.quit().catch(() => undefined);
     }
+  }
+
+  // MCP build check
+  if (existsSync('dist/mcp/index.js')) {
+    results.push({ ok: true, level: 'info', message: 'MCP server build exists (dist/mcp/index.js)' });
+  } else {
+    results.push({
+      ok: true,
+      level: 'warn',
+      message: 'MCP server not built (run `npm run build` first)',
+    });
+  }
+
+  // .mcp.json check
+  if (existsSync('.mcp.json')) {
+    try {
+      const mcpConfig = JSON.parse(await readFile('.mcp.json', 'utf-8')) as unknown;
+      const mcpServers = isRecord(mcpConfig) && isRecord(mcpConfig.mcpServers) ? mcpConfig.mcpServers : null;
+      if (mcpServers && isRecord(mcpServers.supermemory)) {
+        results.push({ ok: true, level: 'info', message: '.mcp.json is valid with supermemory server configured' });
+      } else {
+        results.push({ ok: true, level: 'warn', message: '.mcp.json exists but missing supermemory server config' });
+      }
+    } catch {
+      results.push({ ok: false, level: 'warn', message: '.mcp.json exists but is not valid JSON' });
+    }
+  } else {
+    results.push({ ok: true, level: 'warn', message: '.mcp.json not found (optional for Claude Code auto-discovery)' });
+  }
+
+  // Claude Code MCP registration check
+  try {
+    const mcpList = execSync('claude mcp list 2>/dev/null', { encoding: 'utf-8', timeout: 5000 });
+    if (mcpList.includes('supermemory')) {
+      results.push({ ok: true, level: 'info', message: 'MCP server registered in Claude Code' });
+    } else {
+      results.push({
+        ok: true,
+        level: 'warn',
+        message: 'MCP server not registered in Claude Code (run `npm run mcp:setup`)',
+      });
+    }
+  } catch {
+    results.push({
+      ok: true,
+      level: 'warn',
+      message: 'Claude Code CLI not available (optional for MCP registration check)',
+    });
+  }
+
+  // Embedding API key check
+  const openaiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY || '';
+  if (openaiKey && !openaiKey.startsWith('sk-your-')) {
+    results.push({ ok: true, level: 'info', message: 'OPENAI_API_KEY is configured' });
+  } else {
+    results.push({
+      ok: true,
+      level: 'warn',
+      message: 'OPENAI_API_KEY not set (embeddings and LLM features will be unavailable)',
+    });
   }
 
   console.log('\nConfiguration checks:\n');

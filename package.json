@@ -5,12 +5,16 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "bin": {
+    "supermemory-mcp": "dist/mcp/index.js"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "mcp": "node dist/mcp/index.js",
     "mcp:dev": "tsx src/mcp/index.ts",
+    "mcp:setup": "tsx scripts/mcp-setup.ts",
     "setup": "tsx scripts/setup.ts",
     "doctor": "tsx scripts/doctor.ts",
     "test": "vitest",

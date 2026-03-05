@@ -5,7 +5,7 @@
  * Supports multiple providers (OpenAI, Anthropic) with a unified interface.
  */
 
-import type { MemoryType, Entity } from '../../types/index.js';
+import type { MemoryType, Entity } from '../../types/index.js'
 
 // ============================================================================
 // Extracted Memory Types
@@ -16,22 +16,22 @@ import type { MemoryType, Entity } from '../../types/index.js';
  */
 export interface ExtractedMemory {
   /** The extracted memory content as a clear, standalone statement */
-  content: string;
+  content: string
 
   /** Classification of the memory type */
-  type: MemoryType;
+  type: MemoryType
 
   /** Confidence score for this extraction (0-1) */
-  confidence: number;
+  confidence: number
 
   /** Extracted entities mentioned in the memory */
-  entities: Entity[];
+  entities: Entity[]
 
   /** Keywords extracted from the memory */
-  keywords: string[];
+  keywords: string[]
 
   /** Optional reasoning from the LLM about why this was extracted */
-  reasoning?: string;
+  reasoning?: string
 }
 
 /**
@@ -39,26 +39,26 @@ export interface ExtractedMemory {
  */
 export interface LLMExtractionResult {
   /** Successfully extracted memories */
-  memories: ExtractedMemory[];
+  memories: ExtractedMemory[]
 
   /** Raw LLM response for debugging */
-  rawResponse?: string;
+  rawResponse?: string
 
   /** Tokens used for this extraction */
   tokensUsed?: {
-    prompt: number;
-    completion: number;
-    total: number;
-  };
+    prompt: number
+    completion: number
+    total: number
+  }
 
   /** Processing time in milliseconds */
-  processingTimeMs: number;
+  processingTimeMs: number
 
   /** Whether the extraction used cache */
-  cached: boolean;
+  cached: boolean
 
   /** Provider used for this extraction */
-  provider: LLMProviderType;
+  provider: LLMProviderType
 }
 
 // ============================================================================
@@ -68,32 +68,26 @@ export interface LLMExtractionResult {
 /**
  * Relationship type detected by LLM
  */
-export type LLMRelationshipType =
-  | 'updates'
-  | 'extends'
-  | 'derives'
-  | 'contradicts'
-  | 'related'
-  | 'supersedes';
+export type LLMRelationshipType = 'updates' | 'extends' | 'derives' | 'contradicts' | 'related' | 'supersedes'
 
 /**
  * A relationship between memories detected by an LLM
  */
 export interface DetectedRelationship {
   /** Source memory ID */
-  sourceMemoryId: string;
+  sourceMemoryId: string
 
   /** Target memory ID */
-  targetMemoryId: string;
+  targetMemoryId: string
 
   /** Type of relationship */
-  type: LLMRelationshipType;
+  type: LLMRelationshipType
 
   /** Confidence score for this relationship (0-1) */
-  confidence: number;
+  confidence: number
 
   /** Explanation of why this relationship was detected */
-  reason: string;
+  reason: string
 }
 
 /**
@@ -101,16 +95,16 @@ export interface DetectedRelationship {
  */
 export interface LLMRelationshipResult {
   /** Detected relationships */
-  relationships: DetectedRelationship[];
+  relationships: DetectedRelationship[]
 
   /** Memories that should be marked as superseded */
-  supersededMemoryIds: string[];
+  supersededMemoryIds: string[]
 
   /** Processing time in milliseconds */
-  processingTimeMs: number;
+  processingTimeMs: number
 
   /** Provider used for this detection */
-  provider: LLMProviderType;
+  provider: LLMProviderType
 }
 
 // ============================================================================
@@ -120,26 +114,26 @@ export interface LLMRelationshipResult {
 /**
  * Supported LLM providers
  */
-export type LLMProviderType = 'openai' | 'anthropic' | 'mock';
+export type LLMProviderType = 'openai' | 'anthropic' | 'mock'
 
 /**
  * Base configuration for all LLM providers
  */
 export interface BaseLLMConfig {
   /** Maximum tokens for responses */
-  maxTokens?: number;
+  maxTokens?: number
 
   /** Temperature for generation (0-2) */
-  temperature?: number;
+  temperature?: number
 
   /** Timeout in milliseconds */
-  timeoutMs?: number;
+  timeoutMs?: number
 
   /** Maximum retries on failure */
-  maxRetries?: number;
+  maxRetries?: number
 
   /** Initial delay between retries in milliseconds */
-  retryDelayMs?: number;
+  retryDelayMs?: number
 }
 
 /**
@@ -147,16 +141,16 @@ export interface BaseLLMConfig {
  */
 export interface OpenAILLMConfig extends BaseLLMConfig {
   /** API key for OpenAI */
-  apiKey: string;
+  apiKey: string
 
   /** Model to use (default: gpt-4o-mini) */
-  model?: string;
+  model?: string
 
   /** Base URL for API (for proxies/custom endpoints) */
-  baseUrl?: string;
+  baseUrl?: string
 
   /** Organization ID */
-  organization?: string;
+  organization?: string
 }
 
 /**
@@ -164,13 +158,13 @@ export interface OpenAILLMConfig extends BaseLLMConfig {
  */
 export interface AnthropicLLMConfig extends BaseLLMConfig {
   /** API key for Anthropic */
-  apiKey: string;
+  apiKey: string
 
   /** Model to use (default: claude-3-haiku-20240307) */
-  model?: string;
+  model?: string
 
   /** Base URL for API */
-  baseUrl?: string;
+  baseUrl?: string
 }
 
 /**
@@ -178,24 +172,24 @@ export interface AnthropicLLMConfig extends BaseLLMConfig {
  */
 export interface MockLLMConfig extends BaseLLMConfig {
   /** Predefined responses for testing */
-  mockResponses?: ExtractedMemory[][];
+  mockResponses?: ExtractedMemory[][]
   /** Predefined JSON responses for task-specific prompts */
-  mockJsonResponses?: Array<string | Record<string, unknown>>;
+  mockJsonResponses?: Array<string | Record<string, unknown>>
 
   /** Simulate latency in milliseconds */
-  simulatedLatencyMs?: number;
+  simulatedLatencyMs?: number
 
   /** Simulate errors */
-  simulateErrors?: boolean;
+  simulateErrors?: boolean
 
   /** Error rate (0-1) when simulateErrors is true */
-  errorRate?: number;
+  errorRate?: number
 }
 
 /**
  * Combined configuration type
  */
-export type LLMConfig = OpenAILLMConfig | AnthropicLLMConfig | MockLLMConfig;
+export type LLMConfig = OpenAILLMConfig | AnthropicLLMConfig | MockLLMConfig
 
 // ============================================================================
 // Provider Interface
@@ -206,7 +200,7 @@ export type LLMConfig = OpenAILLMConfig | AnthropicLLMConfig | MockLLMConfig;
  */
 export interface LLMProvider {
   /** Provider type identifier */
-  readonly type: LLMProviderType;
+  readonly type: LLMProviderType
 
   /**
    * Extract memories from text content
@@ -215,7 +209,7 @@ export interface LLMProvider {
    * @param options - Optional extraction options
    * @returns Promise resolving to extraction result
    */
-  extractMemories(text: string, options?: ExtractionOptions): Promise<LLMExtractionResult>;
+  extractMemories(text: string, options?: ExtractionOptions): Promise<LLMExtractionResult>
 
   /**
    * Detect relationships between memories
@@ -229,17 +223,17 @@ export interface LLMProvider {
     newMemory: { id: string; content: string; type: MemoryType },
     existingMemories: Array<{ id: string; content: string; type: MemoryType }>,
     options?: RelationshipDetectionOptions
-  ): Promise<LLMRelationshipResult>;
+  ): Promise<LLMRelationshipResult>
 
   /**
    * Check if the provider is available and configured
    */
-  isAvailable(): boolean;
+  isAvailable(): boolean
 
   /**
    * Get provider health status
    */
-  getHealthStatus(): Promise<ProviderHealthStatus>;
+  getHealthStatus(): Promise<ProviderHealthStatus>
 
   /**
    * Run a JSON-only prompt task with custom system/user prompts.
@@ -248,10 +242,10 @@ export interface LLMProvider {
     systemPrompt: string,
     userPrompt: string
   ): Promise<{
-    rawResponse: string;
-    tokensUsed?: { prompt: number; completion: number; total: number };
-    provider: LLMProviderType;
-  }>;
+    rawResponse: string
+    tokensUsed?: { prompt: number; completion: number; total: number }
+    provider: LLMProviderType
+  }>
 }
 
 /**
@@ -259,22 +253,22 @@ export interface LLMProvider {
  */
 export interface ExtractionOptions {
   /** Container tag for context */
-  containerTag?: string;
+  containerTag?: string
 
   /** Minimum confidence threshold (0-1) */
-  minConfidence?: number;
+  minConfidence?: number
 
   /** Maximum memories to extract */
-  maxMemories?: number;
+  maxMemories?: number
 
   /** Whether to include entity extraction */
-  extractEntities?: boolean;
+  extractEntities?: boolean
 
   /** Whether to include keyword extraction */
-  extractKeywords?: boolean;
+  extractKeywords?: boolean
 
   /** Additional context for extraction */
-  context?: string;
+  context?: string
 }
 
 /**
@@ -282,13 +276,13 @@ export interface ExtractionOptions {
  */
 export interface RelationshipDetectionOptions {
   /** Maximum relationships to return */
-  maxRelationships?: number;
+  maxRelationships?: number
 
   /** Minimum confidence threshold */
-  minConfidence?: number;
+  minConfidence?: number
 
   /** Container tag filter */
-  containerTag?: string;
+  containerTag?: string
 }
 
 /**
@@ -296,25 +290,25 @@ export interface RelationshipDetectionOptions {
  */
 export interface ProviderHealthStatus {
   /** Whether the provider is healthy */
-  healthy: boolean;
+  healthy: boolean
 
   /** Provider type */
-  provider: LLMProviderType;
+  provider: LLMProviderType
 
   /** Latency of last request in ms */
-  latencyMs?: number;
+  latencyMs?: number
 
   /** Error message if unhealthy */
-  error?: string;
+  error?: string
 
   /** Last successful request timestamp */
-  lastSuccess?: Date;
+  lastSuccess?: Date
 
   /** Rate limit info if available */
   rateLimit?: {
-    remaining: number;
-    reset: Date;
-  };
+    remaining: number
+    reset: Date
+  }
 }
 
 // ============================================================================
@@ -326,16 +320,16 @@ export interface ProviderHealthStatus {
  */
 export interface CacheEntry<T> {
   /** Cached value */
-  value: T;
+  value: T
 
   /** When this entry was created */
-  createdAt: Date;
+  createdAt: Date
 
   /** When this entry expires */
-  expiresAt: Date;
+  expiresAt: Date
 
   /** Hash of the input that generated this entry */
-  inputHash: string;
+  inputHash: string
 }
 
 /**
@@ -343,13 +337,13 @@ export interface CacheEntry<T> {
  */
 export interface CacheConfig {
   /** Whether caching is enabled */
-  enabled: boolean;
+  enabled: boolean
 
   /** Time-to-live in milliseconds */
-  ttlMs: number;
+  ttlMs: number
 
   /** Maximum cache size */
-  maxSize: number;
+  maxSize: number
 }
 
 // ============================================================================
@@ -374,6 +368,6 @@ export const LLMErrorCode = {
   CONTENT_FILTERED: 'LLM_CONTENT_FILTERED',
   /** Token limit exceeded */
   TOKEN_LIMIT_EXCEEDED: 'LLM_TOKEN_LIMIT_EXCEEDED',
-} as const;
+} as const
 
-export type LLMErrorCodeType = (typeof LLMErrorCode)[keyof typeof LLMErrorCode];
+export type LLMErrorCodeType = (typeof LLMErrorCode)[keyof typeof LLMErrorCode]

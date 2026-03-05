@@ -5,9 +5,9 @@
  * Provides a unified interface for multiple LLM providers.
  */
 
-import { getLogger } from '../../utils/logger.js';
-import { config as appConfig } from '../../config/index.js';
-import { isLLMFeatureEnabled } from '../../config/feature-flags.js';
+import { getLogger } from '../../utils/logger.js'
+import { config as appConfig } from '../../config/index.js'
+import { isLLMFeatureEnabled } from '../../config/feature-flags.js'
 import type {
   LLMProvider,
   LLMProviderType,
@@ -15,27 +15,27 @@ import type {
   AnthropicLLMConfig,
   MockLLMConfig,
   CacheConfig,
-} from './types.js';
-import { createOpenAIProvider } from './openai.js';
-import { createAnthropicProvider } from './anthropic.js';
-import { createMockProvider } from './mock.js';
+} from './types.js'
+import { createOpenAIProvider } from './openai.js'
+import { createAnthropicProvider } from './anthropic.js'
+import { createMockProvider } from './mock.js'
 
-const logger = getLogger('LLMFactory');
+const logger = getLogger('LLMFactory')
 
 // ============================================================================
 // Re-exports
 // ============================================================================
 
 // Types
-export * from './types.js';
+export * from './types.js'
 
 // Base
-export { BaseLLMProvider, LLMError, DEFAULT_LLM_CONFIG, DEFAULT_CACHE_CONFIG } from './base.js';
+export { BaseLLMProvider, LLMError, DEFAULT_LLM_CONFIG, DEFAULT_CACHE_CONFIG } from './base.js'
 
 // Providers
-export { OpenAILLMProvider, createOpenAIProvider } from './openai.js';
-export { AnthropicLLMProvider, createAnthropicProvider } from './anthropic.js';
-export { MockLLMProvider, createMockProvider } from './mock.js';
+export { OpenAILLMProvider, createOpenAIProvider } from './openai.js'
+export { AnthropicLLMProvider, createAnthropicProvider } from './anthropic.js'
+export { MockLLMProvider, createMockProvider } from './mock.js'
 
 // Prompts (for testing/customization)
 export {
@@ -47,32 +47,25 @@ export {
   generateRelationshipPrompt,
   parseExtractionResponse,
   parseRelationshipResponse,
-} from './prompts.js';
+} from './prompts.js'
 
 // Specialized Services (for memory service TODOs)
-export {
-  MemoryClassifierService,
-  getMemoryClassifier,
-  resetMemoryClassifier,
-} from './memory-classifier.service.js';
-export type { ClassificationResult, ClassifierConfig } from './memory-classifier.service.js';
+export { MemoryClassifierService, getMemoryClassifier, resetMemoryClassifier } from './memory-classifier.service.js'
+export type { ClassificationResult, ClassifierConfig } from './memory-classifier.service.js'
 
 export {
   ContradictionDetectorService,
   getContradictionDetector,
   resetContradictionDetector,
-} from './contradiction-detector.service.js';
-export type { ContradictionResult, DetectorConfig } from './contradiction-detector.service.js';
+} from './contradiction-detector.service.js'
+export type { ContradictionResult, DetectorConfig } from './contradiction-detector.service.js'
 
 export {
   MemoryExtensionDetectorService,
   getMemoryExtensionDetector,
   resetMemoryExtensionDetector,
-} from './memory-extension-detector.service.js';
-export type {
-  ExtensionResult,
-  ExtensionDetectorConfig,
-} from './memory-extension-detector.service.js';
+} from './memory-extension-detector.service.js'
+export type { ExtensionResult, ExtensionDetectorConfig } from './memory-extension-detector.service.js'
 
 // ============================================================================
 // Environment Variable Names
@@ -87,7 +80,7 @@ const ENV_VARS = {
   ANTHROPIC_MODEL: 'ANTHROPIC_MODEL',
   LLM_CACHE_ENABLED: 'LLM_CACHE_ENABLED',
   LLM_CACHE_TTL_MS: 'LLM_CACHE_TTL_MS',
-} as const;
+} as const
 
 // ============================================================================
 // Factory Configuration
@@ -95,22 +88,22 @@ const ENV_VARS = {
 
 export interface LLMFactoryConfig {
   /** Preferred provider type */
-  provider?: LLMProviderType;
+  provider?: LLMProviderType
 
   /** OpenAI-specific config */
-  openai?: Partial<OpenAILLMConfig>;
+  openai?: Partial<OpenAILLMConfig>
 
   /** Anthropic-specific config */
-  anthropic?: Partial<AnthropicLLMConfig>;
+  anthropic?: Partial<AnthropicLLMConfig>
 
   /** Mock provider config */
-  mock?: MockLLMConfig;
+  mock?: MockLLMConfig
 
   /** Cache configuration */
-  cache?: Partial<CacheConfig>;
+  cache?: Partial<CacheConfig>
 
   /** Whether to fallback to regex if no LLM available */
-  fallbackToRegex?: boolean;
+  fallbackToRegex?: boolean
 }
 
 // ============================================================================
@@ -121,28 +114,28 @@ export interface LLMFactoryConfig {
  * Create an LLM provider based on configuration
  */
 export function createLLMProvider(config: LLMFactoryConfig = {}): LLMProvider {
-  const providerType = config.provider ?? getDefaultProviderType();
+  const providerType = config.provider ?? getDefaultProviderType()
 
-  logger.debug('Creating LLM provider', { type: providerType });
+  logger.debug('Creating LLM provider', { type: providerType })
 
   switch (providerType) {
     case 'openai': {
-      const openaiConfig = getOpenAIConfig(config);
-      return createOpenAIProvider(openaiConfig);
+      const openaiConfig = getOpenAIConfig(config)
+      return createOpenAIProvider(openaiConfig)
     }
 
     case 'anthropic': {
-      const anthropicConfig = getAnthropicConfig(config);
-      return createAnthropicProvider(anthropicConfig);
+      const anthropicConfig = getAnthropicConfig(config)
+      return createAnthropicProvider(anthropicConfig)
     }
 
     case 'mock': {
-      return createMockProvider(config.mock ?? {});
+      return createMockProvider(config.mock ?? {})
     }
 
     default: {
-      logger.warn(`Unknown provider type: ${providerType}, falling back to mock`);
-      return createMockProvider({});
+      logger.warn(`Unknown provider type: ${providerType}, falling back to mock`)
+      return createMockProvider({})
     }
   }
 }
@@ -154,37 +147,33 @@ export function createLLMProvider(config: LLMFactoryConfig = {}): LLMProvider {
  */
 export function getDefaultProviderType(): LLMProviderType {
   // Check environment variable first
-  const envProvider = process.env[ENV_VARS.LLM_PROVIDER]?.toLowerCase();
+  const envProvider = process.env[ENV_VARS.LLM_PROVIDER]?.toLowerCase()
   if (envProvider === 'openai' || envProvider === 'anthropic' || envProvider === 'mock') {
-    return envProvider;
+    return envProvider
   }
 
   // Check for API keys in process.env only
-  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY];
-  const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY];
+  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY]
+  const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY]
 
   if (hasOpenAI) {
-    return 'openai';
+    return 'openai'
   }
 
   if (hasAnthropic) {
-    return 'anthropic';
+    return 'anthropic'
   }
 
   // No API keys - return mock for graceful degradation
-  logger.info('No LLM API keys found, using mock provider');
-  return 'mock';
+  logger.info('No LLM API keys found, using mock provider')
+  return 'mock'
 }
 
 /**
  * Get OpenAI configuration from environment and provided config
  */
 function getOpenAIConfig(factoryConfig: LLMFactoryConfig): OpenAILLMConfig {
-  const apiKey =
-    factoryConfig.openai?.apiKey ??
-    process.env[ENV_VARS.OPENAI_API_KEY] ??
-    appConfig.openaiApiKey ??
-    '';
+  const apiKey = factoryConfig.openai?.apiKey ?? process.env[ENV_VARS.OPENAI_API_KEY] ?? appConfig.openaiApiKey ?? ''
 
   return {
     apiKey,
@@ -195,27 +184,24 @@ function getOpenAIConfig(factoryConfig: LLMFactoryConfig): OpenAILLMConfig {
     timeoutMs: factoryConfig.openai?.timeoutMs ?? 30000,
     maxRetries: factoryConfig.openai?.maxRetries ?? 3,
     retryDelayMs: factoryConfig.openai?.retryDelayMs ?? 1000,
-  };
+  }
 }
 
 /**
  * Get Anthropic configuration from environment and provided config
  */
 function getAnthropicConfig(factoryConfig: LLMFactoryConfig): AnthropicLLMConfig {
-  const apiKey = factoryConfig.anthropic?.apiKey ?? process.env[ENV_VARS.ANTHROPIC_API_KEY] ?? '';
+  const apiKey = factoryConfig.anthropic?.apiKey ?? process.env[ENV_VARS.ANTHROPIC_API_KEY] ?? ''
 
   return {
     apiKey,
-    model:
-      factoryConfig.anthropic?.model ??
-      process.env[ENV_VARS.ANTHROPIC_MODEL] ??
-      'claude-3-haiku-20240307',
+    model: factoryConfig.anthropic?.model ?? process.env[ENV_VARS.ANTHROPIC_MODEL] ?? 'claude-3-haiku-20240307',
     maxTokens: factoryConfig.anthropic?.maxTokens ?? 2000,
     temperature: factoryConfig.anthropic?.temperature ?? 0.1,
     timeoutMs: factoryConfig.anthropic?.timeoutMs ?? 30000,
     maxRetries: factoryConfig.anthropic?.maxRetries ?? 3,
     retryDelayMs: factoryConfig.anthropic?.retryDelayMs ?? 1000,
-  };
+  }
 }
 
 /**
@@ -226,11 +212,11 @@ function getAnthropicConfig(factoryConfig: LLMFactoryConfig): AnthropicLLMConfig
  */
 export function isLLMAvailable(): boolean {
   if (!isLLMFeatureEnabled()) {
-    return false;
+    return false
   }
-  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY];
-  const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY];
-  return hasOpenAI || hasAnthropic;
+  const hasOpenAI = !!process.env[ENV_VARS.OPENAI_API_KEY]
+  const hasAnthropic = !!process.env[ENV_VARS.ANTHROPIC_API_KEY]
+  return hasOpenAI || hasAnthropic
 }
 
 /**
@@ -240,49 +226,49 @@ export function isLLMAvailable(): boolean {
  */
 export function getAvailableProviders(): LLMProviderType[] {
   if (!isLLMFeatureEnabled()) {
-    return ['mock'];
+    return ['mock']
   }
-  const providers: LLMProviderType[] = ['mock'];
+  const providers: LLMProviderType[] = ['mock']
 
   if (process.env[ENV_VARS.OPENAI_API_KEY]) {
-    providers.push('openai');
+    providers.push('openai')
   }
 
   if (process.env[ENV_VARS.ANTHROPIC_API_KEY]) {
-    providers.push('anthropic');
+    providers.push('anthropic')
   }
 
-  return providers;
+  return providers
 }
 
 // ============================================================================
 // Singleton Instance
 // ============================================================================
 
-let _llmProviderInstance: LLMProvider | null = null;
+let _llmProviderInstance: LLMProvider | null = null
 
 /**
  * Get the singleton LLM provider instance
  */
 export function getLLMProvider(config?: LLMFactoryConfig): LLMProvider {
   if (!_llmProviderInstance) {
-    _llmProviderInstance = createLLMProvider(config);
+    _llmProviderInstance = createLLMProvider(config)
   }
-  return _llmProviderInstance;
+  return _llmProviderInstance
 }
 
 /**
  * Reset the singleton instance (useful for testing)
  */
 export function resetLLMProvider(): void {
-  _llmProviderInstance = null;
+  _llmProviderInstance = null
 }
 
 /**
  * Set a custom LLM provider instance (useful for testing)
  */
 export function setLLMProvider(provider: LLMProvider): void {
-  _llmProviderInstance = provider;
+  _llmProviderInstance = provider
 }
 
 /**
@@ -290,6 +276,6 @@ export function setLLMProvider(provider: LLMProvider): void {
  */
 export const llmProvider = new Proxy({} as LLMProvider, {
   get(_, prop) {
-    return getLLMProvider()[prop as keyof LLMProvider];
+    return getLLMProvider()[prop as keyof LLMProvider]
   },
-});
+})

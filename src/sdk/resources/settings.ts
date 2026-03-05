@@ -3,14 +3,9 @@
  * Manages organization settings
  */
 
-import { APIResource } from './base.js';
-import { APIPromise } from '../http.js';
-import type {
-  RequestOptions,
-  SettingUpdateParams,
-  SettingUpdateResponse,
-  SettingGetResponse,
-} from '../types.js';
+import { APIResource } from './base.js'
+import { APIPromise } from '../http.js'
+import type { RequestOptions, SettingUpdateParams, SettingUpdateResponse, SettingGetResponse } from '../types.js'
 
 export class Settings extends APIResource {
   /**
@@ -22,7 +17,7 @@ export class Settings extends APIResource {
   get(options?: RequestOptions): APIPromise<SettingGetResponse> {
     return this.client.get<SettingGetResponse>('/v3/settings', {
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -36,6 +31,6 @@ export class Settings extends APIResource {
     return this._patch<SettingUpdateResponse>('/v3/settings', {
       body,
       requestOptions: options,
-    });
+    })
   }
 }

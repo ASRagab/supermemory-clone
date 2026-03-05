@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "supermemory": {
+      "command": "node",
+      "args": ["dist/mcp/index.js"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL:-postgresql://supermemory:supermemory_secret@localhost:15432/supermemory}",
+        "REDIS_URL": "${REDIS_URL}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+        "LOG_LEVEL": "${LOG_LEVEL:-info}"
+      }
+    }
+  }
+}

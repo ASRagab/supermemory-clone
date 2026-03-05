@@ -70,7 +70,7 @@ CREATE OR REPLACE FUNCTION validate_hnsw_performance(
     result_limit INTEGER DEFAULT 10
 )
 RETURNS TABLE (
-    id UUID,
+    memory_id UUID,
     similarity FLOAT,
     execution_time_ms NUMERIC
 ) AS $$
@@ -82,7 +82,7 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        me.id,
+        me.memory_id,
         1 - (me.embedding <=> query_embedding) AS similarity,
         EXTRACT(MILLISECONDS FROM (clock_timestamp() - start_time)) AS execution_time_ms
     FROM memory_embeddings me

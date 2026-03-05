@@ -16,43 +16,43 @@
  * - Update processing_queue table status
  */
 
-import { Worker, Job, Queue } from 'bullmq';
-import type { ConnectionOptions } from 'bullmq';
+import { Worker, Job, Queue } from 'bullmq'
+import type { ConnectionOptions } from 'bullmq'
 import {
   TextExtractor,
   UrlExtractor,
   PdfExtractor,
   MarkdownExtractor,
   CodeExtractor,
-} from '../services/extractors/index.js';
-import type { ContentType, ExtractionResult } from '../types/document.types.js';
-import { documents, processingQueue } from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
-import { workerDb as db } from '../db/worker-connection.js';
-import { getLogger } from '../utils/logger.js';
-import { NotFoundError, ErrorCode } from '../utils/errors.js';
+} from '../services/extractors/index.js'
+import type { ContentType, ExtractionResult } from '../types/document.types.js'
+import { documents, processingQueue } from '../db/schema/index.js'
+import { eq } from 'drizzle-orm'
+import { workerDb as db } from '../db/worker-connection.js'
+import { getLogger } from '../utils/logger.js'
+import { NotFoundError, ErrorCode } from '../utils/errors.js'
 
-const logger = getLogger('ExtractionWorker');
+const logger = getLogger('ExtractionWorker')
 
 // Shared queue instance for chaining (prevents connection leak)
-let sharedChunkingQueue: Queue | null = null;
+let sharedChunkingQueue: Queue | null = null
 
 // Job data interface
 export interface ExtractionJobData {
-  documentId: string;
-  sourceUrl?: string;
-  sourceType?: 'text' | 'url' | 'file';
-  filePath?: string;
-  containerTag: string;
+  documentId: string
+  sourceUrl?: string
+  sourceType?: 'text' | 'url' | 'file'
+  filePath?: string
+  containerTag: string
 }
 
 // Job result interface
 export interface ExtractionJobResult {
-  documentId: string;
-  extractedContent: string;
-  contentType: ContentType;
-  metadata: Record<string, unknown>;
-  processingTimeMs: number;
+  documentId: string
+  extractedContent: string
+  contentType: ContentType
+  metadata: Record<string, unknown>
+  processingTimeMs: number
 }
 
 // Extractor instances (singleton pattern)
@@ -62,7 +62,7 @@ const extractors = {
   pdf: new PdfExtractor(),
   markdown: new MarkdownExtractor(),
   code: new CodeExtractor(),
-};
+}
 
 /**
  * Convert content type to MIME type for database storage
@@ -75,41 +75,37 @@ function contentTypeToMimeType(contentType: ContentType): string {
     markdown: 'text/markdown',
     code: 'text/plain',
     unknown: 'application/octet-stream',
-  };
-  return mimeTypeMap[contentType] || 'text/plain';
+  }
+  return mimeTypeMap[contentType] || 'text/plain'
 }
 
 /**
  * Detect content type from content string, URL, or file path
  */
-function detectContentType(
-  content: string,
-  sourceType?: string,
-  filePath?: string
-): ContentType {
+function detectContentType(content: string, sourceType?: string, filePath?: string): ContentType {
   // Explicit source type
   if (sourceType === 'url' && extractors.url.canHandle(content)) {
-    return 'url';
+    return 'url'
   }
 
   // File type detection from path
   if (sourceType === 'file' && filePath) {
-    const ext = filePath.toLowerCase().split('.').pop();
-    if (ext === 'pdf') return 'pdf';
-    if (ext === 'md' || ext === 'markdown') return 'markdown';
+    const ext = filePath.toLowerCase().split('.').pop()
+    if (ext === 'pdf') return 'pdf'
+    if (ext === 'md' || ext === 'markdown') return 'markdown'
     if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'go', 'rs'].includes(ext ?? '')) {
-      return 'code';
+      return 'code'
     }
   }
 
   // Content-based detection
   if (extractors.url.canHandle(content)) {
-    return 'url';
+    return 'url'
   }
 
   // Check for markdown patterns
   if (content.includes('```') || /^#{1,6}\s/.test(content) || content.includes('[](')) {
-    return 'markdown';
+    return 'markdown'
   }
 
   // Check for code patterns
@@ -121,11 +117,11 @@ function detectContentType(
     content.includes('def ') ||
     content.includes('public class ')
   ) {
-    return 'code';
+    return 'code'
   }
 
   // Default to text
-  return 'text';
+  return 'text'
 }
 
 /**
@@ -138,31 +134,29 @@ async function extractContent(
 ): Promise<ExtractionResult> {
   switch (contentType) {
     case 'url':
-      return extractors.url.extract(content, options);
+      return extractors.url.extract(content, options)
     case 'pdf':
-      return extractors.pdf.extract(content, options);
+      return extractors.pdf.extract(content, options)
     case 'markdown':
-      return extractors.markdown.extract(content, options);
+      return extractors.markdown.extract(content, options)
     case 'code':
-      return extractors.code.extract(content, options);
+      return extractors.code.extract(content, options)
     case 'text':
     default:
-      return extractors.text.extract(content, options);
+      return extractors.text.extract(content, options)
   }
 }
 
 /**
  * Job processor function
  */
-export async function processExtractionJob(
-  job: Job<ExtractionJobData>
-): Promise<ExtractionJobResult> {
-  const startTime = Date.now();
-  const { documentId, sourceUrl, sourceType, filePath, containerTag } = job.data;
+export async function processExtractionJob(job: Job<ExtractionJobData>): Promise<ExtractionJobResult> {
+  const startTime = Date.now()
+  const { documentId, sourceUrl, sourceType, filePath, containerTag } = job.data
 
   try {
     // Update progress: 0% - Job received
-    await job.updateProgress(0);
+    await job.updateProgress(0)
     await db
       .update(processingQueue)
       .set({
@@ -170,40 +164,32 @@ export async function processExtractionJob(
         startedAt: new Date(),
         workerId: job.id,
       })
-      .where(eq(processingQueue.documentId, documentId));
+      .where(eq(processingQueue.documentId, documentId))
 
     // Fetch document from database
-    const [doc] = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1);
+    const [doc] = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
 
     if (!doc) {
-      throw new NotFoundError('Document', documentId, ErrorCode.DOCUMENT_NOT_FOUND);
+      throw new NotFoundError('Document', documentId, ErrorCode.DOCUMENT_NOT_FOUND)
     }
 
     // Detect content type
-    const contentType = detectContentType(
-      sourceUrl || doc.content,
-      sourceType,
-      filePath
-    );
+    const contentType = detectContentType(sourceUrl || doc.content, sourceType, filePath)
 
     // Update progress: 25% - Content type detected
-    await job.updateProgress(25);
+    await job.updateProgress(25)
 
     // Extract content using appropriate extractor
     const extractionOptions = {
       metadata: doc.metadata || {},
       sourceUrl,
       filePath,
-    };
+    }
 
-    const extractionResult = await extractContent(
-      sourceUrl || doc.content,
-      contentType,
-      extractionOptions
-    );
+    const extractionResult = await extractContent(sourceUrl || doc.content, contentType, extractionOptions)
 
     // Update progress: 50% - Content extracted
-    await job.updateProgress(50);
+    await job.updateProgress(50)
 
     // Save extracted content to database
     await db
@@ -215,10 +201,10 @@ export async function processExtractionJob(
         status: 'processing',
         updatedAt: new Date(),
       })
-      .where(eq(documents.id, documentId));
+      .where(eq(documents.id, documentId))
 
     // Update progress: 75% - Saved to database
-    await job.updateProgress(75);
+    await job.updateProgress(75)
 
     // Chain to chunking queue (using shared instance to prevent connection leak)
     if (!sharedChunkingQueue) {
@@ -226,8 +212,8 @@ export async function processExtractionJob(
       const connection = {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      };
-      sharedChunkingQueue = new Queue('chunking', { connection });
+      }
+      sharedChunkingQueue = new Queue('chunking', { connection })
     }
 
     await sharedChunkingQueue.add(
@@ -243,10 +229,10 @@ export async function processExtractionJob(
         removeOnComplete: true,
         removeOnFail: false,
       }
-    );
+    )
 
     // Update progress: 90% - Chained to chunking
-    await job.updateProgress(90);
+    await job.updateProgress(90)
 
     // Mark processing queue job as completed
     await db
@@ -255,12 +241,12 @@ export async function processExtractionJob(
         status: 'completed',
         completedAt: new Date(),
       })
-      .where(eq(processingQueue.documentId, documentId));
+      .where(eq(processingQueue.documentId, documentId))
 
     // Update progress: 100% - Complete
-    await job.updateProgress(100);
+    await job.updateProgress(100)
 
-    const processingTimeMs = Date.now() - startTime;
+    const processingTimeMs = Date.now() - startTime
 
     return {
       documentId,
@@ -268,11 +254,11 @@ export async function processExtractionJob(
       contentType,
       metadata: extractionResult.metadata,
       processingTimeMs,
-    };
+    }
   } catch (error) {
     // Update processing queue with error
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const attemptNumber = job.attemptsMade + 1;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const attemptNumber = job.attemptsMade + 1
 
     await db
       .update(processingQueue)
@@ -282,7 +268,7 @@ export async function processExtractionJob(
         errorCode: 'EXTRACTION_FAILED',
         attempts: attemptNumber,
       })
-      .where(eq(processingQueue.documentId, documentId));
+      .where(eq(processingQueue.documentId, documentId))
 
     // Update document status
     await db
@@ -291,9 +277,9 @@ export async function processExtractionJob(
         status: 'failed',
         updatedAt: new Date(),
       })
-      .where(eq(documents.id, documentId));
+      .where(eq(documents.id, documentId))
 
-    throw error;
+    throw error
   }
 }
 
@@ -303,46 +289,42 @@ export async function processExtractionJob(
 export function createExtractionWorker(connection: ConnectionOptions): Worker<ExtractionJobData, ExtractionJobResult> {
   // Initialize shared chunking queue to prevent connection leak
   if (!sharedChunkingQueue) {
-    sharedChunkingQueue = new Queue('chunking', { connection });
+    sharedChunkingQueue = new Queue('chunking', { connection })
   }
 
-  const worker = new Worker<ExtractionJobData, ExtractionJobResult>(
-    'extraction',
-    processExtractionJob,
-    {
-      connection,
-      concurrency: parseInt(process.env.BULLMQ_CONCURRENCY_EXTRACTION || '5', 10),
-      removeOnComplete: { count: 100 },
-      removeOnFail: { count: 500 },
-      limiter: {
-        max: 10,
-        duration: 1000,
-      },
-    }
-  );
+  const worker = new Worker<ExtractionJobData, ExtractionJobResult>('extraction', processExtractionJob, {
+    connection,
+    concurrency: parseInt(process.env.BULLMQ_CONCURRENCY_EXTRACTION || '5', 10),
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 500 },
+    limiter: {
+      max: 10,
+      duration: 1000,
+    },
+  })
 
   // Worker event handlers
   worker.on('completed', (job: Job<ExtractionJobData, ExtractionJobResult>) => {
-    logger.info('Job completed', { jobId: job.id, documentId: job.data.documentId });
-  });
+    logger.info('Job completed', { jobId: job.id, documentId: job.data.documentId })
+  })
 
   worker.on('failed', (job: Job<ExtractionJobData> | undefined, err: Error) => {
     if (job) {
-      logger.error('Job failed', { jobId: job.id, documentId: job.data.documentId, error: err.message });
+      logger.error('Job failed', { jobId: job.id, documentId: job.data.documentId, error: err.message })
     } else {
-      logger.error('Job failed', { error: err.message });
+      logger.error('Job failed', { error: err.message })
     }
-  });
+  })
 
   worker.on('error', (err: Error) => {
-    logger.error('Worker error', { error: err.message });
-  });
+    logger.error('Worker error', { error: err.message })
+  })
 
   worker.on('active', (job: Job<ExtractionJobData>) => {
-    logger.info('Processing job', { jobId: job.id, documentId: job.data.documentId });
-  });
+    logger.info('Processing job', { jobId: job.id, documentId: job.data.documentId })
+  })
 
-  return worker;
+  return worker
 }
 
 /**
@@ -360,5 +342,5 @@ export function createExtractionQueue(connection: ConnectionOptions): Queue<Extr
       removeOnComplete: true,
       removeOnFail: false,
     },
-  });
+  })
 }

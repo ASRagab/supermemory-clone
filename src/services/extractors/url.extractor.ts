@@ -2,42 +2,39 @@
  * URL extractor - fetches and cleans web page content
  */
 
-import { ExtractionResult, ExtractorInterface, ContentType } from '../../types/document.types.js';
-import { ExternalServiceError } from '../../utils/errors.js';
+import { ExtractionResult, ExtractorInterface, ContentType } from '../../types/document.types.js'
+import { ExternalServiceError } from '../../utils/errors.js'
 
 interface FetchOptions {
-  timeout?: number;
-  userAgent?: string;
-  followRedirects?: boolean;
+  timeout?: number
+  userAgent?: string
+  followRedirects?: boolean
 }
 
 export class UrlExtractor implements ExtractorInterface {
-  private readonly defaultTimeout = 30000;
-  private readonly defaultUserAgent = 'Mozilla/5.0 (compatible; SupermemoryBot/1.0)';
+  private readonly defaultTimeout = 30000
+  private readonly defaultUserAgent = 'Mozilla/5.0 (compatible; SupermemoryBot/1.0)'
 
   /**
    * Check if content is a valid URL
    */
   canHandle(content: string): boolean {
     try {
-      const trimmed = content.trim();
-      const url = new URL(trimmed);
-      return url.protocol === 'http:' || url.protocol === 'https:';
+      const trimmed = content.trim()
+      const url = new URL(trimmed)
+      return url.protocol === 'http:' || url.protocol === 'https:'
     } catch {
-      return false;
+      return false
     }
   }
 
   /**
    * Fetch URL and extract clean content
    */
-  async extract(
-    url: string,
-    options?: FetchOptions & Record<string, unknown>
-  ): Promise<ExtractionResult> {
-    const trimmedUrl = url.trim();
-    const html = await this.fetchUrl(trimmedUrl, options);
-    const { content, metadata } = this.parseHtml(html, trimmedUrl);
+  async extract(url: string, options?: FetchOptions & Record<string, unknown>): Promise<ExtractionResult> {
+    const trimmedUrl = url.trim()
+    const html = await this.fetchUrl(trimmedUrl, options)
+    const { content, metadata } = this.parseHtml(html, trimmedUrl)
 
     return {
       content,
@@ -48,16 +45,16 @@ export class UrlExtractor implements ExtractorInterface {
         source: 'web',
       },
       rawContent: html,
-    };
+    }
   }
 
   /**
    * Fetch URL content
    */
   private async fetchUrl(url: string, options?: FetchOptions): Promise<string> {
-    const timeout = options?.timeout ?? this.defaultTimeout;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeout = options?.timeout ?? this.defaultTimeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
 
     try {
       const response = await fetch(url, {
@@ -68,56 +65,50 @@ export class UrlExtractor implements ExtractorInterface {
         },
         redirect: options?.followRedirects !== false ? 'follow' : 'manual',
         signal: controller.signal,
-      });
+      })
 
       if (!response.ok) {
-        throw new ExternalServiceError(
-          'HTTP',
-          `HTTP ${response.status}: ${response.statusText}`,
-          response.status,
-          { url }
-        );
+        throw new ExternalServiceError('HTTP', `HTTP ${response.status}: ${response.statusText}`, response.status, {
+          url,
+        })
       }
 
-      return await response.text();
+      return await response.text()
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(timeoutId)
     }
   }
 
   /**
    * Parse HTML and extract clean text content
    */
-  private parseHtml(
-    html: string,
-    url: string
-  ): { content: string; metadata: ExtractionResult['metadata'] } {
+  private parseHtml(html: string, url: string): { content: string; metadata: ExtractionResult['metadata'] } {
     // Extract title
-    const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-    const title = titleMatch?.[1] ? this.decodeHtmlEntities(titleMatch[1].trim()) : undefined;
+    const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i)
+    const title = titleMatch?.[1] ? this.decodeHtmlEntities(titleMatch[1].trim()) : undefined
 
     // Extract meta description (handle both attribute orders)
     const descMatch =
       html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i) ??
-      html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/i);
-    const description = descMatch?.[1] ? this.decodeHtmlEntities(descMatch[1].trim()) : undefined;
+      html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/i)
+    const description = descMatch?.[1] ? this.decodeHtmlEntities(descMatch[1].trim()) : undefined
 
     // Extract author (handle both attribute orders)
     const authorMatch =
       html.match(/<meta[^>]*name=["']author["'][^>]*content=["']([^"']*)["']/i) ??
-      html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']author["']/i);
-    const author = authorMatch?.[1] ? this.decodeHtmlEntities(authorMatch[1].trim()) : undefined;
+      html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']author["']/i)
+    const author = authorMatch?.[1] ? this.decodeHtmlEntities(authorMatch[1].trim()) : undefined
 
     // Extract og:tags for additional metadata
-    const ogTags = this.extractOpenGraphTags(html);
+    const ogTags = this.extractOpenGraphTags(html)
 
     // Clean HTML to get text content
-    const content = this.htmlToText(html);
-    const words = content.split(/\s+/).filter((w) => w.length > 0);
+    const content = this.htmlToText(html)
+    const words = content.split(/\s+/).filter((w) => w.length > 0)
 
-    let domain: string | undefined;
+    let domain: string | undefined
     try {
-      domain = new URL(url).hostname;
+      domain = new URL(url).hostname
     } catch {
       // URL parsing failed, leave domain undefined
     }
@@ -135,57 +126,57 @@ export class UrlExtractor implements ExtractorInterface {
         ogType: ogTags['type'],
         domain,
       },
-    };
+    }
   }
 
   /**
    * Extract OpenGraph meta tags
    */
   private extractOpenGraphTags(html: string): Record<string, string | undefined> {
-    const tags: Record<string, string | undefined> = {};
-    const ogPattern = /<meta[^>]*property=["']og:([^"']*)["'][^>]*content=["']([^"']*)["']/gi;
-    let match: RegExpExecArray | null;
+    const tags: Record<string, string | undefined> = {}
+    const ogPattern = /<meta[^>]*property=["']og:([^"']*)["'][^>]*content=["']([^"']*)["']/gi
+    let match: RegExpExecArray | null
 
     while ((match = ogPattern.exec(html)) !== null) {
-      const key = match[1];
-      const value = match[2];
+      const key = match[1]
+      const value = match[2]
       if (key && value) {
-        tags[key] = this.decodeHtmlEntities(value);
+        tags[key] = this.decodeHtmlEntities(value)
       }
     }
 
-    return tags;
+    return tags
   }
 
   /**
    * Convert HTML to clean text
    */
   private htmlToText(html: string): string {
-    let text = html;
+    let text = html
 
     // Remove script and style content
-    text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    text = text.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '');
+    text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    text = text.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
 
     // Remove comments
-    text = text.replace(/<!--[\s\S]*?-->/g, '');
+    text = text.replace(/<!--[\s\S]*?-->/g, '')
 
     // Remove header, footer, nav, aside (common non-content areas)
-    text = text.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '');
-    text = text.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
-    text = text.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
-    text = text.replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '');
+    text = text.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+    text = text.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+    text = text.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+    text = text.replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
 
     // Convert block elements to newlines
-    text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|hr)[^>]*>/gi, '\n');
-    text = text.replace(/<(br|hr)[^>]*\/?>/gi, '\n');
+    text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|hr)[^>]*>/gi, '\n')
+    text = text.replace(/<(br|hr)[^>]*\/?>/gi, '\n')
 
     // Remove all remaining HTML tags
-    text = text.replace(/<[^>]+>/g, ' ');
+    text = text.replace(/<[^>]+>/g, ' ')
 
     // Decode HTML entities
-    text = this.decodeHtmlEntities(text);
+    text = this.decodeHtmlEntities(text)
 
     // Clean up whitespace
     text = text
@@ -193,9 +184,9 @@ export class UrlExtractor implements ExtractorInterface {
       .replace(/\n[ \t]+/g, '\n')
       .replace(/[ \t]+\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
-      .trim();
+      .trim()
 
-    return text;
+    return text
   }
 
   /**
@@ -216,22 +207,18 @@ export class UrlExtractor implements ExtractorInterface {
       '&copy;': '(c)',
       '&reg;': '(R)',
       '&trade;': '(TM)',
-    };
+    }
 
-    let result = text;
+    let result = text
     for (const [entity, char] of Object.entries(entities)) {
-      result = result.replace(new RegExp(entity, 'gi'), char);
+      result = result.replace(new RegExp(entity, 'gi'), char)
     }
 
     // Handle numeric entities
-    result = result.replace(/&#(\d+);/g, (_, code: string) =>
-      String.fromCharCode(parseInt(code, 10))
-    );
-    result = result.replace(/&#x([a-fA-F0-9]+);/g, (_, code: string) =>
-      String.fromCharCode(parseInt(code, 16))
-    );
+    result = result.replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
+    result = result.replace(/&#x([a-fA-F0-9]+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 16)))
 
-    return result;
+    return result
   }
 
   /**
@@ -239,18 +226,18 @@ export class UrlExtractor implements ExtractorInterface {
    */
   async isAccessible(url: string): Promise<boolean> {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
 
       const response = await fetch(url, {
         method: 'HEAD',
         signal: controller.signal,
-      });
+      })
 
-      clearTimeout(timeoutId);
-      return response.ok;
+      clearTimeout(timeoutId)
+      return response.ok
     } catch {
-      return false;
+      return false
     }
   }
 }

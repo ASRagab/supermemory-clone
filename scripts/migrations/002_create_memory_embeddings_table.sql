@@ -1,3 +1,8 @@
+-- SUPERSEDED: This migration is superseded by the Drizzle ORM migration
+-- (drizzle/0000_dapper_the_professor.sql). The canonical memory_embeddings
+-- schema uses memory_id as the sole primary key and has no id, chunk_id,
+-- dimensions, or updated_at columns. Do NOT run this migration.
+--
 -- Migration: 002_create_memory_embeddings_table.sql
 -- Description: Create memory_embeddings table with vector support
 -- Dependencies: 001_create_pgvector_extension.sql

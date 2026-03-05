@@ -11,18 +11,13 @@
  * No in-memory caching is done here to avoid storage inconsistency.
  */
 
-import type {
-  MemoryType,
-  MemoryRelationship,
-  RelationshipType,
-  Entity,
-} from '../types/index.js';
-import { generateId } from '../utils/id.js';
-import { getLogger } from '../utils/logger.js';
-import { AppError, ValidationError, ErrorCode } from '../utils/errors.js';
-import { validate, validateMemoryContent, containerTagSchema } from '../utils/validation.js';
-import { isEmbeddingRelationshipsEnabled } from '../config/feature-flags.js';
-import { getEmbeddingService, type EmbeddingService } from './embedding.service.js';
+import type { MemoryType, MemoryRelationship, RelationshipType, Entity } from '../types/index.js'
+import { generateId } from '../utils/id.js'
+import { getLogger } from '../utils/logger.js'
+import { AppError, ValidationError, ErrorCode } from '../utils/errors.js'
+import { validate, validateMemoryContent, containerTagSchema } from '../utils/validation.js'
+import { isEmbeddingRelationshipsEnabled } from '../config/feature-flags.js'
+import { getEmbeddingService, type EmbeddingService } from './embedding.service.js'
 import {
   Memory,
   Relationship,
@@ -30,8 +25,8 @@ import {
   ExtensionCheckResult,
   MemoryServiceConfig,
   DEFAULT_MEMORY_CONFIG,
-} from './memory.types.js';
-import { type MemoryRepository, getMemoryRepository } from './memory.repository.js';
+} from './memory.types.js'
+import { type MemoryRepository, getMemoryRepository } from './memory.repository.js'
 import {
   getLLMProvider,
   isLLMAvailable,
@@ -42,11 +37,11 @@ import {
   getMemoryClassifier,
   getContradictionDetector,
   getMemoryExtensionDetector,
-} from './llm/index.js';
-import { classifyMemoryTypeHeuristically, countMemoryTypeMatches } from './llm/heuristics.js';
-import { detectRelationshipsWithEmbeddings } from './relationships/detector.js';
+} from './llm/index.js'
+import { classifyMemoryTypeHeuristically, countMemoryTypeMatches } from './llm/heuristics.js'
+import { detectRelationshipsWithEmbeddings } from './relationships/detector.js'
 
-const logger = getLogger('MemoryService');
+const logger = getLogger('MemoryService')
 
 // ============================================================================
 // Relationship Detection Patterns
@@ -65,7 +60,7 @@ const UPDATE_INDICATOR_PATTERNS: readonly RegExp[] = [
   /\b(?:now|actually|instead)\b/i,
   /** Matches revision verbs: changed, revised, modified */
   /\b(?:changed|revised|modified)\b/i,
-] as const;
+] as const
 
 /**
  * Patterns indicating a memory extends or adds to previous information.
@@ -80,7 +75,7 @@ const EXTENSION_INDICATOR_PATTERNS: readonly RegExp[] = [
   /\b(?:in addition|on top of|besides)\b/i,
   /** Matches building phrases: extending, building on, adding to */
   /\b(?:extending|building on|adding to)\b/i,
-] as const;
+] as const
 
 /**
  * Patterns indicating a memory is derived from or caused by another.
@@ -95,7 +90,7 @@ const DERIVATION_INDICATOR_PATTERNS: readonly RegExp[] = [
   /\b(?:because|since|as a result)\b/i,
   /** Matches derivation phrases: based on, derived from, follows from */
   /\b(?:based on|derived from|follows from)\b/i,
-] as const;
+] as const
 
 /**
  * Patterns indicating a memory contradicts previous information.
@@ -110,7 +105,7 @@ const CONTRADICTION_INDICATOR_PATTERNS: readonly RegExp[] = [
   /\b(?:contrary|opposite|different)\b/i,
   /** Matches negation phrases: not true, incorrect, wrong */
   /\b(?:not true|incorrect|wrong)\b/i,
-] as const;
+] as const
 
 /**
  * Patterns indicating a memory is semantically related to another.
@@ -125,7 +120,7 @@ const RELATION_INDICATOR_PATTERNS: readonly RegExp[] = [
   /\b(?:connected|linked|associated)\b/i,
   /** Matches reference phrases: see also, refer to, compare */
   /\b(?:see also|refer to|compare)\b/i,
-] as const;
+] as const
 
 /**
  * Patterns indicating a memory supersedes or replaces previous information.
@@ -140,7 +135,7 @@ const SUPERSESSION_INDICATOR_PATTERNS: readonly RegExp[] = [
   /\b(?:no longer|obsolete|deprecated)\b/i,
   /** Matches recency phrases: new version, latest, current */
   /\b(?:new version|latest|current)\b/i,
-] as const;
+] as const
 
 /**
  * Combined relationship indicator patterns for relationship detection.
@@ -153,7 +148,7 @@ const RELATIONSHIP_INDICATORS: Record<RelationshipType, readonly RegExp[]> = {
   contradicts: CONTRADICTION_INDICATOR_PATTERNS,
   related: RELATION_INDICATOR_PATTERNS,
   supersedes: SUPERSESSION_INDICATOR_PATTERNS,
-};
+}
 
 // ============================================================================
 // Entity Extraction Patterns
@@ -170,7 +165,7 @@ const PERSON_ENTITY_PATTERNS: readonly RegExp[] = [
   /\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/g,
   /** Matches two consecutive capitalized words (First Last name pattern) */
   /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/g,
-] as const;
+] as const
 
 /**
  * Patterns for extracting place/location names from text.
@@ -183,7 +178,7 @@ const PLACE_ENTITY_PATTERNS: readonly RegExp[] = [
   /\b(?:in|at|from|to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/gi,
   /** Matches known major cities (extensible list) */
   /\b(?:New York|Los Angeles|San Francisco|London|Paris|Tokyo|Berlin)\b/gi,
-] as const;
+] as const
 
 /**
  * Patterns for extracting organization names from text.
@@ -196,7 +191,7 @@ const ORGANIZATION_ENTITY_PATTERNS: readonly RegExp[] = [
   /\b(?:Inc\.|Corp\.|LLC|Ltd\.|Company|Organization)\b/gi,
   /** Matches known major tech companies (extensible list) */
   /\b(?:Google|Microsoft|Apple|Amazon|Meta|OpenAI)\b/gi,
-] as const;
+] as const
 
 /**
  * Patterns for extracting dates from text.
@@ -209,7 +204,7 @@ const DATE_ENTITY_PATTERNS: readonly RegExp[] = [
   /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g,
   /** Matches month name formats: January 15, 2024 or January 15 */
   /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s+\d{4})?\b/gi,
-] as const;
+] as const
 
 /**
  * Combined entity extraction patterns.
@@ -220,54 +215,54 @@ const ENTITY_PATTERNS: Record<string, readonly RegExp[]> = {
   place: PLACE_ENTITY_PATTERNS,
   organization: ORGANIZATION_ENTITY_PATTERNS,
   date: DATE_ENTITY_PATTERNS,
-};
+}
 
 // ============================================================================
 // Memory Service
 // ============================================================================
 
 export class MemoryService {
-  private repository: MemoryRepository;
-  private config: MemoryServiceConfig;
-  private llmProvider: LLMProvider | null = null;
-  private useLLM: boolean;
-  private useEmbeddingRelationships: boolean;
-  private embeddingService: EmbeddingService | null = null;
+  private repository: MemoryRepository
+  private config: MemoryServiceConfig
+  private llmProvider: LLMProvider | null = null
+  private useLLM: boolean
+  private useEmbeddingRelationships: boolean
+  private embeddingService: EmbeddingService | null = null
   // Note: Removed redundant `this.memories` Map to avoid dual storage inconsistency.
   // All storage operations now go through the repository only.
 
   constructor(config: Partial<MemoryServiceConfig> = {}, repository?: MemoryRepository) {
-    this.config = { ...DEFAULT_MEMORY_CONFIG, ...config };
-    this.repository = repository ?? getMemoryRepository();
+    this.config = { ...DEFAULT_MEMORY_CONFIG, ...config }
+    this.repository = repository ?? getMemoryRepository()
 
     // Initialize LLM provider if available
-    this.useLLM = isLLMAvailable();
+    this.useLLM = isLLMAvailable()
     if (this.useLLM) {
       try {
-        this.llmProvider = getLLMProvider();
+        this.llmProvider = getLLMProvider()
         logger.info('LLM provider initialized for memory extraction', {
           provider: this.llmProvider.type,
-        });
+        })
       } catch (error) {
         logger.warn('Failed to initialize LLM provider, falling back to regex', {
           error: error instanceof Error ? error.message : String(error),
-        });
-        this.useLLM = false;
+        })
+        this.useLLM = false
       }
     } else {
-      logger.info('No LLM provider configured, using regex-based extraction');
+      logger.info('No LLM provider configured, using regex-based extraction')
     }
 
-    this.useEmbeddingRelationships = isEmbeddingRelationshipsEnabled();
+    this.useEmbeddingRelationships = isEmbeddingRelationshipsEnabled()
     if (this.useEmbeddingRelationships) {
-      this.embeddingService = getEmbeddingService();
+      this.embeddingService = getEmbeddingService()
     }
 
     logger.debug('MemoryService initialized', {
       config: this.config,
       useLLM: this.useLLM,
       useEmbeddings: this.useEmbeddingRelationships,
-    });
+    })
   }
 
   // ============================================================================
@@ -288,48 +283,46 @@ export class MemoryService {
   async extractMemories(
     content: string,
     options: {
-      containerTag?: string;
-      minConfidence?: number;
-      maxMemories?: number;
-      forceLLM?: boolean;
-      forceRegex?: boolean;
+      containerTag?: string
+      minConfidence?: number
+      maxMemories?: number
+      forceLLM?: boolean
+      forceRegex?: boolean
     } = {}
   ): Promise<Memory[]> {
     try {
-      validateMemoryContent(content);
+      validateMemoryContent(content)
       if (options.containerTag !== undefined) {
-        validate(containerTagSchema, options.containerTag);
+        validate(containerTagSchema, options.containerTag)
       }
       logger.debug('Extracting memories from content', {
         contentLength: content.length,
         useLLM: this.useLLM && !options.forceRegex,
-      });
+      })
 
       // Determine extraction method
-      const shouldUseLLM =
-        !options.forceRegex &&
-        (options.forceLLM || (this.useLLM && this.llmProvider?.isAvailable()));
+      const shouldUseLLM = !options.forceRegex && (options.forceLLM || (this.useLLM && this.llmProvider?.isAvailable()))
 
       if (shouldUseLLM && this.llmProvider) {
         try {
-          return await this.extractMemoriesWithLLM(content, options);
+          return await this.extractMemoriesWithLLM(content, options)
         } catch (error) {
           // Log and fallback to regex
           logger.warn('LLM extraction failed, falling back to regex', {
             error: error instanceof Error ? error.message : String(error),
             isRetryable: error instanceof LLMError ? error.retryable : false,
-          });
+          })
         }
       }
 
       // Fallback to regex-based extraction
-      return this.extractMemoriesWithRegex(content, options);
+      return this.extractMemoriesWithRegex(content, options)
     } catch (error) {
       if (error instanceof ValidationError) {
-        throw error;
+        throw error
       }
-      logger.errorWithException('Failed to extract memories', error);
-      throw AppError.from(error, ErrorCode.EXTRACTION_ERROR);
+      logger.errorWithException('Failed to extract memories', error)
+      throw AppError.from(error, ErrorCode.EXTRACTION_ERROR)
     }
   }
 
@@ -339,23 +332,23 @@ export class MemoryService {
   private async extractMemoriesWithLLM(
     content: string,
     options: {
-      containerTag?: string;
-      minConfidence?: number;
-      maxMemories?: number;
+      containerTag?: string
+      minConfidence?: number
+      maxMemories?: number
     }
   ): Promise<Memory[]> {
     if (!this.llmProvider) {
-      throw new AppError('LLM provider not available', ErrorCode.INTERNAL_ERROR);
+      throw new AppError('LLM provider not available', ErrorCode.INTERNAL_ERROR)
     }
 
-    const startTime = Date.now();
+    const startTime = Date.now()
     const result: LLMExtractionResult = await this.llmProvider.extractMemories(content, {
       containerTag: options.containerTag ?? this.config.defaultContainerTag,
       minConfidence: options.minConfidence ?? this.config.minConfidenceThreshold,
       maxMemories: options.maxMemories,
       extractEntities: true,
       extractKeywords: true,
-    });
+    })
 
     // Convert LLM results to Memory objects
     const memories: Memory[] = result.memories.map((extracted) => ({
@@ -379,7 +372,7 @@ export class MemoryService {
       },
       createdAt: new Date(),
       updatedAt: new Date(),
-    }));
+    }))
 
     logger.info('Memories extracted with LLM', {
       count: memories.length,
@@ -387,9 +380,9 @@ export class MemoryService {
       cached: result.cached,
       processingTimeMs: Date.now() - startTime,
       tokensUsed: result.tokensUsed?.total,
-    });
+    })
 
-    return memories;
+    return memories
   }
 
   /**
@@ -398,26 +391,26 @@ export class MemoryService {
   private extractMemoriesWithRegex(
     content: string,
     options: {
-      containerTag?: string;
-      minConfidence?: number;
-      maxMemories?: number;
+      containerTag?: string
+      minConfidence?: number
+      maxMemories?: number
     }
   ): Memory[] {
-    const sentences = this.splitIntoSentences(content);
-    const memories: Memory[] = [];
-    const maxMemories = options.maxMemories ?? 50;
-    const minConfidence = options.minConfidence ?? this.config.minConfidenceThreshold;
+    const sentences = this.splitIntoSentences(content)
+    const memories: Memory[] = []
+    const maxMemories = options.maxMemories ?? 50
+    const minConfidence = options.minConfidence ?? this.config.minConfidenceThreshold
 
     for (const sentence of sentences) {
-      if (memories.length >= maxMemories) break;
-      if (sentence.trim().length < 10) continue;
+      if (memories.length >= maxMemories) break
+      if (sentence.trim().length < 10) continue
 
-      const type = this.classifyMemoryType(sentence);
-      const entities = this.extractEntities(sentence);
-      const keywords = this.extractKeywords(sentence);
-      const confidence = this.calculateConfidence(sentence, type);
+      const type = this.classifyMemoryType(sentence)
+      const entities = this.extractEntities(sentence)
+      const keywords = this.extractKeywords(sentence)
+      const confidence = this.calculateConfidence(sentence, type)
 
-      if (confidence < minConfidence) continue;
+      if (confidence < minConfidence) continue
 
       const memory: Memory = {
         id: generateId(),
@@ -438,13 +431,13 @@ export class MemoryService {
         },
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      }
 
-      memories.push(memory);
+      memories.push(memory)
     }
 
-    logger.info('Memories extracted with regex', { count: memories.length });
-    return memories;
+    logger.info('Memories extracted with regex', { count: memories.length })
+    return memories
   }
 
   /**
@@ -462,34 +455,33 @@ export class MemoryService {
     newMemory: Memory,
     existingMemories: Memory[],
     options: {
-      minConfidence?: number;
-      maxRelationships?: number;
-      forceLLM?: boolean;
-      forceRegex?: boolean;
+      minConfidence?: number
+      maxRelationships?: number
+      forceLLM?: boolean
+      forceRegex?: boolean
     } = {}
   ): Promise<Relationship[]> {
     // Limit comparisons for performance
-    const memoriesToCompare = existingMemories.slice(0, this.config.maxRelationshipComparisons);
+    const memoriesToCompare = existingMemories.slice(0, this.config.maxRelationshipComparisons)
 
     if (memoriesToCompare.length === 0) {
-      return [];
+      return []
     }
 
-    const shouldUseLLM =
-      !options.forceRegex && (options.forceLLM || (this.useLLM && this.llmProvider?.isAvailable()));
+    const shouldUseLLM = !options.forceRegex && (options.forceLLM || (this.useLLM && this.llmProvider?.isAvailable()))
 
     if (shouldUseLLM && this.llmProvider) {
       try {
-        return await this.detectRelationshipsWithLLM(newMemory, memoriesToCompare, options);
+        return await this.detectRelationshipsWithLLM(newMemory, memoriesToCompare, options)
       } catch (error) {
         logger.warn('LLM relationship detection failed, falling back to patterns', {
           error: error instanceof Error ? error.message : String(error),
-        });
+        })
       }
     }
 
     // Fallback to pattern-based detection
-    return this.detectRelationships(newMemory, memoriesToCompare);
+    return this.detectRelationships(newMemory, memoriesToCompare)
   }
 
   /**
@@ -499,12 +491,12 @@ export class MemoryService {
     newMemory: Memory,
     existingMemories: Memory[],
     options: {
-      minConfidence?: number;
-      maxRelationships?: number;
+      minConfidence?: number
+      maxRelationships?: number
     }
   ): Promise<Relationship[]> {
     if (!this.llmProvider) {
-      throw new AppError('LLM provider not available', ErrorCode.INTERNAL_ERROR);
+      throw new AppError('LLM provider not available', ErrorCode.INTERNAL_ERROR)
     }
 
     const result: LLMRelationshipResult = await this.llmProvider.detectRelationships(
@@ -514,7 +506,7 @@ export class MemoryService {
         minConfidence: options.minConfidence ?? 0.5,
         maxRelationships: options.maxRelationships,
       }
-    );
+    )
 
     // Convert LLM results to Relationship objects
     const relationships: Relationship[] = result.relationships.map((rel) => ({
@@ -529,16 +521,16 @@ export class MemoryService {
         detectionMethod: 'llm',
         llmProvider: result.provider,
       },
-    }));
+    }))
 
     logger.info('Relationships detected with LLM', {
       count: relationships.length,
       supersededCount: result.supersededMemoryIds.length,
       provider: result.provider,
       processingTimeMs: result.processingTimeMs,
-    });
+    })
 
-    return relationships;
+    return relationships
   }
 
   /**
@@ -549,16 +541,16 @@ export class MemoryService {
    * @returns Relationship[] - Array of detected relationships
    */
   detectRelationships(newMemory: Memory, existingMemories: Memory[]): Relationship[] {
-    const relationships: Relationship[] = [];
+    const relationships: Relationship[] = []
 
     // Limit comparisons for performance
-    const memoriesToCompare = existingMemories.slice(0, this.config.maxRelationshipComparisons);
+    const memoriesToCompare = existingMemories.slice(0, this.config.maxRelationshipComparisons)
 
     for (const existing of memoriesToCompare) {
-      if (existing.id === newMemory.id) continue;
+      if (existing.id === newMemory.id) continue
 
       // Check for updates (new memory supersedes old)
-      const updateResult = this.checkForUpdates(newMemory, existing);
+      const updateResult = this.checkForUpdates(newMemory, existing)
       if (updateResult.isUpdate && updateResult.confidence >= 0.7) {
         relationships.push({
           id: generateId(),
@@ -569,12 +561,12 @@ export class MemoryService {
           description: updateResult.reason,
           createdAt: new Date(),
           metadata: { detectionMethod: 'pattern' },
-        });
-        continue;
+        })
+        continue
       }
 
       // Check for extensions (new memory adds to old)
-      const extensionResult = this.checkForExtensions(newMemory, existing);
+      const extensionResult = this.checkForExtensions(newMemory, existing)
       if (extensionResult.isExtension && extensionResult.confidence >= 0.6) {
         relationships.push({
           id: generateId(),
@@ -585,12 +577,12 @@ export class MemoryService {
           description: extensionResult.reason,
           createdAt: new Date(),
           metadata: { detectionMethod: 'pattern' },
-        });
-        continue;
+        })
+        continue
       }
 
       // Check for general semantic relationship
-      const similarity = this.calculateTextSimilarity(newMemory.content, existing.content);
+      const similarity = this.calculateTextSimilarity(newMemory.content, existing.content)
       if (similarity >= 0.5) {
         relationships.push({
           id: generateId(),
@@ -601,11 +593,11 @@ export class MemoryService {
           description: 'Semantically related content',
           createdAt: new Date(),
           metadata: { detectionMethod: 'pattern' },
-        });
+        })
       }
     }
 
-    return relationships;
+    return relationships
   }
 
   /**
@@ -618,31 +610,26 @@ export class MemoryService {
     containerTag?: string
   ): Promise<Relationship[]> {
     if (!this.useEmbeddingRelationships || !this.embeddingService) {
-      return this.detectRelationships(newMemory, existingMemories);
+      return this.detectRelationships(newMemory, existingMemories)
     }
 
     if (existingMemories.length === 0) {
-      return [];
+      return []
     }
 
     try {
-      const result = await detectRelationshipsWithEmbeddings(
-        newMemory,
-        existingMemories,
-        this.embeddingService,
-        {
-          containerTag,
-          config: {
-            maxCandidates: this.config.maxRelationshipComparisons,
-          },
-        }
-      );
-      return result.relationships.map((rel) => rel.relationship);
+      const result = await detectRelationshipsWithEmbeddings(newMemory, existingMemories, this.embeddingService, {
+        containerTag,
+        config: {
+          maxCandidates: this.config.maxRelationshipComparisons,
+        },
+      })
+      return result.relationships.map((rel) => rel.relationship)
     } catch (error) {
       logger.warn('Embedding relationship detection failed, falling back to patterns', {
         error: error instanceof Error ? error.message : String(error),
-      });
-      return this.detectRelationships(newMemory, existingMemories);
+      })
+      return this.detectRelationships(newMemory, existingMemories)
     }
   }
 
@@ -658,8 +645,8 @@ export class MemoryService {
     // Note: This is synchronous for backward compatibility.
     // For LLM async, call: await getMemoryClassifier().classify(content)
 
-    const heuristic = classifyMemoryTypeHeuristically(content);
-    return heuristic.type;
+    const heuristic = classifyMemoryTypeHeuristically(content)
+    return heuristic.type
   }
 
   /**
@@ -669,9 +656,9 @@ export class MemoryService {
    * @returns Promise with MemoryType
    */
   async classifyMemoryTypeAsync(content: string): Promise<MemoryType> {
-    const classifier = getMemoryClassifier();
-    const result = await classifier.classify(content);
-    return result.type;
+    const classifier = getMemoryClassifier()
+    const result = await classifier.classify(content)
+    return result.type
   }
 
   /**
@@ -684,51 +671,50 @@ export class MemoryService {
   checkForUpdates(newMemory: Memory, existing: Memory): UpdateCheckResult {
     // Use heuristic fallback for synchronous calls
     // For LLM-based detection, use checkForUpdatesAsync instead
-    const newLower = newMemory.content.toLowerCase();
-    const existingLower = existing.content.toLowerCase();
+    const newLower = newMemory.content.toLowerCase()
+    const existingLower = existing.content.toLowerCase()
 
-    const newWords = new Set(newLower.split(/\s+/).filter((w) => w.length > 3));
-    const existingWords = new Set(existingLower.split(/\s+/).filter((w) => w.length > 3));
+    const newWords = new Set(newLower.split(/\s+/).filter((w) => w.length > 3))
+    const existingWords = new Set(existingLower.split(/\s+/).filter((w) => w.length > 3))
 
-    const intersection = new Set([...newWords].filter((x) => existingWords.has(x)));
-    const overlapRatio = intersection.size / Math.min(newWords.size, existingWords.size) || 0;
+    const intersection = new Set([...newWords].filter((x) => existingWords.has(x)))
+    const overlapRatio = intersection.size / Math.min(newWords.size, existingWords.size) || 0
 
-    let hasUpdateIndicator = false;
+    let hasUpdateIndicator = false
     for (const pattern of RELATIONSHIP_INDICATORS.updates) {
       if (pattern.test(newLower)) {
-        hasUpdateIndicator = true;
-        break;
+        hasUpdateIndicator = true
+        break
       }
     }
 
-    let hasContradiction = false;
+    let hasContradiction = false
     for (const pattern of RELATIONSHIP_INDICATORS.contradicts) {
       if (pattern.test(newLower) && overlapRatio > 0.3) {
-        hasContradiction = true;
-        break;
+        hasContradiction = true
+        break
       }
     }
 
-    let hasSuperseding = false;
+    let hasSuperseding = false
     for (const pattern of RELATIONSHIP_INDICATORS.supersedes) {
       if (pattern.test(newLower) && overlapRatio > 0.4) {
-        hasSuperseding = true;
-        break;
+        hasSuperseding = true
+        break
       }
     }
 
-    const isUpdate =
-      (hasUpdateIndicator || hasContradiction || hasSuperseding) && overlapRatio > 0.3;
-    const confidence = isUpdate ? Math.min(0.9, overlapRatio + 0.3) : 0;
+    const isUpdate = (hasUpdateIndicator || hasContradiction || hasSuperseding) && overlapRatio > 0.3
+    const confidence = isUpdate ? Math.min(0.9, overlapRatio + 0.3) : 0
 
-    let reason = 'No update relationship detected';
+    let reason = 'No update relationship detected'
     if (isUpdate) {
       if (hasContradiction) {
-        reason = 'New memory contradicts existing information';
+        reason = 'New memory contradicts existing information'
       } else if (hasSuperseding) {
-        reason = 'New memory supersedes existing information';
+        reason = 'New memory supersedes existing information'
       } else {
-        reason = 'New memory updates existing information';
+        reason = 'New memory updates existing information'
       }
     }
 
@@ -737,7 +723,7 @@ export class MemoryService {
       existingMemory: isUpdate ? existing : undefined,
       confidence,
       reason,
-    };
+    }
   }
 
   /**
@@ -749,15 +735,15 @@ export class MemoryService {
    * @returns Promise with UpdateCheckResult
    */
   async checkForUpdatesAsync(newMemory: Memory, existing: Memory): Promise<UpdateCheckResult> {
-    const detector = getContradictionDetector();
-    const result = await detector.checkContradiction(newMemory, existing);
+    const detector = getContradictionDetector()
+    const result = await detector.checkContradiction(newMemory, existing)
 
     return {
       isUpdate: result.isContradiction,
       existingMemory: result.isContradiction ? existing : undefined,
       confidence: result.confidence,
       reason: result.reason,
-    };
+    }
   }
 
   /**
@@ -780,38 +766,35 @@ export class MemoryService {
     // Return JSON: { isExtension: boolean, confidence: 0-1, reason: string }
     // ```
 
-    const newLower = newMemory.content.toLowerCase();
-    const existingLower = existing.content.toLowerCase();
+    const newLower = newMemory.content.toLowerCase()
+    const existingLower = existing.content.toLowerCase()
 
     // Check for common subject matter
-    const newWords = newLower.split(/\s+/).filter((w) => w.length > 3);
-    const existingWords = new Set(existingLower.split(/\s+/).filter((w) => w.length > 3));
+    const newWords = newLower.split(/\s+/).filter((w) => w.length > 3)
+    const existingWords = new Set(existingLower.split(/\s+/).filter((w) => w.length > 3))
 
-    const commonWords = newWords.filter((w) => existingWords.has(w));
-    const overlapRatio = commonWords.length / Math.min(newWords.length, existingWords.size) || 0;
+    const commonWords = newWords.filter((w) => existingWords.has(w))
+    const overlapRatio = commonWords.length / Math.min(newWords.length, existingWords.size) || 0
 
     // New memory should be longer or contain additional information
-    const hasMoreDetail = newMemory.content.length > existing.content.length * 0.8;
+    const hasMoreDetail = newMemory.content.length > existing.content.length * 0.8
 
     // Extension indicators
-    let hasExtensionIndicator = false;
+    let hasExtensionIndicator = false
     for (const pattern of RELATIONSHIP_INDICATORS.extends) {
       if (pattern.test(newLower)) {
-        hasExtensionIndicator = true;
-        break;
+        hasExtensionIndicator = true
+        break
       }
     }
 
     // Check if new content is contained within old (not an extension)
-    const newContentInOld = existingLower.includes(newLower.slice(0, 20));
+    const newContentInOld = existingLower.includes(newLower.slice(0, 20))
 
     const isExtension =
-      overlapRatio > 0.2 &&
-      overlapRatio < 0.9 &&
-      !newContentInOld &&
-      (hasMoreDetail || hasExtensionIndicator);
+      overlapRatio > 0.2 && overlapRatio < 0.9 && !newContentInOld && (hasMoreDetail || hasExtensionIndicator)
 
-    const confidence = isExtension ? Math.min(0.85, overlapRatio + 0.2) : 0;
+    const confidence = isExtension ? Math.min(0.85, overlapRatio + 0.2) : 0
 
     return {
       isExtension,
@@ -820,7 +803,7 @@ export class MemoryService {
       reason: isExtension
         ? 'New memory adds additional detail to existing information'
         : 'No extension relationship detected',
-    };
+    }
   }
 
   /**
@@ -831,19 +814,16 @@ export class MemoryService {
    * @param existing - The existing memory to compare
    * @returns Promise with ExtensionCheckResult
    */
-  async checkForExtensionsAsync(
-    newMemory: Memory,
-    existing: Memory
-  ): Promise<ExtensionCheckResult> {
-    const detector = getMemoryExtensionDetector();
-    const result = await detector.checkExtension(newMemory, existing);
+  async checkForExtensionsAsync(newMemory: Memory, existing: Memory): Promise<ExtensionCheckResult> {
+    const detector = getMemoryExtensionDetector()
+    const result = await detector.checkExtension(newMemory, existing)
 
     return {
       isExtension: result.isExtension,
       existingMemory: result.isExtension ? existing : undefined,
       confidence: result.confidence,
       reason: result.reason,
-    };
+    }
   }
 
   // ============================================================================
@@ -858,154 +838,142 @@ export class MemoryService {
   async processAndStoreMemories(
     content: string,
     options: {
-      containerTag?: string;
-      sourceId?: string;
-      detectRelationships?: boolean;
+      containerTag?: string
+      sourceId?: string
+      detectRelationships?: boolean
     } = {}
   ): Promise<{
-    memories: Memory[];
-    relationships: Relationship[];
-    supersededMemoryIds: string[];
+    memories: Memory[]
+    relationships: Relationship[]
+    supersededMemoryIds: string[]
   }> {
-    const createdMemoryIds: string[] = [];
-    const relationshipIdsToRollback: string[] = [];
+    const createdMemoryIds: string[] = []
+    const relationshipIdsToRollback: string[] = []
     const supersedeSnapshots: Array<{
-      id: string;
-      isLatest: boolean;
-      supersededBy?: string;
-    }> = [];
+      id: string
+      isLatest: boolean
+      supersededBy?: string
+    }> = []
 
     const rollback = async (reason: unknown) => {
       logger.warn('Rolling back processAndStoreMemories due to failure', {
         error: reason instanceof Error ? reason.message : String(reason),
-      });
+      })
 
       for (const snapshot of supersedeSnapshots) {
         try {
-          const existing = await this.repository.findById(snapshot.id);
+          const existing = await this.repository.findById(snapshot.id)
           if (existing) {
             await this.repository.update(snapshot.id, {
               isLatest: snapshot.isLatest,
               supersededBy: snapshot.supersededBy,
-            });
+            })
           }
         } catch (error) {
           logger.warn('Failed to rollback superseded memory', {
             memoryId: snapshot.id,
             error: error instanceof Error ? error.message : String(error),
-          });
+          })
         }
       }
 
       for (const relId of relationshipIdsToRollback) {
         try {
-          await this.repository.deleteRelationship(relId);
+          await this.repository.deleteRelationship(relId)
         } catch (error) {
           logger.warn('Failed to rollback relationship', {
             relationshipId: relId,
             error: error instanceof Error ? error.message : String(error),
-          });
+          })
         }
       }
 
       for (const memoryId of createdMemoryIds) {
         try {
-          await this.repository.delete(memoryId);
+          await this.repository.delete(memoryId)
         } catch (error) {
           logger.warn('Failed to rollback memory', {
             memoryId,
             error: error instanceof Error ? error.message : String(error),
-          });
+          })
         }
       }
-    };
+    }
 
     try {
       // Only use default containerTag if not explicitly provided (including undefined)
-      const containerTag =
-        'containerTag' in options ? options.containerTag : this.config.defaultContainerTag;
+      const containerTag = 'containerTag' in options ? options.containerTag : this.config.defaultContainerTag
 
       if (containerTag) {
-        validate(containerTagSchema, containerTag);
+        validate(containerTagSchema, containerTag)
       }
 
-      const shouldDetectRelationships =
-        options.detectRelationships ?? this.config.autoDetectRelationships;
+      const shouldDetectRelationships = options.detectRelationships ?? this.config.autoDetectRelationships
 
       logger.debug('Processing and storing memories', {
         containerTag,
         detectRelationships: shouldDetectRelationships,
-      });
+      })
 
       // Extract memories from content
-      const extractedMemories = await this.extractMemories(content);
+      const extractedMemories = await this.extractMemories(content)
 
       // Update container tags and source info
       for (const memory of extractedMemories) {
-        memory.containerTag = containerTag;
+        memory.containerTag = containerTag
         if (options.sourceId) {
-          memory.sourceId = options.sourceId;
+          memory.sourceId = options.sourceId
         }
       }
 
-      const allRelationships: Relationship[] = [];
-      const supersededMemoryIds: string[] = [];
+      const allRelationships: Relationship[] = []
+      const supersededMemoryIds: string[] = []
 
       // Process each extracted memory
       for (const memory of extractedMemories) {
         // Store the memory in repository only (no local cache)
-        await this.repository.create(memory);
-        createdMemoryIds.push(memory.id);
+        await this.repository.create(memory)
+        createdMemoryIds.push(memory.id)
 
         // Detect relationships if enabled
         if (shouldDetectRelationships) {
           const existingMemories = await this.repository.findPotentialRelations(memory, {
             containerTag,
             limit: this.config.maxRelationshipComparisons,
-          });
+          })
 
-          const relationships = await this.detectRelationshipsForMemory(
-            memory,
-            existingMemories,
-            containerTag
-          );
+          const relationships = await this.detectRelationshipsForMemory(memory, existingMemories, containerTag)
 
           // Set relationship detection method in memory metadata
-          const relationshipMethod =
-            this.useEmbeddingRelationships && this.embeddingService ? 'embedding' : 'heuristic';
-          memory.metadata.relationshipMethod = relationshipMethod;
+          const relationshipMethod = this.useEmbeddingRelationships && this.embeddingService ? 'embedding' : 'heuristic'
+          memory.metadata.relationshipMethod = relationshipMethod
 
-          const existingById = new Map(existingMemories.map((m) => [m.id, m]));
+          const existingById = new Map(existingMemories.map((m) => [m.id, m]))
 
           // Process update relationships - mark old memories as superseded
           for (const rel of relationships) {
             if (rel.type === 'updates' || rel.type === 'supersedes') {
-              const target = existingById.get(rel.targetMemoryId);
-              if (
-                target &&
-                memory.containerTag &&
-                target.containerTag &&
-                memory.containerTag !== target.containerTag
-              ) {
-                continue;
+              const target = existingById.get(rel.targetMemoryId)
+              if (target && memory.containerTag && target.containerTag && memory.containerTag !== target.containerTag) {
+                continue
               }
               if (target) {
                 supersedeSnapshots.push({
                   id: target.id,
                   isLatest: target.isLatest,
                   supersededBy: target.supersededBy,
-                });
+                })
               }
-              await this.repository.markSuperseded(rel.targetMemoryId, memory.id);
-              supersededMemoryIds.push(rel.targetMemoryId);
+              await this.repository.markSuperseded(rel.targetMemoryId, memory.id)
+              supersededMemoryIds.push(rel.targetMemoryId)
             }
           }
 
           // Store relationships
           if (relationships.length > 0) {
-            relationshipIdsToRollback.push(...relationships.map((rel) => rel.id));
-            await this.repository.createRelationshipBatch(relationships);
-            allRelationships.push(...relationships);
+            relationshipIdsToRollback.push(...relationships.map((rel) => rel.id))
+            await this.repository.createRelationshipBatch(relationships)
+            allRelationships.push(...relationships)
           }
         }
       }
@@ -1014,20 +982,20 @@ export class MemoryService {
         memoriesCount: extractedMemories.length,
         relationshipsCount: allRelationships.length,
         supersededCount: supersededMemoryIds.length,
-      });
+      })
 
       return {
         memories: extractedMemories,
         relationships: allRelationships,
         supersededMemoryIds,
-      };
-    } catch (error) {
-      await rollback(error);
-      if (error instanceof AppError) {
-        throw error;
       }
-      logger.errorWithException('Failed to process and store memories', error);
-      throw AppError.from(error, ErrorCode.INTERNAL_ERROR);
+    } catch (error) {
+      await rollback(error)
+      if (error instanceof AppError) {
+        throw error
+      }
+      logger.errorWithException('Failed to process and store memories', error)
+      throw AppError.from(error, ErrorCode.INTERNAL_ERROR)
     }
   }
 
@@ -1036,22 +1004,18 @@ export class MemoryService {
    */
   updateIsLatest(newMemory: Memory, existingMemories: Memory[]): void {
     for (const existing of existingMemories) {
-      if (
-        newMemory.containerTag &&
-        existing.containerTag &&
-        newMemory.containerTag !== existing.containerTag
-      ) {
-        continue;
+      if (newMemory.containerTag && existing.containerTag && newMemory.containerTag !== existing.containerTag) {
+        continue
       }
-      const updateResult = this.checkForUpdates(newMemory, existing);
+      const updateResult = this.checkForUpdates(newMemory, existing)
       if (updateResult.isUpdate && updateResult.confidence >= 0.7) {
-        existing.isLatest = false;
-        existing.supersededBy = newMemory.id;
+        existing.isLatest = false
+        existing.supersededBy = newMemory.id
         newMemory.relationships.push({
           type: 'supersedes',
           targetId: existing.id,
           confidence: updateResult.confidence,
-        });
+        })
       }
     }
   }
@@ -1062,21 +1026,21 @@ export class MemoryService {
    * @throws ValidationError if text or containerTag is invalid
    */
   extractMemoriesFromText(text: string, containerTag?: string): Memory[] {
-    validateMemoryContent(text);
+    validateMemoryContent(text)
     if (containerTag) {
-      validate(containerTagSchema, containerTag);
+      validate(containerTagSchema, containerTag)
     }
 
-    const sentences = this.splitIntoSentences(text);
-    const memories: Memory[] = [];
+    const sentences = this.splitIntoSentences(text)
+    const memories: Memory[] = []
 
     for (const sentence of sentences) {
-      if (sentence.trim().length < 10) continue;
+      if (sentence.trim().length < 10) continue
 
-      const type = this.classifyMemoryType(sentence);
-      const entities = this.extractEntities(sentence);
-      const keywords = this.extractKeywords(sentence);
-      const confidence = this.calculateConfidence(sentence, type);
+      const type = this.classifyMemoryType(sentence)
+      const entities = this.extractEntities(sentence)
+      const keywords = this.extractKeywords(sentence)
+      const confidence = this.calculateConfidence(sentence, type)
 
       const memory: Memory = {
         id: generateId(),
@@ -1094,15 +1058,15 @@ export class MemoryService {
         },
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      }
 
-      memories.push(memory);
+      memories.push(memory)
     }
 
     // Detect relationships between extracted memories
-    this.detectRelationshipsInternal(memories);
+    this.detectRelationshipsInternal(memories)
 
-    return memories;
+    return memories
   }
 
   // ============================================================================
@@ -1110,20 +1074,20 @@ export class MemoryService {
   // ============================================================================
 
   async storeMemory(memory: Memory): Promise<Memory> {
-    return this.repository.create(memory);
+    return this.repository.create(memory)
   }
 
   async getMemory(id: string): Promise<Memory | null> {
-    return this.repository.findById(id);
+    return this.repository.findById(id)
   }
 
   async getAllMemories(): Promise<Memory[]> {
-    return this.repository.getAllMemories();
+    return this.repository.getAllMemories()
   }
 
   async getLatestMemories(): Promise<Memory[]> {
-    const all = await this.repository.getAllMemories();
-    return all.filter((m) => m.isLatest);
+    const all = await this.repository.getAllMemories()
+    return all.filter((m) => m.isLatest)
   }
 
   // ============================================================================
@@ -1131,33 +1095,33 @@ export class MemoryService {
   // ============================================================================
 
   private splitIntoSentences(text: string): string[] {
-    return text.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
+    return text.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0)
   }
 
   private extractEntities(text: string): Entity[] {
-    const entities: Entity[] = [];
-    const seen = new Set<string>();
+    const entities: Entity[] = []
+    const seen = new Set<string>()
 
     for (const [type, patterns] of Object.entries(ENTITY_PATTERNS)) {
       for (const pattern of patterns) {
-        const matches = text.matchAll(pattern);
+        const matches = text.matchAll(pattern)
         for (const match of matches) {
-          const name = match[1] || match[0];
-          const normalizedName = name.trim().toLowerCase();
+          const name = match[1] || match[0]
+          const normalizedName = name.trim().toLowerCase()
 
           if (!seen.has(normalizedName) && name.length > 1) {
-            seen.add(normalizedName);
+            seen.add(normalizedName)
             entities.push({
               name: name.trim(),
               type: type as Entity['type'],
               mentions: 1,
-            });
+            })
           }
         }
       }
     }
 
-    return entities;
+    return entities
   }
 
   private extractKeywords(text: string): string[] {
@@ -1218,123 +1182,112 @@ export class MemoryService {
       'our',
       'their',
       'its',
-    ]);
+    ])
 
-    const words = text.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
-    const keywords = words.filter((word) => !stopWords.has(word));
+    const words = text.toLowerCase().match(/\b[a-z]{3,}\b/g) || []
+    const keywords = words.filter((word) => !stopWords.has(word))
 
-    return [...new Set(keywords)].slice(0, 10);
+    return [...new Set(keywords)].slice(0, 10)
   }
 
   private calculateConfidence(content: string, type: MemoryType): number {
-    let confidence = 0.5;
+    let confidence = 0.5
 
     // Longer content with more detail = higher confidence
-    if (content.length > 100) confidence += 0.1;
-    if (content.length > 200) confidence += 0.1;
+    if (content.length > 100) confidence += 0.1
+    if (content.length > 200) confidence += 0.1
 
     // Pattern matches increase confidence
-    const matchCount = countMemoryTypeMatches(content, type);
-    confidence += Math.min(matchCount * 0.1, 0.2);
+    const matchCount = countMemoryTypeMatches(content, type)
+    confidence += Math.min(matchCount * 0.1, 0.2)
 
-    return Math.min(confidence, 1);
+    return Math.min(confidence, 1)
   }
 
   private calculateTextSimilarity(text1: string, text2: string): number {
-    const words1 = new Set(text1.toLowerCase().split(/\s+/));
-    const words2 = new Set(text2.toLowerCase().split(/\s+/));
+    const words1 = new Set(text1.toLowerCase().split(/\s+/))
+    const words2 = new Set(text2.toLowerCase().split(/\s+/))
 
-    const intersection = new Set([...words1].filter((x) => words2.has(x)));
-    const union = new Set([...words1, ...words2]);
+    const intersection = new Set([...words1].filter((x) => words2.has(x)))
+    const union = new Set([...words1, ...words2])
 
-    if (union.size === 0) return 0;
-    return intersection.size / union.size;
+    if (union.size === 0) return 0
+    return intersection.size / union.size
   }
 
   private detectRelationshipsInternal(memories: Memory[]): MemoryRelationship[] {
-    const relationships: MemoryRelationship[] = [];
+    const relationships: MemoryRelationship[] = []
 
     for (let i = 0; i < memories.length; i++) {
       for (let j = i + 1; j < memories.length; j++) {
-        const sourceMemory = memories[i]!;
-        const targetMemory = memories[j]!;
+        const sourceMemory = memories[i]!
+        const targetMemory = memories[j]!
 
-        const relationshipType = this.detectRelationshipType(
-          sourceMemory.content,
-          targetMemory.content
-        );
+        const relationshipType = this.detectRelationshipType(sourceMemory.content, targetMemory.content)
 
         if (relationshipType) {
           const relationship: MemoryRelationship = {
             type: relationshipType,
             targetId: targetMemory.id,
-            confidence: this.calculateRelationshipConfidence(
-              sourceMemory,
-              targetMemory,
-              relationshipType
-            ),
-          };
+            confidence: this.calculateRelationshipConfidence(sourceMemory, targetMemory, relationshipType),
+          }
 
-          sourceMemory.relationships.push(relationship);
-          relationships.push(relationship);
+          sourceMemory.relationships.push(relationship)
+          relationships.push(relationship)
         }
       }
     }
 
-    return relationships;
+    return relationships
   }
 
   private detectRelationshipType(source: string, target: string): RelationshipType | null {
-    const similarity = this.calculateTextSimilarity(source, target);
+    const similarity = this.calculateTextSimilarity(source, target)
     if (similarity < 0.1) {
-      return null;
+      return null
     }
 
     // Check explicit relationship indicators
     for (const [type, patterns] of Object.entries(RELATIONSHIP_INDICATORS)) {
       for (const pattern of patterns) {
         if (pattern.test(source) || pattern.test(target)) {
-          return type as RelationshipType;
+          return type as RelationshipType
         }
       }
     }
 
     // If similar but no explicit indicator, mark as related
     if (similarity > 0.3) {
-      return 'related';
+      return 'related'
     }
 
-    return null;
+    return null
   }
 
-  private calculateRelationshipConfidence(
-    source: Memory,
-    target: Memory,
-    type: RelationshipType
-  ): number {
-    let confidence = 0.5;
+  private calculateRelationshipConfidence(source: Memory, target: Memory, type: RelationshipType): number {
+    let confidence = 0.5
 
     // Same container increases confidence
     if (source.containerTag && source.containerTag === target.containerTag) {
-      confidence += 0.1;
+      confidence += 0.1
     }
 
     // Text similarity affects confidence
-    const similarity = this.calculateTextSimilarity(source.content, target.content);
-    confidence += similarity * 0.3;
+    const similarity = this.calculateTextSimilarity(source.content, target.content)
+    confidence += similarity * 0.3
 
     // Explicit indicators increase confidence
-    const patterns = RELATIONSHIP_INDICATORS[type];
+    const patterns = RELATIONSHIP_INDICATORS[type]
     if (patterns) {
       for (const pattern of patterns) {
         if (pattern.test(source.content) || pattern.test(target.content)) {
-          confidence += 0.1;
-          break;
+          confidence += 0.1
+          break
         }
       }
     }
 
-    return Math.min(confidence, 1);
+    return Math.min(confidence, 1)
   }
 }
 
@@ -1342,7 +1295,7 @@ export class MemoryService {
 // Factory Functions (Proxy-based Lazy Singleton)
 // ============================================================================
 
-let _serviceInstance: MemoryService | null = null;
+let _serviceInstance: MemoryService | null = null
 
 /**
  * Get the singleton MemoryService instance (created lazily)
@@ -1353,16 +1306,16 @@ let _serviceInstance: MemoryService | null = null;
  */
 export function getMemoryService(config?: Partial<MemoryServiceConfig>): MemoryService {
   if (!_serviceInstance) {
-    _serviceInstance = new MemoryService(config);
+    _serviceInstance = new MemoryService(config)
   }
-  return _serviceInstance;
+  return _serviceInstance
 }
 
 /**
  * Reset the singleton instance (useful for testing)
  */
 export function resetMemoryService(): void {
-  _serviceInstance = null;
+  _serviceInstance = null
 }
 
 /**
@@ -1372,7 +1325,7 @@ export function createMemoryService(
   config?: Partial<MemoryServiceConfig>,
   repository?: MemoryRepository
 ): MemoryService {
-  return new MemoryService(config, repository);
+  return new MemoryService(config, repository)
 }
 
 /**
@@ -1380,6 +1333,6 @@ export function createMemoryService(
  */
 export const memoryService = new Proxy({} as MemoryService, {
   get(_, prop) {
-    return getMemoryService()[prop as keyof MemoryService];
+    return getMemoryService()[prop as keyof MemoryService]
   },
-});
+})

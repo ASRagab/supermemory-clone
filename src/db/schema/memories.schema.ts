@@ -11,9 +11,9 @@ import {
   index,
   check,
   type AnyPgColumn,
-} from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { documents } from './documents.schema.js';
+} from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { documents } from './documents.schema.js'
 
 export const memories = pgTable(
   'memories',
@@ -64,12 +64,9 @@ export const memories = pgTable(
       'memories_type_check',
       sql`${table.memoryType} IN ('fact', 'preference', 'episode', 'belief', 'skill', 'context')`
     ),
-    check(
-      'memories_confidence_check',
-      sql`${table.confidenceScore} >= 0 AND ${table.confidenceScore} <= 1`
-    ),
+    check('memories_confidence_check', sql`${table.confidenceScore} >= 0 AND ${table.confidenceScore} <= 1`),
   ]
-);
+)
 
-export type Memory = typeof memories.$inferSelect;
-export type NewMemory = typeof memories.$inferInsert;
+export type Memory = typeof memories.$inferSelect
+export type NewMemory = typeof memories.$inferInsert

@@ -13,17 +13,14 @@
  * Target: <$0.60/month with typical usage
  */
 
-import { getLogger } from '../../utils/logger.js';
-import { createHash } from 'crypto';
-import type { MemoryType } from '../../types/index.js';
-import { getLLMProvider, isLLMAvailable } from './index.js';
-import { LLMError } from './base.js';
-import {
-  classifyMemoryTypeHeuristically,
-  calculateHeuristicConfidence,
-} from './heuristics.js';
+import { getLogger } from '../../utils/logger.js'
+import { createHash } from 'crypto'
+import type { MemoryType } from '../../types/index.js'
+import { getLLMProvider, isLLMAvailable } from './index.js'
+import { LLMError } from './base.js'
+import { classifyMemoryTypeHeuristically, calculateHeuristicConfidence } from './heuristics.js'
 
-const logger = getLogger('MemoryClassifier');
+const logger = getLogger('MemoryClassifier')
 
 // ============================================================================
 // Prompt Templates
@@ -44,10 +41,10 @@ Respond with ONLY a JSON object:
   "type": "one of the types above",
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation"
-}`;
+}`
 
 export function buildMemoryClassifierUserPrompt(content: string): string {
-  return `Classify this content:\n\n"${content}"\n\nRespond with JSON only.`;
+  return `Classify this content:\n\n"${content}"\n\nRespond with JSON only.`
 }
 
 // ============================================================================
@@ -55,31 +52,31 @@ export function buildMemoryClassifierUserPrompt(content: string): string {
 // ============================================================================
 
 export interface ClassificationResult {
-  type: MemoryType;
-  confidence: number;
-  reasoning?: string;
-  cached: boolean;
-  usedLLM: boolean;
+  type: MemoryType
+  confidence: number
+  reasoning?: string
+  cached: boolean
+  usedLLM: boolean
 }
 
 export interface ClassifierConfig {
   /** Minimum confidence for LLM classification (0-1) */
-  minConfidence?: number;
+  minConfidence?: number
   /** Whether to enable caching */
-  enableCache?: boolean;
+  enableCache?: boolean
   /** Cache TTL in milliseconds */
-  cacheTTLMs?: number;
+  cacheTTLMs?: number
   /** Maximum cache size */
-  maxCacheSize?: number;
+  maxCacheSize?: number
   /** Whether to fallback to pattern matching on errors */
-  fallbackToPatterns?: boolean;
+  fallbackToPatterns?: boolean
 }
 
 interface CacheEntry {
-  type: MemoryType;
-  confidence: number;
-  reasoning?: string;
-  timestamp: number;
+  type: MemoryType
+  confidence: number
+  reasoning?: string
+  timestamp: number
 }
 
 // ============================================================================
@@ -87,8 +84,8 @@ interface CacheEntry {
 // ============================================================================
 
 export class MemoryClassifierService {
-  private config: Required<ClassifierConfig>;
-  private cache: Map<string, CacheEntry> = new Map();
+  private config: Required<ClassifierConfig>
+  private cache: Map<string, CacheEntry> = new Map()
   private stats = {
     totalClassifications: 0,
     llmClassifications: 0,
@@ -96,7 +93,7 @@ export class MemoryClassifierService {
     cacheHits: 0,
     errors: 0,
     totalCost: 0,
-  };
+  }
 
   constructor(config: ClassifierConfig = {}) {
     this.config = {
@@ -105,12 +102,12 @@ export class MemoryClassifierService {
       cacheTTLMs: config.cacheTTLMs ?? 15 * 60 * 1000, // 15 minutes
       maxCacheSize: config.maxCacheSize ?? 1000,
       fallbackToPatterns: config.fallbackToPatterns ?? true,
-    };
+    }
 
     logger.info('Memory classifier initialized', {
       cacheEnabled: this.config.enableCache,
       fallbackEnabled: this.config.fallbackToPatterns,
-    });
+    })
   }
 
   // ============================================================================
@@ -124,29 +121,29 @@ export class MemoryClassifierService {
    * @returns Classification result with type, confidence, and metadata
    */
   async classify(content: string): Promise<ClassificationResult> {
-    this.stats.totalClassifications++;
+    this.stats.totalClassifications++
 
     // Check cache first
     if (this.config.enableCache) {
-      const cached = this.getCached(content);
+      const cached = this.getCached(content)
       if (cached) {
-        this.stats.cacheHits++;
-        logger.debug('Cache hit for classification', { contentPreview: content.substring(0, 50) });
+        this.stats.cacheHits++
+        logger.debug('Cache hit for classification', { contentPreview: content.substring(0, 50) })
         return {
           type: cached.type,
           confidence: cached.confidence,
           reasoning: cached.reasoning,
           cached: true,
           usedLLM: false,
-        };
+        }
       }
     }
 
     // Try LLM classification if available
     if (isLLMAvailable()) {
       try {
-        const result = await this.classifyWithLLM(content);
-        this.stats.llmClassifications++;
+        const result = await this.classifyWithLLM(content)
+        this.stats.llmClassifications++
 
         // Cache the result
         if (this.config.enableCache && result.confidence >= this.config.minConfidence) {
@@ -155,36 +152,36 @@ export class MemoryClassifierService {
             confidence: result.confidence,
             reasoning: result.reasoning,
             timestamp: Date.now(),
-          });
+          })
         }
 
         return {
           ...result,
           cached: false,
           usedLLM: true,
-        };
+        }
       } catch (error) {
-        this.stats.errors++;
+        this.stats.errors++
         logger.warn('LLM classification failed, falling back to patterns', {
           error: error instanceof Error ? error.message : String(error),
-        });
+        })
 
         if (!this.config.fallbackToPatterns) {
-          throw error;
+          throw error
         }
       }
     }
 
     // Fallback to pattern matching
-    const patternResult = this.classifyWithPatterns(content);
-    this.stats.patternClassifications++;
+    const patternResult = this.classifyWithPatterns(content)
+    this.stats.patternClassifications++
 
     return {
       type: patternResult.type,
       confidence: patternResult.confidence,
       cached: false,
       usedLLM: false,
-    };
+    }
   }
 
   /**
@@ -192,23 +189,21 @@ export class MemoryClassifierService {
    */
   getStats() {
     const cacheHitRate =
-      this.stats.totalClassifications > 0
-        ? (this.stats.cacheHits / this.stats.totalClassifications) * 100
-        : 0;
+      this.stats.totalClassifications > 0 ? (this.stats.cacheHits / this.stats.totalClassifications) * 100 : 0
 
     return {
       ...this.stats,
       cacheHitRate: parseFloat(cacheHitRate.toFixed(2)),
       cacheSize: this.cache.size,
-    };
+    }
   }
 
   /**
    * Clear the cache
    */
   clearCache(): void {
-    this.cache.clear();
-    logger.info('Classification cache cleared');
+    this.cache.clear()
+    logger.info('Classification cache cleared')
   }
 
   // ============================================================================
@@ -216,40 +211,38 @@ export class MemoryClassifierService {
   // ============================================================================
 
   private async classifyWithLLM(content: string): Promise<{
-    type: MemoryType;
-    confidence: number;
-    reasoning?: string;
+    type: MemoryType
+    confidence: number
+    reasoning?: string
   }> {
-    const provider = getLLMProvider();
+    const provider = getLLMProvider()
 
     try {
       const response = await provider.generateJson(
         MEMORY_CLASSIFIER_SYSTEM_PROMPT,
         buildMemoryClassifierUserPrompt(content)
-      );
+      )
 
-      const parsed = this.parseJsonResponse(response.rawResponse, response.provider);
+      const parsed = this.parseJsonResponse(response.rawResponse, response.provider)
 
       // Estimate cost (Haiku: ~$0.25 per million input tokens, ~$1.25 per million output)
-      const inputCost = ((response.tokensUsed?.prompt ?? 0) / 1000000) * 0.25;
-      const outputCost = ((response.tokensUsed?.completion ?? 0) / 1000000) * 1.25;
-      this.stats.totalCost += inputCost + outputCost;
+      const inputCost = ((response.tokensUsed?.prompt ?? 0) / 1000000) * 0.25
+      const outputCost = ((response.tokensUsed?.completion ?? 0) / 1000000) * 1.25
+      this.stats.totalCost += inputCost + outputCost
 
       logger.debug('LLM classification successful', {
         type: parsed.type,
         confidence: parsed.confidence,
         tokensUsed: response.tokensUsed?.total ?? 0,
         cost: inputCost + outputCost,
-      });
+      })
 
-      return parsed;
+      return parsed
     } catch (error) {
       if (error instanceof LLMError) {
-        throw error;
+        throw error
       }
-      throw new Error(
-        `LLM classification failed: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`LLM classification failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -258,78 +251,65 @@ export class MemoryClassifierService {
   // ============================================================================
 
   private classifyWithPatterns(content: string): {
-    type: MemoryType;
-    confidence: number;
+    type: MemoryType
+    confidence: number
   } {
-    const heuristic = classifyMemoryTypeHeuristically(content);
-    const type = heuristic.type;
+    const heuristic = classifyMemoryTypeHeuristically(content)
+    const type = heuristic.type
     const confidence = calculateHeuristicConfidence(heuristic.matchCount, {
       base: 0.5,
       perMatch: 0.1,
       max: 0.9,
       defaultConfidence: 0.3,
-    });
+    })
 
     logger.debug('Pattern classification', {
       type,
       confidence,
       matchCount: heuristic.matchCount,
-    });
+    })
 
-    return { type, confidence };
+    return { type, confidence }
   }
 
   private parseJsonResponse(
     rawResponse: string,
     provider: 'openai' | 'anthropic' | 'mock'
   ): {
-    type: MemoryType;
-    confidence: number;
-    reasoning?: string;
+    type: MemoryType
+    confidence: number
+    reasoning?: string
   } {
-    const trimmed = rawResponse.trim();
-    const jsonMatch = trimmed.startsWith('{') ? trimmed : trimmed.match(/\{[\s\S]*\}/)?.[0];
+    const trimmed = rawResponse.trim()
+    const jsonMatch = trimmed.startsWith('{') ? trimmed : trimmed.match(/\{[\s\S]*\}/)?.[0]
     if (!jsonMatch) {
-      throw LLMError.invalidResponse(provider, 'No JSON object found in response');
+      throw LLMError.invalidResponse(provider, 'No JSON object found in response')
     }
 
-    let parsed: unknown;
+    let parsed: unknown
     try {
-      parsed = JSON.parse(jsonMatch);
+      parsed = JSON.parse(jsonMatch)
     } catch {
-      throw LLMError.invalidResponse(provider, 'Invalid JSON response');
+      throw LLMError.invalidResponse(provider, 'Invalid JSON response')
     }
 
-    if (
-      !parsed ||
-      typeof parsed !== 'object' ||
-      !('type' in parsed) ||
-      !('confidence' in parsed)
-    ) {
-      throw LLMError.invalidResponse(provider, 'Missing required fields in JSON response');
+    if (!parsed || typeof parsed !== 'object' || !('type' in parsed) || !('confidence' in parsed)) {
+      throw LLMError.invalidResponse(provider, 'Missing required fields in JSON response')
     }
 
-    const type = (parsed as { type: MemoryType }).type;
-    const confidence = (parsed as { confidence: number }).confidence;
-    const reasoning = (parsed as { reasoning?: string }).reasoning;
+    const type = (parsed as { type: MemoryType }).type
+    const confidence = (parsed as { confidence: number }).confidence
+    const reasoning = (parsed as { reasoning?: string }).reasoning
 
-    const validTypes: MemoryType[] = [
-      'fact',
-      'event',
-      'preference',
-      'skill',
-      'relationship',
-      'context',
-      'note',
-    ];
+    const validTypes: MemoryType[] = ['fact', 'event', 'preference', 'skill', 'relationship', 'context', 'note']
     if (!validTypes.includes(type)) {
-      throw LLMError.invalidResponse(provider, 'Invalid memory type in response');
+      throw LLMError.invalidResponse(provider, 'Invalid memory type in response')
     }
     if (typeof confidence !== 'number' || Number.isNaN(confidence)) {
-      throw LLMError.invalidResponse(provider, 'Invalid confidence in response');
+      throw LLMError.invalidResponse(provider, 'Invalid confidence in response')
     }
 
-    return { type, confidence, reasoning };
+    return { type, confidence, reasoning }
   }
 
   // ============================================================================
@@ -338,44 +318,44 @@ export class MemoryClassifierService {
 
   private getCacheKey(content: string): string {
     // Use first 500 chars for cache key to avoid huge keys
-    const normalized = content.substring(0, 500).trim().toLowerCase();
-    return createHash('sha256').update(normalized).digest('hex');
+    const normalized = content.substring(0, 500).trim().toLowerCase()
+    return createHash('sha256').update(normalized).digest('hex')
   }
 
   private getCached(content: string): CacheEntry | null {
-    const key = this.getCacheKey(content);
-    const entry = this.cache.get(key);
+    const key = this.getCacheKey(content)
+    const entry = this.cache.get(key)
 
     if (!entry) {
-      return null;
+      return null
     }
 
     // Check if expired
-    const age = Date.now() - entry.timestamp;
+    const age = Date.now() - entry.timestamp
     if (age > this.config.cacheTTLMs) {
-      this.cache.delete(key);
-      return null;
+      this.cache.delete(key)
+      return null
     }
 
-    return entry;
+    return entry
   }
 
   private setCached(content: string, entry: CacheEntry): void {
     // Enforce cache size limit
     if (this.cache.size >= this.config.maxCacheSize) {
       // Remove oldest 10% of entries
-      const entries = Array.from(this.cache.entries());
-      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-      const excess = this.cache.size - this.config.maxCacheSize + 1;
-      const minimumToRemove = Math.max(1, Math.ceil(this.config.maxCacheSize * 0.1));
-      const toRemove = entries.slice(0, Math.max(excess, minimumToRemove));
+      const entries = Array.from(this.cache.entries())
+      entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
+      const excess = this.cache.size - this.config.maxCacheSize + 1
+      const minimumToRemove = Math.max(1, Math.ceil(this.config.maxCacheSize * 0.1))
+      const toRemove = entries.slice(0, Math.max(excess, minimumToRemove))
       for (const [key] of toRemove) {
-        this.cache.delete(key);
+        this.cache.delete(key)
       }
     }
 
-    const key = this.getCacheKey(content);
-    this.cache.set(key, entry);
+    const key = this.getCacheKey(content)
+    this.cache.set(key, entry)
   }
 }
 
@@ -383,21 +363,21 @@ export class MemoryClassifierService {
 // Singleton Instance
 // ============================================================================
 
-let _instance: MemoryClassifierService | null = null;
+let _instance: MemoryClassifierService | null = null
 
 /**
  * Get the singleton instance
  */
 export function getMemoryClassifier(config?: ClassifierConfig): MemoryClassifierService {
   if (!_instance) {
-    _instance = new MemoryClassifierService(config);
+    _instance = new MemoryClassifierService(config)
   }
-  return _instance;
+  return _instance
 }
 
 /**
  * Reset the singleton (for testing)
  */
 export function resetMemoryClassifier(): void {
-  _instance = null;
+  _instance = null
 }

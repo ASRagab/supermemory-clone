@@ -5,13 +5,13 @@
  * using vector similarity, temporal analysis, entity overlap, and optional LLM verification.
  */
 
-import type { RelationshipType, Entity } from '../../types/index.js';
-import type { Memory, Relationship } from '../memory.types.js';
-import type { EmbeddingService } from '../embedding.service.js';
-import { cosineSimilarity } from '../embedding.service.js';
-import { generateId } from '../../utils/id.js';
-import { getLogger } from '../../utils/logger.js';
-import { AppError, ErrorCode } from '../../utils/errors.js';
+import type { RelationshipType, Entity } from '../../types/index.js'
+import type { Memory, Relationship } from '../memory.types.js'
+import type { EmbeddingService } from '../embedding.service.js'
+import { cosineSimilarity } from '../embedding.service.js'
+import { generateId } from '../../utils/id.js'
+import { getLogger } from '../../utils/logger.js'
+import { AppError, ErrorCode } from '../../utils/errors.js'
 import type {
   RelationshipConfig,
   RelationshipCandidate,
@@ -26,10 +26,10 @@ import type {
   RelationshipDetectionStats,
   CachedRelationshipScore,
   DetectionStrategyType,
-} from './types.js';
-import { DEFAULT_RELATIONSHIP_CONFIG, generateCacheKey } from './types.js';
+} from './types.js'
+import { DEFAULT_RELATIONSHIP_CONFIG, generateCacheKey } from './types.js'
 
-const logger = getLogger('EmbeddingRelationshipDetector');
+const logger = getLogger('EmbeddingRelationshipDetector')
 
 // ============================================================================
 // Embedding Helper (candidate list)
@@ -45,38 +45,34 @@ export async function detectRelationshipsWithEmbeddings(
   candidates: Memory[],
   embeddingService: EmbeddingService,
   options: {
-    containerTag?: string;
-    config?: Partial<RelationshipConfig>;
+    containerTag?: string
+    config?: Partial<RelationshipConfig>
   } = {}
 ): Promise<RelationshipDetectionResult> {
-  const vectorStore = new InMemoryVectorStoreAdapter();
+  const vectorStore = new InMemoryVectorStoreAdapter()
 
   if (candidates.length > 0) {
-    const embeddings = await embeddingService.batchEmbed(candidates.map((m) => m.content));
+    const embeddings = await embeddingService.batchEmbed(candidates.map((m) => m.content))
     for (let i = 0; i < candidates.length; i++) {
-      const candidate = candidates[i];
-      const embedding = embeddings[i];
+      const candidate = candidates[i]
+      const embedding = embeddings[i]
       if (candidate && embedding) {
-        candidate.embedding = embedding;
-        vectorStore.addMemory(candidate, embedding);
+        candidate.embedding = embedding
+        vectorStore.addMemory(candidate, embedding)
       }
     }
   }
 
   if (!newMemory.embedding || newMemory.embedding.length === 0) {
-    newMemory.embedding = await embeddingService.generateEmbedding(newMemory.content);
+    newMemory.embedding = await embeddingService.generateEmbedding(newMemory.content)
   }
 
-  const detector = new EmbeddingRelationshipDetector(
-    embeddingService,
-    vectorStore,
-    options.config
-  );
+  const detector = new EmbeddingRelationshipDetector(embeddingService, vectorStore, options.config)
 
   return detector.detectRelationships(newMemory, {
     containerTag: options.containerTag,
     excludeIds: [newMemory.id],
-  });
+  })
 }
 
 // ============================================================================
@@ -109,7 +105,7 @@ function createDetectedRelationship(
       temporalScore: candidate.temporalScore,
       detectionStrategy: strategyName,
     },
-  };
+  }
 
   // Validate strategy name is a valid DetectionStrategyType
   const validStrategy: DetectionStrategyType =
@@ -119,7 +115,7 @@ function createDetectedRelationship(
     strategyName === 'llmVerification' ||
     strategyName === 'hybrid'
       ? strategyName
-      : 'hybrid';
+      : 'hybrid'
 
   return {
     relationship,
@@ -130,7 +126,7 @@ function createDetectedRelationship(
     llmVerified,
     llmConfidence,
     detectionStrategy: validStrategy,
-  };
+  }
 }
 
 /**
@@ -142,8 +138,8 @@ function hasUpdateIndicators(content: string): boolean {
     /\b(?:now|actually|instead)\b/i,
     /\b(?:changed|revised|modified)\b/i,
     /\b(?:no longer|used to be|previously)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -154,8 +150,8 @@ function hasExtensionIndicators(content: string): boolean {
     /\b(?:also|additionally|furthermore|moreover)\b/i,
     /\b(?:in addition|on top of|besides)\b/i,
     /\b(?:extending|building on|adding to)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -167,8 +163,8 @@ function hasContradictionIndicators(content: string): boolean {
     /\b(?:contrary|opposite|different)\b/i,
     /\b(?:not true|incorrect|wrong|false)\b/i,
     /\b(?:disagree|dispute|reject)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -179,8 +175,8 @@ function hasSupersessionIndicators(content: string): boolean {
     /\b(?:replaces|supersedes|overrides)\b/i,
     /\b(?:no longer|obsolete|deprecated)\b/i,
     /\b(?:new version|latest|current)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -192,8 +188,8 @@ function hasCausalIndicators(content: string): boolean {
     /\b(?:because|since|as a result)\b/i,
     /\b(?:based on|derived from|follows from)\b/i,
     /\b(?:leads to|results in|causes)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 // ============================================================================
@@ -205,13 +201,13 @@ function hasCausalIndicators(content: string): boolean {
  * Can be replaced with a proper vector database in production.
  */
 export class InMemoryVectorStoreAdapter implements VectorStore {
-  private entries: Map<string, { memory: Memory; embedding: number[] }> = new Map();
+  private entries: Map<string, { memory: Memory; embedding: number[] }> = new Map()
 
   /**
    * Add a memory with its embedding
    */
   addMemory(memory: Memory, embedding: number[]): void {
-    this.entries.set(memory.id, { memory, embedding });
+    this.entries.set(memory.id, { memory, embedding })
   }
 
   /**
@@ -219,7 +215,7 @@ export class InMemoryVectorStoreAdapter implements VectorStore {
    */
   addMemories(items: Array<{ memory: Memory; embedding: number[] }>): void {
     for (const item of items) {
-      this.entries.set(item.memory.id, item);
+      this.entries.set(item.memory.id, item)
     }
   }
 
@@ -227,33 +223,33 @@ export class InMemoryVectorStoreAdapter implements VectorStore {
    * Remove a memory
    */
   removeMemory(memoryId: string): boolean {
-    return this.entries.delete(memoryId);
+    return this.entries.delete(memoryId)
   }
 
   /**
    * Update a memory's embedding
    */
   updateEmbedding(memoryId: string, embedding: number[]): boolean {
-    const entry = this.entries.get(memoryId);
+    const entry = this.entries.get(memoryId)
     if (entry) {
-      entry.embedding = embedding;
-      return true;
+      entry.embedding = embedding
+      return true
     }
-    return false;
+    return false
   }
 
   /**
    * Get all memories
    */
   getAllMemories(): Memory[] {
-    return Array.from(this.entries.values()).map((e) => e.memory);
+    return Array.from(this.entries.values()).map((e) => e.memory)
   }
 
   /**
    * Clear all entries
    */
   clear(): void {
-    this.entries.clear();
+    this.entries.clear()
   }
 
   async findSimilar(
@@ -262,26 +258,26 @@ export class InMemoryVectorStoreAdapter implements VectorStore {
     threshold: number,
     filters?: { containerTag?: string; excludeIds?: string[] }
   ): Promise<VectorSearchResult[]> {
-    const results: VectorSearchResult[] = [];
-    const excludeSet = new Set(filters?.excludeIds || []);
+    const results: VectorSearchResult[] = []
+    const excludeSet = new Set(filters?.excludeIds || [])
 
     for (const [id, entry] of this.entries) {
-      if (excludeSet.has(id)) continue;
-      if (filters?.containerTag && entry.memory.containerTag !== filters.containerTag) continue;
+      if (excludeSet.has(id)) continue
+      if (filters?.containerTag && entry.memory.containerTag !== filters.containerTag) continue
 
-      const similarity = cosineSimilarity(embedding, entry.embedding);
+      const similarity = cosineSimilarity(embedding, entry.embedding)
       if (similarity >= threshold) {
         results.push({
           memoryId: id,
           memory: entry.memory,
           similarity,
-        });
+        })
       }
     }
 
     // Sort by similarity descending and limit
-    results.sort((a, b) => b.similarity - a.similarity);
-    return results.slice(0, limit);
+    results.sort((a, b) => b.similarity - a.similarity)
+    return results.slice(0, limit)
   }
 }
 
@@ -295,11 +291,11 @@ export class InMemoryVectorStoreAdapter implements VectorStore {
  * between memories.
  */
 export class EmbeddingRelationshipDetector {
-  private readonly embeddingService: EmbeddingService;
-  private readonly vectorStore: VectorStore;
-  private readonly config: RelationshipConfig;
-  private readonly cache: Map<string, CachedRelationshipScore>;
-  private llmProvider?: LLMProvider;
+  private readonly embeddingService: EmbeddingService
+  private readonly vectorStore: VectorStore
+  private readonly config: RelationshipConfig
+  private readonly cache: Map<string, CachedRelationshipScore>
+  private llmProvider?: LLMProvider
 
   constructor(
     embeddingService: EmbeddingService,
@@ -307,16 +303,16 @@ export class EmbeddingRelationshipDetector {
     config: Partial<RelationshipConfig> = {},
     llmProvider?: LLMProvider
   ) {
-    this.embeddingService = embeddingService;
-    this.vectorStore = vectorStore;
-    this.config = { ...DEFAULT_RELATIONSHIP_CONFIG, ...config };
-    this.llmProvider = llmProvider;
-    this.cache = new Map();
+    this.embeddingService = embeddingService
+    this.vectorStore = vectorStore
+    this.config = { ...DEFAULT_RELATIONSHIP_CONFIG, ...config }
+    this.llmProvider = llmProvider
+    this.cache = new Map()
 
     logger.debug('EmbeddingRelationshipDetector initialized', {
       config: this.config,
       hasLLMProvider: !!llmProvider,
-    });
+    })
   }
 
   // ============================================================================
@@ -330,60 +326,57 @@ export class EmbeddingRelationshipDetector {
     newMemory: Memory,
     candidates: RelationshipCandidate[]
   ): Promise<DetectedRelationship[]> {
-    const relationships: DetectedRelationship[] = [];
-    const { thresholds } = this.config;
+    const relationships: DetectedRelationship[] = []
+    const { thresholds } = this.config
 
     for (const candidate of candidates) {
-      const sim = candidate.vectorSimilarity;
-      let detectedType: RelationshipType | null = null;
-      let adjustedConfidence = sim;
+      const sim = candidate.vectorSimilarity
+      let detectedType: RelationshipType | null = null
+      let adjustedConfidence = sim
 
       // Check for supersedes (highest threshold)
       if (sim >= thresholds.supersedes) {
         if (hasSupersessionIndicators(newMemory.content)) {
-          detectedType = 'supersedes';
-          adjustedConfidence = Math.min(sim + 0.05, 1.0);
+          detectedType = 'supersedes'
+          adjustedConfidence = Math.min(sim + 0.05, 1.0)
         } else if (hasUpdateIndicators(newMemory.content)) {
-          detectedType = 'updates';
+          detectedType = 'updates'
         }
       }
       // Check for updates
       else if (sim >= thresholds.updates) {
         if (hasUpdateIndicators(newMemory.content)) {
-          detectedType = 'updates';
-          adjustedConfidence = Math.min(sim + 0.05, 1.0);
-        } else if (
-          hasContradictionIndicators(newMemory.content) &&
-          this.config.enableContradictionDetection
-        ) {
-          detectedType = 'contradicts';
+          detectedType = 'updates'
+          adjustedConfidence = Math.min(sim + 0.05, 1.0)
+        } else if (hasContradictionIndicators(newMemory.content) && this.config.enableContradictionDetection) {
+          detectedType = 'contradicts'
         }
       }
       // Check for contradicts
       else if (sim >= thresholds.contradicts && this.config.enableContradictionDetection) {
         if (hasContradictionIndicators(newMemory.content)) {
-          detectedType = 'contradicts';
+          detectedType = 'contradicts'
         }
       }
       // Check for extends
       else if (sim >= thresholds.extends) {
         if (hasExtensionIndicators(newMemory.content)) {
-          detectedType = 'extends';
-          adjustedConfidence = Math.min(sim + 0.05, 1.0);
+          detectedType = 'extends'
+          adjustedConfidence = Math.min(sim + 0.05, 1.0)
         } else {
           // High similarity but no explicit indicator - mark as related
-          detectedType = 'related';
+          detectedType = 'related'
         }
       }
       // Check for derives
       else if (sim >= thresholds.derives && this.config.enableCausalDetection) {
         if (hasCausalIndicators(newMemory.content)) {
-          detectedType = 'derives';
+          detectedType = 'derives'
         }
       }
       // Check for related (lowest threshold)
       else if (sim >= thresholds.related) {
-        detectedType = 'related';
+        detectedType = 'related'
       }
 
       if (detectedType) {
@@ -391,21 +384,15 @@ export class EmbeddingRelationshipDetector {
         const adjustedCandidate: RelationshipCandidate = {
           ...candidate,
           combinedScore: adjustedConfidence,
-        };
+        }
 
         relationships.push(
-          createDetectedRelationship(
-            newMemory,
-            candidate.memory,
-            detectedType,
-            adjustedCandidate,
-            'similarity'
-          )
-        );
+          createDetectedRelationship(newMemory, candidate.memory, detectedType, adjustedCandidate, 'similarity')
+        )
       }
     }
 
-    return relationships;
+    return relationships
   }
 
   /**
@@ -415,41 +402,31 @@ export class EmbeddingRelationshipDetector {
     newMemory: Memory,
     candidates: RelationshipCandidate[]
   ): Promise<DetectedRelationship[]> {
-    const relationships: DetectedRelationship[] = [];
+    const relationships: DetectedRelationship[] = []
 
     // Only process candidates with moderate similarity
-    const relevantCandidates = candidates.filter(
-      (c) => c.vectorSimilarity >= this.config.thresholds.related * 0.8
-    );
+    const relevantCandidates = candidates.filter((c) => c.vectorSimilarity >= this.config.thresholds.related * 0.8)
 
     for (const candidate of relevantCandidates) {
-      const timeDiff = Math.abs(
-        newMemory.createdAt.getTime() - candidate.memory.createdAt.getTime()
-      );
-      const oneHour = 60 * 60 * 1000;
-      const oneDay = 24 * oneHour;
+      const timeDiff = Math.abs(newMemory.createdAt.getTime() - candidate.memory.createdAt.getTime())
+      const oneHour = 60 * 60 * 1000
+      const oneDay = 24 * oneHour
 
       // Check for rapid succession updates (within 1 hour)
       if (timeDiff < oneHour && candidate.vectorSimilarity >= 0.75) {
         // New memory likely updates the old one
-        const isNewer = newMemory.createdAt > candidate.memory.createdAt;
+        const isNewer = newMemory.createdAt > candidate.memory.createdAt
         if (isNewer && candidate.memory.type === newMemory.type) {
           // Boost temporal score
           const adjustedCandidate: RelationshipCandidate = {
             ...candidate,
             temporalScore: 0.95,
             combinedScore: Math.min(candidate.vectorSimilarity * 0.7 + 0.3, 1.0),
-          };
+          }
 
           relationships.push(
-            createDetectedRelationship(
-              newMemory,
-              candidate.memory,
-              'updates',
-              adjustedCandidate,
-              'temporal'
-            )
-          );
+            createDetectedRelationship(newMemory, candidate.memory, 'updates', adjustedCandidate, 'temporal')
+          )
         }
       }
       // Check for related context (within same day)
@@ -460,22 +437,16 @@ export class EmbeddingRelationshipDetector {
             ...candidate,
             temporalScore: 0.8,
             combinedScore: Math.min(candidate.vectorSimilarity * 0.8 + 0.1, 1.0),
-          };
+          }
 
           relationships.push(
-            createDetectedRelationship(
-              newMemory,
-              candidate.memory,
-              'related',
-              adjustedCandidate,
-              'temporal'
-            )
-          );
+            createDetectedRelationship(newMemory, candidate.memory, 'related', adjustedCandidate, 'temporal')
+          )
         }
       }
     }
 
-    return relationships;
+    return relationships
   }
 
   /**
@@ -483,11 +454,8 @@ export class EmbeddingRelationshipDetector {
    */
   private isValidEntity(entity: unknown): entity is Entity {
     return (
-      typeof entity === 'object' &&
-      entity !== null &&
-      'name' in entity &&
-      typeof (entity as Entity).name === 'string'
-    );
+      typeof entity === 'object' && entity !== null && 'name' in entity && typeof (entity as Entity).name === 'string'
+    )
   }
 
   /**
@@ -497,48 +465,48 @@ export class EmbeddingRelationshipDetector {
     newMemory: Memory,
     candidates: RelationshipCandidate[]
   ): Promise<DetectedRelationship[]> {
-    const relationships: DetectedRelationship[] = [];
+    const relationships: DetectedRelationship[] = []
 
-    const rawEntities = newMemory.metadata?.entities;
+    const rawEntities = newMemory.metadata?.entities
     const newEntities = Array.isArray(rawEntities)
       ? (rawEntities.filter(this.isValidEntity.bind(this)) as Entity[])
-      : [];
+      : []
 
     if (newEntities.length === 0) {
-      return relationships;
+      return relationships
     }
 
     for (const candidate of candidates) {
-      const rawCandidateEntities = candidate.memory.metadata?.entities;
+      const rawCandidateEntities = candidate.memory.metadata?.entities
       const candidateEntities = Array.isArray(rawCandidateEntities)
         ? (rawCandidateEntities.filter(this.isValidEntity.bind(this)) as Entity[])
-        : [];
+        : []
 
-      if (candidateEntities.length === 0) continue;
+      if (candidateEntities.length === 0) continue
 
       // Calculate entity overlap
-      const names1 = new Set(newEntities.map((e) => e.name.toLowerCase()));
-      const names2 = new Set(candidateEntities.map((e) => e.name.toLowerCase()));
+      const names1 = new Set(newEntities.map((e) => e.name.toLowerCase()))
+      const names2 = new Set(candidateEntities.map((e) => e.name.toLowerCase()))
 
-      const intersection = [...names1].filter((n) => names2.has(n)).length;
-      const union = new Set([...names1, ...names2]).size;
-      const entityOverlap = union > 0 ? intersection / union : 0;
+      const intersection = [...names1].filter((n) => names2.has(n)).length
+      const union = new Set([...names1, ...names2]).size
+      const entityOverlap = union > 0 ? intersection / union : 0
 
       // Significant entity overlap (>50%) suggests strong relationship
       if (entityOverlap >= 0.5) {
         // Combine with vector similarity for relationship type
         const combinedScore =
           candidate.vectorSimilarity * (1 - this.config.entityOverlapWeight) +
-          entityOverlap * this.config.entityOverlapWeight;
+          entityOverlap * this.config.entityOverlapWeight
 
-        let relationshipType: RelationshipType = 'related';
+        let relationshipType: RelationshipType = 'related'
 
         // High entity overlap + high similarity = likely update or extension
         if (entityOverlap >= 0.8 && candidate.vectorSimilarity >= 0.7) {
           if (hasUpdateIndicators(newMemory.content)) {
-            relationshipType = 'updates';
+            relationshipType = 'updates'
           } else if (hasExtensionIndicators(newMemory.content)) {
-            relationshipType = 'extends';
+            relationshipType = 'extends'
           }
         }
 
@@ -546,21 +514,15 @@ export class EmbeddingRelationshipDetector {
           ...candidate,
           entityOverlap,
           combinedScore: Math.min(combinedScore, 1.0),
-        };
+        }
 
         relationships.push(
-          createDetectedRelationship(
-            newMemory,
-            candidate.memory,
-            relationshipType,
-            adjustedCandidate,
-            'entityOverlap'
-          )
-        );
+          createDetectedRelationship(newMemory, candidate.memory, relationshipType, adjustedCandidate, 'entityOverlap')
+        )
       }
     }
 
-    return relationships;
+    return relationships
   }
 
   /**
@@ -568,18 +530,18 @@ export class EmbeddingRelationshipDetector {
    */
   private mergeRelationships(allRelationships: DetectedRelationship[]): DetectedRelationship[] {
     // Merge results, keeping highest confidence per relationship pair
-    const relationshipMap = new Map<string, DetectedRelationship>();
+    const relationshipMap = new Map<string, DetectedRelationship>()
 
     for (const rel of allRelationships) {
-      const key = `${rel.relationship.sourceMemoryId}:${rel.relationship.targetMemoryId}`;
-      const existing = relationshipMap.get(key);
+      const key = `${rel.relationship.sourceMemoryId}:${rel.relationship.targetMemoryId}`
+      const existing = relationshipMap.get(key)
 
       if (!existing || rel.relationship.confidence > existing.relationship.confidence) {
-        relationshipMap.set(key, rel);
+        relationshipMap.set(key, rel)
       }
     }
 
-    return Array.from(relationshipMap.values());
+    return Array.from(relationshipMap.values())
   }
 
   // ============================================================================
@@ -597,11 +559,11 @@ export class EmbeddingRelationshipDetector {
   async detectRelationships(
     newMemory: Memory,
     options: {
-      containerTag?: string;
-      excludeIds?: string[];
+      containerTag?: string
+      excludeIds?: string[]
     } = {}
   ): Promise<RelationshipDetectionResult> {
-    const startTime = Date.now();
+    const startTime = Date.now()
     const stats: RelationshipDetectionStats = {
       candidatesEvaluated: 0,
       relationshipsDetected: 0,
@@ -616,33 +578,28 @@ export class EmbeddingRelationshipDetector {
       llmVerifications: 0,
       processingTimeMs: 0,
       fromCache: false,
-    };
+    }
 
     try {
       logger.debug('Detecting relationships for memory', {
         memoryId: newMemory.id,
         contentPreview: newMemory.content.substring(0, 50),
-      });
+      })
 
       // Step 1: Get embedding for new memory
-      const embedding = await this.getOrGenerateEmbedding(newMemory);
+      const embedding = await this.getOrGenerateEmbedding(newMemory)
 
       // Step 2: Find similar memories via vector search
-      const minThreshold = Math.min(...Object.values(this.config.thresholds));
-      const similarResults = await this.vectorStore.findSimilar(
-        embedding,
-        this.config.maxCandidates,
-        minThreshold,
-        {
-          containerTag: options.containerTag,
-          excludeIds: [...(options.excludeIds || []), newMemory.id],
-        }
-      );
+      const minThreshold = Math.min(...Object.values(this.config.thresholds))
+      const similarResults = await this.vectorStore.findSimilar(embedding, this.config.maxCandidates, minThreshold, {
+        containerTag: options.containerTag,
+        excludeIds: [...(options.excludeIds || []), newMemory.id],
+      })
 
-      stats.candidatesEvaluated = similarResults.length;
+      stats.candidatesEvaluated = similarResults.length
 
       if (similarResults.length === 0) {
-        logger.debug('No similar memories found', { memoryId: newMemory.id });
+        logger.debug('No similar memories found', { memoryId: newMemory.id })
         return {
           sourceMemory: newMemory,
           relationships: [],
@@ -652,44 +609,37 @@ export class EmbeddingRelationshipDetector {
             ...stats,
             processingTimeMs: Date.now() - startTime,
           },
-        };
+        }
       }
 
       // Step 3: Build candidates with full scoring
-      const candidates = await this.buildCandidates(newMemory, similarResults);
+      const candidates = await this.buildCandidates(newMemory, similarResults)
 
       // Step 4: Run detection approaches
-      const similarityRels = await this.detectBySimilarity(newMemory, candidates);
-      const temporalRels =
-        this.config.temporalWeight > 0 ? await this.detectByTemporal(newMemory, candidates) : [];
+      const similarityRels = await this.detectBySimilarity(newMemory, candidates)
+      const temporalRels = this.config.temporalWeight > 0 ? await this.detectByTemporal(newMemory, candidates) : []
       const entityRels =
-        this.config.entityOverlapWeight > 0
-          ? await this.detectByEntityOverlap(newMemory, candidates)
-          : [];
+        this.config.entityOverlapWeight > 0 ? await this.detectByEntityOverlap(newMemory, candidates) : []
 
       // Merge results from all approaches
-      const allDetectedRelationships = this.mergeRelationships([
-        ...similarityRels,
-        ...temporalRels,
-        ...entityRels,
-      ]);
+      const allDetectedRelationships = this.mergeRelationships([...similarityRels, ...temporalRels, ...entityRels])
 
       // Step 5: Process results
-      const relationships = allDetectedRelationships;
-      const supersededMemoryIds: string[] = [];
-      const contradictions: Contradiction[] = [];
+      const relationships = allDetectedRelationships
+      const supersededMemoryIds: string[] = []
+      const contradictions: Contradiction[] = []
 
       for (const rel of relationships) {
-        stats.byType[rel.relationship.type]++;
-        stats.relationshipsDetected++;
+        stats.byType[rel.relationship.type]++
+        stats.relationshipsDetected++
 
         if (rel.llmVerified) {
-          stats.llmVerifications++;
+          stats.llmVerifications++
         }
 
         // Track superseded memories
         if (rel.relationship.type === 'updates' || rel.relationship.type === 'supersedes') {
-          supersededMemoryIds.push(rel.relationship.targetMemoryId);
+          supersededMemoryIds.push(rel.relationship.targetMemoryId)
         }
       }
 
@@ -698,16 +648,16 @@ export class EmbeddingRelationshipDetector {
         const detectedContradictions = await this.detectContradictions(
           newMemory,
           candidates.filter((c) => c.vectorSimilarity >= this.config.thresholds.contradicts)
-        );
-        contradictions.push(...detectedContradictions);
+        )
+        contradictions.push(...detectedContradictions)
       }
 
-      stats.processingTimeMs = Date.now() - startTime;
+      stats.processingTimeMs = Date.now() - startTime
 
       logger.info('Relationship detection complete', {
         memoryId: newMemory.id,
         stats,
-      });
+      })
 
       return {
         sourceMemory: newMemory,
@@ -715,12 +665,12 @@ export class EmbeddingRelationshipDetector {
         supersededMemoryIds: [...new Set(supersededMemoryIds)],
         contradictions,
         stats,
-      };
+      }
     } catch (error) {
       logger.errorWithException('Relationship detection failed', error, {
         memoryId: newMemory.id,
-      });
-      throw AppError.from(error, ErrorCode.INTERNAL_ERROR);
+      })
+      throw AppError.from(error, ErrorCode.INTERNAL_ERROR)
     }
   }
 
@@ -731,15 +681,15 @@ export class EmbeddingRelationshipDetector {
   async batchDetectRelationships(
     memories: Memory[],
     options: {
-      containerTag?: string;
+      containerTag?: string
     } = {}
   ): Promise<RelationshipDetectionResult[]> {
-    const results: RelationshipDetectionResult[] = [];
-    const processedIds = new Set<string>();
+    const results: RelationshipDetectionResult[] = []
+    const processedIds = new Set<string>()
 
     // Process in batches
     for (let i = 0; i < memories.length; i += this.config.batchSize) {
-      const batch = memories.slice(i, i + this.config.batchSize);
+      const batch = memories.slice(i, i + this.config.batchSize)
 
       const batchResults = await Promise.all(
         batch.map((memory) =>
@@ -748,15 +698,15 @@ export class EmbeddingRelationshipDetector {
             excludeIds: [...processedIds],
           })
         )
-      );
+      )
 
       for (const result of batchResults) {
-        results.push(result);
-        processedIds.add(result.sourceMemory.id);
+        results.push(result)
+        processedIds.add(result.sourceMemory.id)
       }
     }
 
-    return results;
+    return results
   }
 
   // ============================================================================
@@ -766,11 +716,8 @@ export class EmbeddingRelationshipDetector {
   /**
    * Detect contradictions between a memory and candidates.
    */
-  async detectContradictions(
-    memory: Memory,
-    candidates: RelationshipCandidate[]
-  ): Promise<Contradiction[]> {
-    const contradictions: Contradiction[] = [];
+  async detectContradictions(memory: Memory, candidates: RelationshipCandidate[]): Promise<Contradiction[]> {
+    const contradictions: Contradiction[] = []
 
     for (const candidate of candidates) {
       // Check for contradiction indicators in content
@@ -778,7 +725,7 @@ export class EmbeddingRelationshipDetector {
         memory.content,
         candidate.memory.content,
         candidate.vectorSimilarity
-      );
+      )
 
       if (contradictionScore.isContradiction) {
         const contradiction: Contradiction = {
@@ -794,58 +741,55 @@ export class EmbeddingRelationshipDetector {
           suggestedResolution: this.suggestResolution(memory, candidate.memory),
           detectedAt: new Date(),
           resolved: false,
-        };
+        }
 
         // Optionally verify with LLM
         if (this.llmProvider && this.config.enableLLMVerification) {
           try {
-            const llmResult = await this.llmProvider.checkContradiction(
-              memory.content,
-              candidate.memory.content
-            );
+            const llmResult = await this.llmProvider.checkContradiction(memory.content, candidate.memory.content)
 
             if (llmResult.isContradiction) {
-              contradiction.confidence = llmResult.confidence;
+              contradiction.confidence = llmResult.confidence
               if (llmResult.type) {
-                contradiction.type = llmResult.type;
+                contradiction.type = llmResult.type
               }
-              contradiction.description = llmResult.description;
+              contradiction.description = llmResult.description
             } else {
               // LLM says no contradiction, skip
-              continue;
+              continue
             }
           } catch (error) {
             logger.warn('LLM contradiction check failed', {
               error: error instanceof Error ? error.message : 'Unknown',
-            });
+            })
           }
         }
 
-        contradictions.push(contradiction);
+        contradictions.push(contradiction)
       }
     }
 
-    return contradictions;
+    return contradictions
   }
 
   /**
    * Check multiple memories for contradictions among themselves.
    */
   async detectContradictionsInGroup(memories: Memory[]): Promise<Contradiction[]> {
-    const contradictions: Contradiction[] = [];
+    const contradictions: Contradiction[] = []
 
     // Get embeddings for all memories
-    const embeddings = await Promise.all(memories.map((m) => this.getOrGenerateEmbedding(m)));
+    const embeddings = await Promise.all(memories.map((m) => this.getOrGenerateEmbedding(m)))
 
     // Compare each pair
     for (let i = 0; i < memories.length; i++) {
       for (let j = i + 1; j < memories.length; j++) {
-        const memory1 = memories[i]!;
-        const memory2 = memories[j]!;
-        const embedding1 = embeddings[i]!;
-        const embedding2 = embeddings[j]!;
+        const memory1 = memories[i]!
+        const memory2 = memories[j]!
+        const embedding1 = embeddings[i]!
+        const embedding2 = embeddings[j]!
 
-        const similarity = cosineSimilarity(embedding1, embedding2);
+        const similarity = cosineSimilarity(embedding1, embedding2)
 
         if (similarity >= this.config.thresholds.contradicts) {
           const candidate: RelationshipCandidate = {
@@ -854,16 +798,16 @@ export class EmbeddingRelationshipDetector {
             entityOverlap: 0,
             temporalScore: 0,
             combinedScore: similarity,
-          };
+          }
 
-          const detectedContradictions = await this.detectContradictions(memory1, [candidate]);
+          const detectedContradictions = await this.detectContradictions(memory1, [candidate])
 
-          contradictions.push(...detectedContradictions);
+          contradictions.push(...detectedContradictions)
         }
       }
     }
 
-    return contradictions;
+    return contradictions
   }
 
   // ============================================================================
@@ -875,10 +819,10 @@ export class EmbeddingRelationshipDetector {
    */
   private async getOrGenerateEmbedding(memory: Memory): Promise<number[]> {
     if (memory.embedding && memory.embedding.length > 0) {
-      return memory.embedding;
+      return memory.embedding
     }
 
-    return this.embeddingService.generateEmbedding(memory.content);
+    return this.embeddingService.generateEmbedding(memory.content)
   }
 
   /**
@@ -888,27 +832,23 @@ export class EmbeddingRelationshipDetector {
     newMemory: Memory,
     searchResults: VectorSearchResult[]
   ): Promise<RelationshipCandidate[]> {
-    const candidates: RelationshipCandidate[] = [];
-    const now = Date.now();
+    const candidates: RelationshipCandidate[] = []
+    const now = Date.now()
 
     for (const result of searchResults) {
       // Calculate entity overlap
       const entityOverlap = this.calculateEntityOverlap(
         newMemory.metadata?.entities || [],
         result.memory.metadata?.entities || []
-      );
+      )
 
       // Calculate temporal score (recency bias)
-      const timeDiff = now - result.memory.createdAt.getTime();
-      const oneWeek = 7 * 24 * 60 * 60 * 1000;
-      const temporalScore = Math.exp(-timeDiff / oneWeek);
+      const timeDiff = now - result.memory.createdAt.getTime()
+      const oneWeek = 7 * 24 * 60 * 60 * 1000
+      const temporalScore = Math.exp(-timeDiff / oneWeek)
 
       // Calculate combined score
-      const combinedScore = this.calculateCombinedScore(
-        result.similarity,
-        entityOverlap,
-        temporalScore
-      );
+      const combinedScore = this.calculateCombinedScore(result.similarity, entityOverlap, temporalScore)
 
       candidates.push({
         memory: result.memory,
@@ -916,58 +856,50 @@ export class EmbeddingRelationshipDetector {
         entityOverlap,
         temporalScore,
         combinedScore,
-      });
+      })
     }
 
     // Sort by combined score
-    candidates.sort((a, b) => b.combinedScore - a.combinedScore);
+    candidates.sort((a, b) => b.combinedScore - a.combinedScore)
 
-    return candidates;
+    return candidates
   }
 
   /**
    * Calculate entity overlap between two entity lists
    */
   private calculateEntityOverlap(entities1: unknown[], entities2: unknown[]): number {
-    if (!Array.isArray(entities1) || !Array.isArray(entities2)) return 0;
-    if (entities1.length === 0 || entities2.length === 0) return 0;
+    if (!Array.isArray(entities1) || !Array.isArray(entities2)) return 0
+    if (entities1.length === 0 || entities2.length === 0) return 0
 
     const names1 = new Set(
       entities1
         .filter((e): e is { name: string } => typeof e === 'object' && e !== null && 'name' in e)
         .map((e) => e.name.toLowerCase())
-    );
+    )
     const names2 = new Set(
       entities2
         .filter((e): e is { name: string } => typeof e === 'object' && e !== null && 'name' in e)
         .map((e) => e.name.toLowerCase())
-    );
+    )
 
-    const intersection = [...names1].filter((n) => names2.has(n)).length;
-    const union = new Set([...names1, ...names2]).size;
+    const intersection = [...names1].filter((n) => names2.has(n)).length
+    const union = new Set([...names1, ...names2]).size
 
-    return union > 0 ? intersection / union : 0;
+    return union > 0 ? intersection / union : 0
   }
 
   /**
    * Calculate combined score from multiple signals
    */
-  private calculateCombinedScore(
-    vectorSimilarity: number,
-    entityOverlap: number,
-    temporalScore: number
-  ): number {
+  private calculateCombinedScore(vectorSimilarity: number, entityOverlap: number, temporalScore: number): number {
     const weights = {
       vector: 1 - this.config.temporalWeight - this.config.entityOverlapWeight,
       temporal: this.config.temporalWeight,
       entity: this.config.entityOverlapWeight,
-    };
+    }
 
-    return (
-      vectorSimilarity * weights.vector +
-      temporalScore * weights.temporal +
-      entityOverlap * weights.entity
-    );
+    return vectorSimilarity * weights.vector + temporalScore * weights.temporal + entityOverlap * weights.entity
   }
 
   /**
@@ -978,13 +910,13 @@ export class EmbeddingRelationshipDetector {
     content2: string,
     similarity: number
   ): {
-    isContradiction: boolean;
-    type: ContradictionType;
-    confidence: number;
-    description: string;
+    isContradiction: boolean
+    type: ContradictionType
+    confidence: number
+    description: string
   } {
-    const lower1 = content1.toLowerCase();
-    const lower2 = content2.toLowerCase();
+    const lower1 = content1.toLowerCase()
+    const lower2 = content2.toLowerCase()
 
     // Check for negation patterns
     const negationPatterns = [
@@ -996,10 +928,10 @@ export class EmbeddingRelationshipDetector {
       /\bdoesn't\b/,
       /\bisn't\b/,
       /\baren't\b/,
-    ];
+    ]
 
-    const hasNegation1 = negationPatterns.some((p) => p.test(lower1));
-    const hasNegation2 = negationPatterns.some((p) => p.test(lower2));
+    const hasNegation1 = negationPatterns.some((p) => p.test(lower1))
+    const hasNegation2 = negationPatterns.some((p) => p.test(lower2))
 
     // XOR negation (one has negation, other doesn't) with high similarity = potential contradiction
     if (hasNegation1 !== hasNegation2 && similarity >= 0.75) {
@@ -1008,7 +940,7 @@ export class EmbeddingRelationshipDetector {
         type: 'factual',
         confidence: similarity * 0.9,
         description: 'Potentially contradictory statements detected (negation asymmetry)',
-      };
+      }
     }
 
     // Check for opposite adjectives/adverbs
@@ -1021,24 +953,21 @@ export class EmbeddingRelationshipDetector {
       [/\blove\b/, /\bhate\b/],
       [/\blike\b/, /\bdislike\b/],
       [/\bprefer\b/, /\bavoid\b/],
-    ];
+    ]
 
     for (const [pattern1, pattern2] of opposites) {
-      if (
-        (pattern1.test(lower1) && pattern2.test(lower2)) ||
-        (pattern2.test(lower1) && pattern1.test(lower2))
-      ) {
+      if ((pattern1.test(lower1) && pattern2.test(lower2)) || (pattern2.test(lower1) && pattern1.test(lower2))) {
         return {
           isContradiction: true,
           type: 'semantic',
           confidence: similarity * 0.85,
           description: 'Semantically opposite statements detected',
-        };
+        }
       }
     }
 
     // Check for temporal contradiction indicators
-    const temporalPatterns = [/\bused to\b/, /\bno longer\b/, /\bpreviously\b/, /\bformerly\b/];
+    const temporalPatterns = [/\bused to\b/, /\bno longer\b/, /\bpreviously\b/, /\bformerly\b/]
 
     if (temporalPatterns.some((p) => p.test(lower1) || p.test(lower2)) && similarity >= 0.7) {
       return {
@@ -1046,7 +975,7 @@ export class EmbeddingRelationshipDetector {
         type: 'temporal',
         confidence: similarity * 0.8,
         description: 'Temporal update detected - information may have changed',
-      };
+      }
     }
 
     return {
@@ -1054,7 +983,7 @@ export class EmbeddingRelationshipDetector {
       type: 'partial',
       confidence: 0,
       description: 'No contradiction detected',
-    };
+    }
   }
 
   /**
@@ -1062,11 +991,11 @@ export class EmbeddingRelationshipDetector {
    */
   private suggestResolution(memory1: Memory, memory2: Memory): ContradictionResolution {
     // Prefer newer information by default
-    const isMemory1Newer = memory1.createdAt > memory2.createdAt;
+    const isMemory1Newer = memory1.createdAt > memory2.createdAt
 
     // Check confidence levels
-    const confidence1 = memory1.confidence ?? 0.5;
-    const confidence2 = memory2.confidence ?? 0.5;
+    const confidence1 = memory1.confidence ?? 0.5
+    const confidence2 = memory2.confidence ?? 0.5
 
     if (Math.abs(confidence1 - confidence2) > 0.2) {
       // Significant confidence difference - keep higher confidence
@@ -1074,7 +1003,7 @@ export class EmbeddingRelationshipDetector {
         action: confidence1 > confidence2 ? 'keep_newer' : 'keep_older',
         reason: `Higher confidence memory (${Math.max(confidence1, confidence2).toFixed(2)}) should be preferred`,
         confidence: 0.7,
-      };
+      }
     }
 
     if (isMemory1Newer) {
@@ -1082,14 +1011,14 @@ export class EmbeddingRelationshipDetector {
         action: 'keep_newer',
         reason: 'Newer information typically supersedes older information',
         confidence: 0.6,
-      };
+      }
     }
 
     return {
       action: 'manual_review',
       reason: 'Unable to automatically determine which memory is more accurate',
       confidence: 0.4,
-    };
+    }
   }
 
   // ============================================================================
@@ -1100,63 +1029,58 @@ export class EmbeddingRelationshipDetector {
    * Get cached relationship score
    */
   getCachedScore(sourceId: string, targetId: string): CachedRelationshipScore | null {
-    const key = generateCacheKey(sourceId, targetId);
-    const cached = this.cache.get(key);
+    const key = generateCacheKey(sourceId, targetId)
+    const cached = this.cache.get(key)
 
     if (cached && Date.now() - cached.cachedAt < this.config.cacheTTL) {
-      return cached;
+      return cached
     }
 
     // Cache expired
     if (cached) {
-      this.cache.delete(key);
+      this.cache.delete(key)
     }
 
-    return null;
+    return null
   }
 
   /**
    * Cache a relationship score
    */
-  cacheScore(
-    sourceId: string,
-    targetId: string,
-    score: number,
-    type: RelationshipType | null
-  ): void {
-    const key = generateCacheKey(sourceId, targetId);
+  cacheScore(sourceId: string, targetId: string, score: number, type: RelationshipType | null): void {
+    const key = generateCacheKey(sourceId, targetId)
     this.cache.set(key, {
       sourceId,
       targetId,
       score,
       type,
       cachedAt: Date.now(),
-    });
+    })
   }
 
   /**
    * Clear the cache
    */
   clearCache(): void {
-    this.cache.clear();
+    this.cache.clear()
   }
 
   /**
    * Get cache statistics
    */
   getCacheStats(): { size: number; oldestEntry: number | null } {
-    let oldest: number | null = null;
+    let oldest: number | null = null
 
     for (const entry of this.cache.values()) {
       if (oldest === null || entry.cachedAt < oldest) {
-        oldest = entry.cachedAt;
+        oldest = entry.cachedAt
       }
     }
 
     return {
       size: this.cache.size,
       oldestEntry: oldest,
-    };
+    }
   }
 
   // ============================================================================
@@ -1167,22 +1091,22 @@ export class EmbeddingRelationshipDetector {
    * Get current configuration
    */
   getConfig(): RelationshipConfig {
-    return { ...this.config };
+    return { ...this.config }
   }
 
   /**
    * Update configuration
    */
   updateConfig(updates: Partial<RelationshipConfig>): void {
-    Object.assign(this.config, updates);
-    logger.debug('Configuration updated', { updates });
+    Object.assign(this.config, updates)
+    logger.debug('Configuration updated', { updates })
   }
 
   /**
    * Set LLM provider
    */
   setLLMProvider(provider: LLMProvider): void {
-    this.llmProvider = provider;
+    this.llmProvider = provider
   }
 }
 
@@ -1199,6 +1123,6 @@ export function createEmbeddingRelationshipDetector(
   config?: Partial<RelationshipConfig>,
   llmProvider?: LLMProvider
 ): EmbeddingRelationshipDetector {
-  const store = vectorStore ?? new InMemoryVectorStoreAdapter();
-  return new EmbeddingRelationshipDetector(embeddingService, store, config, llmProvider);
+  const store = vectorStore ?? new InMemoryVectorStoreAdapter()
+  return new EmbeddingRelationshipDetector(embeddingService, store, config, llmProvider)
 }

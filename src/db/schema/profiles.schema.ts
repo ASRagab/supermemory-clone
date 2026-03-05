@@ -1,6 +1,6 @@
-import { pgTable, uuid, varchar, jsonb, timestamp, integer, index } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { containerTags } from './containers.schema.js';
+import { pgTable, uuid, varchar, jsonb, timestamp, integer, index } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { containerTags } from './containers.schema.js'
 
 export const userProfiles = pgTable(
   'user_profiles',
@@ -28,7 +28,7 @@ export const userProfiles = pgTable(
     index('idx_user_profiles_preferences').using('gin', table.preferences),
     index('idx_user_profiles_updated').on(table.updatedAt.desc()),
   ]
-);
+)
 
-export type UserProfile = typeof userProfiles.$inferSelect;
-export type NewUserProfile = typeof userProfiles.$inferInsert;
+export type UserProfile = typeof userProfiles.$inferSelect
+export type NewUserProfile = typeof userProfiles.$inferInsert

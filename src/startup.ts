@@ -7,19 +7,11 @@
  * This module should be imported and called FIRST in the application entry point.
  */
 
-import { getSecretsService } from './services/secrets.service.js';
-import {
-  validateApiKey,
-  validateDatabaseUrl,
-  checkSecretStrength,
-} from './utils/secret-validation.js';
-import {
-  getRequiredSecrets,
-  getOptionalSecrets,
-  type SecretDefinition,
-} from './config/secrets.config.js';
-import { logger } from './utils/logger.js';
-import { AppError, ErrorCode } from './utils/errors.js';
+import { getSecretsService } from './services/secrets.service.js'
+import { validateApiKey, validateDatabaseUrl, checkSecretStrength } from './utils/secret-validation.js'
+import { getRequiredSecrets, getOptionalSecrets, type SecretDefinition } from './config/secrets.config.js'
+import { logger } from './utils/logger.js'
+import { AppError, ErrorCode } from './utils/errors.js'
 
 // ============================================================================
 // Types
@@ -30,17 +22,17 @@ import { AppError, ErrorCode } from './utils/errors.js';
  */
 export interface StartupValidationResult {
   /** All validations passed */
-  success: boolean;
+  success: boolean
   /** Fatal errors (prevent startup) */
-  errors: string[];
+  errors: string[]
   /** Non-fatal warnings */
-  warnings: string[];
+  warnings: string[]
   /** Loaded secrets count */
-  secretsLoaded: number;
+  secretsLoaded: number
   /** Weak secrets detected */
-  weakSecrets: string[];
+  weakSecrets: string[]
   /** Missing optional secrets */
-  missingOptional: string[];
+  missingOptional: string[]
 }
 
 /**
@@ -48,26 +40,26 @@ export interface StartupValidationResult {
  */
 export interface ConfigurationSummary {
   /** Environment */
-  environment: string;
+  environment: string
   /** Node version */
-  nodeVersion: string;
+  nodeVersion: string
   /** Required secrets status */
   requiredSecrets: {
-    present: string[];
-    missing: string[];
-  };
+    present: string[]
+    missing: string[]
+  }
   /** Optional secrets status */
   optionalSecrets: {
-    present: string[];
-    missing: string[];
-  };
+    present: string[]
+    missing: string[]
+  }
   /** Database configuration (sanitized) */
   database?: {
-    type: string;
-    host: string;
-    port: number;
-    database: string;
-  };
+    type: string
+    host: string
+    port: number
+    database: string
+  }
 }
 
 // ============================================================================
@@ -87,86 +79,78 @@ export function validateSecretsOnStartup(): StartupValidationResult {
     secretsLoaded: 0,
     weakSecrets: [],
     missingOptional: [],
-  };
+  }
 
-  logger.info('[Startup] Validating secrets configuration...');
+  logger.info('[Startup] Validating secrets configuration...')
 
   // Check required secrets
-  const requiredSecrets = getRequiredSecrets();
-  const missingRequired: string[] = [];
+  const requiredSecrets = getRequiredSecrets()
+  const missingRequired: string[] = []
 
   for (const secret of requiredSecrets) {
-    const value = process.env[secret.envVar];
+    const value = process.env[secret.envVar]
 
     if (!value) {
-      missingRequired.push(secret.envVar);
-      result.errors.push(`Required secret missing: ${secret.envVar} - ${secret.description}`);
-      continue;
+      missingRequired.push(secret.envVar)
+      result.errors.push(`Required secret missing: ${secret.envVar} - ${secret.description}`)
+      continue
     }
 
     // Validate the secret
-    const validation = validateSecret(secret, value);
+    const validation = validateSecret(secret, value)
     if (!validation.valid) {
-      result.errors.push(
-        `Invalid secret ${secret.envVar}: ${validation.errors.join(', ')}`
-      );
+      result.errors.push(`Invalid secret ${secret.envVar}: ${validation.errors.join(', ')}`)
     }
 
     if (validation.warnings.length > 0) {
-      result.warnings.push(
-        `${secret.envVar}: ${validation.warnings.join(', ')}`
-      );
+      result.warnings.push(`${secret.envVar}: ${validation.warnings.join(', ')}`)
     }
 
     if (validation.weak) {
-      result.weakSecrets.push(secret.envVar);
-      result.warnings.push(`Weak secret detected: ${secret.envVar}`);
+      result.weakSecrets.push(secret.envVar)
+      result.warnings.push(`Weak secret detected: ${secret.envVar}`)
     }
 
-    result.secretsLoaded++;
+    result.secretsLoaded++
   }
 
   // Check optional secrets
-  const optionalSecrets = getOptionalSecrets();
+  const optionalSecrets = getOptionalSecrets()
 
   for (const secret of optionalSecrets) {
-    const value = process.env[secret.envVar];
+    const value = process.env[secret.envVar]
 
     if (!value) {
-      result.missingOptional.push(secret.envVar);
+      result.missingOptional.push(secret.envVar)
       logger.debug(`[Startup] Optional secret not set: ${secret.envVar}`, {
         description: secret.description,
         default: secret.defaultValue ? '[has default]' : '[no default]',
-      });
-      continue;
+      })
+      continue
     }
 
     // Validate the secret
-    const validation = validateSecret(secret, value);
+    const validation = validateSecret(secret, value)
     if (!validation.valid) {
-      result.warnings.push(
-        `Optional secret ${secret.envVar} is invalid: ${validation.errors.join(', ')}`
-      );
+      result.warnings.push(`Optional secret ${secret.envVar} is invalid: ${validation.errors.join(', ')}`)
     }
 
     if (validation.warnings.length > 0) {
-      result.warnings.push(
-        `${secret.envVar}: ${validation.warnings.join(', ')}`
-      );
+      result.warnings.push(`${secret.envVar}: ${validation.warnings.join(', ')}`)
     }
 
     if (validation.weak) {
-      result.weakSecrets.push(secret.envVar);
-      result.warnings.push(`Weak optional secret: ${secret.envVar}`);
+      result.weakSecrets.push(secret.envVar)
+      result.warnings.push(`Weak optional secret: ${secret.envVar}`)
     }
 
-    result.secretsLoaded++;
+    result.secretsLoaded++
   }
 
   // Determine overall success
-  result.success = result.errors.length === 0;
+  result.success = result.errors.length === 0
 
-  return result;
+  return result
 }
 
 /**
@@ -176,55 +160,55 @@ function validateSecret(
   definition: SecretDefinition,
   value: string
 ): {
-  valid: boolean;
-  errors: string[];
-  warnings: string[];
-  weak: boolean;
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  weak: boolean
 } {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  let weak = false;
+  const errors: string[] = []
+  const warnings: string[] = []
+  let weak = false
 
   // Check minimum length
   if (definition.minLength && value.length < definition.minLength) {
-    errors.push(`Must be at least ${definition.minLength} characters`);
+    errors.push(`Must be at least ${definition.minLength} characters`)
   }
 
   // Format-specific validation
   switch (definition.format) {
     case 'api_key': {
-      const validation = validateApiKey(value);
+      const validation = validateApiKey(value)
       if (!validation.valid && validation.error) {
-        warnings.push(validation.error);
+        warnings.push(validation.error)
       }
-      break;
+      break
     }
 
     case 'database_url': {
       try {
-        validateDatabaseUrl(value);
+        validateDatabaseUrl(value)
       } catch {
-        errors.push('Invalid database URL format');
+        errors.push('Invalid database URL format')
       }
-      break;
+      break
     }
 
     case 'password':
     case 'generic': {
-      const strength = checkSecretStrength(value);
+      const strength = checkSecretStrength(value)
       if (strength.strength === 'weak' || strength.strength === 'fair') {
-        weak = true;
-        warnings.push(...strength.recommendations);
+        weak = true
+        warnings.push(...strength.recommendations)
       }
-      break;
+      break
     }
   }
 
   // Custom validation function
   if (definition.validate) {
-    const customValidation = definition.validate(value);
+    const customValidation = definition.validate(value)
     if (!customValidation.valid && customValidation.error) {
-      errors.push(customValidation.error);
+      errors.push(customValidation.error)
     }
   }
 
@@ -233,15 +217,15 @@ function validateSecret(
     errors,
     warnings,
     weak,
-  };
+  }
 }
 
 /**
  * Get sanitized configuration summary for logging
  */
 export function getConfigurationSummary(): ConfigurationSummary {
-  const requiredSecrets = getRequiredSecrets();
-  const optionalSecrets = getOptionalSecrets();
+  const requiredSecrets = getRequiredSecrets()
+  const optionalSecrets = getOptionalSecrets()
 
   const summary: ConfigurationSummary = {
     environment: process.env.NODE_ENV || 'development',
@@ -254,43 +238,43 @@ export function getConfigurationSummary(): ConfigurationSummary {
       present: [],
       missing: [],
     },
-  };
+  }
 
   // Check required secrets
   for (const secret of requiredSecrets) {
     if (process.env[secret.envVar]) {
-      summary.requiredSecrets.present.push(secret.envVar);
+      summary.requiredSecrets.present.push(secret.envVar)
     } else {
-      summary.requiredSecrets.missing.push(secret.envVar);
+      summary.requiredSecrets.missing.push(secret.envVar)
     }
   }
 
   // Check optional secrets
   for (const secret of optionalSecrets) {
     if (process.env[secret.envVar]) {
-      summary.optionalSecrets.present.push(secret.envVar);
+      summary.optionalSecrets.present.push(secret.envVar)
     } else {
-      summary.optionalSecrets.missing.push(secret.envVar);
+      summary.optionalSecrets.missing.push(secret.envVar)
     }
   }
 
   // Add sanitized database config if present
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = process.env.DATABASE_URL
   if (databaseUrl) {
     try {
-      const parsed = validateDatabaseUrl(databaseUrl);
+      const parsed = validateDatabaseUrl(databaseUrl)
       summary.database = {
         type: parsed.type,
         host: parsed.host,
         port: parsed.port,
         database: parsed.database,
-      };
+      }
     } catch {
       // Invalid database URL, skip
     }
   }
 
-  return summary;
+  return summary
 }
 
 /**
@@ -300,13 +284,13 @@ export function getConfigurationSummary(): ConfigurationSummary {
  * @throws AppError if critical validation fails
  */
 export async function initializeAndValidate(): Promise<void> {
-  logger.info('[Startup] Initializing application...');
+  logger.info('[Startup] Initializing application...')
 
   // Validate secrets
-  const validationResult = validateSecretsOnStartup();
+  const validationResult = validateSecretsOnStartup()
 
   // Log configuration summary (sanitized)
-  const summary = getConfigurationSummary();
+  const summary = getConfigurationSummary()
   logger.info('[Startup] Configuration summary', {
     environment: summary.environment,
     nodeVersion: summary.nodeVersion,
@@ -316,14 +300,14 @@ export async function initializeAndValidate(): Promise<void> {
     database: summary.database
       ? `${summary.database.type}://${summary.database.host}:${summary.database.port}/${summary.database.database}`
       : 'not configured',
-  });
+  })
 
   // Log warnings
   if (validationResult.warnings.length > 0) {
     logger.warn('[Startup] Configuration warnings', {
       count: validationResult.warnings.length,
       warnings: validationResult.warnings,
-    });
+    })
   }
 
   // Log weak secrets warning
@@ -331,7 +315,7 @@ export async function initializeAndValidate(): Promise<void> {
     logger.warn('[Startup] ⚠️  Weak secrets detected', {
       secrets: validationResult.weakSecrets,
       recommendation: 'Consider rotating these secrets with stronger values',
-    });
+    })
   }
 
   // Log missing optional secrets
@@ -339,7 +323,7 @@ export async function initializeAndValidate(): Promise<void> {
     logger.info('[Startup] Optional secrets not configured', {
       secrets: validationResult.missingOptional,
       note: 'These features may be disabled or using defaults',
-    });
+    })
   }
 
   // Fail fast on errors
@@ -347,39 +331,35 @@ export async function initializeAndValidate(): Promise<void> {
     logger.error('[Startup] ❌ Critical validation errors', {
       errorCount: validationResult.errors.length,
       errors: validationResult.errors,
-    });
+    })
 
-    throw new AppError(
-      `Startup validation failed: ${validationResult.errors.join('; ')}`,
-      ErrorCode.VALIDATION_ERROR,
-      {
-        errors: validationResult.errors,
-        missingRequired: summary.requiredSecrets.missing,
-      }
-    );
+    throw new AppError(`Startup validation failed: ${validationResult.errors.join('; ')}`, ErrorCode.VALIDATION_ERROR, {
+      errors: validationResult.errors,
+      missingRequired: summary.requiredSecrets.missing,
+    })
   }
 
   // Initialize secrets service if master password is provided
-  const masterPassword = process.env.SECRETS_MASTER_PASSWORD;
+  const masterPassword = process.env.SECRETS_MASTER_PASSWORD
   if (masterPassword) {
     try {
-      const secretsService = getSecretsService();
-      secretsService.initialize(masterPassword);
-      logger.info('[Startup] Secrets service initialized');
+      const secretsService = getSecretsService()
+      secretsService.initialize(masterPassword)
+      logger.info('[Startup] Secrets service initialized')
     } catch (error) {
       logger.error('[Startup] Failed to initialize secrets service', {
         error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      })
+      throw error
     }
   } else {
-    logger.warn('[Startup] Secrets service not initialized (SECRETS_MASTER_PASSWORD not set)');
+    logger.warn('[Startup] Secrets service not initialized (SECRETS_MASTER_PASSWORD not set)')
   }
 
   logger.info('[Startup] ✅ Validation complete', {
     secretsLoaded: validationResult.secretsLoaded,
     warnings: validationResult.warnings.length,
-  });
+  })
 }
 
 /**
@@ -388,7 +368,7 @@ export async function initializeAndValidate(): Promise<void> {
  */
 export async function validateEnvironment(): Promise<void> {
   try {
-    await initializeAndValidate();
+    await initializeAndValidate()
   } catch (error) {
     if (error instanceof AppError) {
       // Log structured error
@@ -396,14 +376,14 @@ export async function validateEnvironment(): Promise<void> {
         code: error.code,
         message: error.message,
         details: error.details,
-      });
+      })
     } else {
       logger.error('[Startup] Unexpected error during validation', {
         error: error instanceof Error ? error.message : String(error),
-      });
+      })
     }
 
     // Exit with error code
-    process.exit(1);
+    process.exit(1)
   }
 }

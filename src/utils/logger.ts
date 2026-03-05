@@ -14,29 +14,29 @@ export const LogLevel = {
   WARN: 2,
   ERROR: 3,
   SILENT: 4,
-} as const;
+} as const
 
-export type LogLevelName = keyof typeof LogLevel;
-export type LogLevelValue = (typeof LogLevel)[LogLevelName];
+export type LogLevelName = keyof typeof LogLevel
+export type LogLevelValue = (typeof LogLevel)[LogLevelName]
 
 /**
  * Log entry structure
  */
 export interface LogEntry {
   /** Log level */
-  level: LogLevelName;
+  level: LogLevelName
   /** Log message */
-  message: string;
+  message: string
   /** Timestamp */
-  timestamp: Date;
+  timestamp: Date
   /** Optional context data */
-  context?: Record<string, unknown>;
+  context?: Record<string, unknown>
   /** Optional request/trace ID */
-  traceId?: string;
+  traceId?: string
   /** Error object if applicable */
-  error?: Error;
+  error?: Error
   /** Service or module name */
-  service?: string;
+  service?: string
 }
 
 /**
@@ -44,15 +44,15 @@ export interface LogEntry {
  */
 export interface LoggerConfig {
   /** Minimum log level to output */
-  level: LogLevelName;
+  level: LogLevelName
   /** Service name for log entries */
-  service?: string;
+  service?: string
   /** Whether to include timestamps */
-  includeTimestamp?: boolean;
+  includeTimestamp?: boolean
   /** Whether to output as JSON */
-  jsonOutput?: boolean;
+  jsonOutput?: boolean
   /** Custom output handler */
-  output?: (entry: LogEntry) => void;
+  output?: (entry: LogEntry) => void
 }
 
 /**
@@ -62,7 +62,7 @@ const DEFAULT_CONFIG: LoggerConfig = {
   level: (process.env.LOG_LEVEL as LogLevelName) || 'INFO',
   includeTimestamp: true,
   jsonOutput: process.env.NODE_ENV === 'production',
-};
+}
 
 /**
  * Format log entry for console output
@@ -83,59 +83,59 @@ function formatLogEntry(entry: LogEntry, config: LoggerConfig): string {
             stack: entry.error.stack,
           }
         : undefined,
-    });
+    })
   }
 
-  const parts: string[] = [];
+  const parts: string[] = []
 
   if (config.includeTimestamp) {
-    parts.push(`[${entry.timestamp.toISOString()}]`);
+    parts.push(`[${entry.timestamp.toISOString()}]`)
   }
 
-  parts.push(`[${entry.level}]`);
+  parts.push(`[${entry.level}]`)
 
   if (entry.service) {
-    parts.push(`[${entry.service}]`);
+    parts.push(`[${entry.service}]`)
   }
 
   if (entry.traceId) {
-    parts.push(`[${entry.traceId}]`);
+    parts.push(`[${entry.traceId}]`)
   }
 
-  parts.push(entry.message);
+  parts.push(entry.message)
 
   if (entry.context && Object.keys(entry.context).length > 0) {
-    parts.push(JSON.stringify(entry.context));
+    parts.push(JSON.stringify(entry.context))
   }
 
   if (entry.error) {
-    parts.push(`\n  Error: ${entry.error.message}`);
+    parts.push(`\n  Error: ${entry.error.message}`)
     if (entry.error.stack) {
-      parts.push(`\n  Stack: ${entry.error.stack}`);
+      parts.push(`\n  Stack: ${entry.error.stack}`)
     }
   }
 
-  return parts.join(' ');
+  return parts.join(' ')
 }
 
 /**
  * Default output handler
  */
 function defaultOutput(entry: LogEntry, config: LoggerConfig): void {
-  const formatted = formatLogEntry(entry, config);
+  const formatted = formatLogEntry(entry, config)
 
   switch (entry.level) {
     case 'ERROR':
-      console.error(formatted);
-      break;
+      console.error(formatted)
+      break
     case 'WARN':
-      console.warn(formatted);
-      break;
+      console.warn(formatted)
+      break
     case 'DEBUG':
-      console.debug(formatted);
-      break;
+      console.debug(formatted)
+      break
     default:
-      console.log(formatted);
+      console.log(formatted)
   }
 }
 
@@ -143,40 +143,40 @@ function defaultOutput(entry: LogEntry, config: LoggerConfig): void {
  * Logger class providing structured logging with levels and context
  */
 export class Logger {
-  private config: LoggerConfig;
-  private traceId?: string;
-  private defaultContext: Record<string, unknown> = {};
+  private config: LoggerConfig
+  private traceId?: string
+  private defaultContext: Record<string, unknown> = {}
 
   constructor(config: Partial<LoggerConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = { ...DEFAULT_CONFIG, ...config }
   }
 
   /**
    * Set trace ID for request correlation
    */
   setTraceId(traceId: string): void {
-    this.traceId = traceId;
+    this.traceId = traceId
   }
 
   /**
    * Clear trace ID
    */
   clearTraceId(): void {
-    this.traceId = undefined;
+    this.traceId = undefined
   }
 
   /**
    * Set default context that will be included in all log entries
    */
   setDefaultContext(context: Record<string, unknown>): void {
-    this.defaultContext = { ...context };
+    this.defaultContext = { ...context }
   }
 
   /**
    * Add to default context
    */
   addContext(context: Record<string, unknown>): void {
-    this.defaultContext = { ...this.defaultContext, ...context };
+    this.defaultContext = { ...this.defaultContext, ...context }
   }
 
   /**
@@ -186,30 +186,25 @@ export class Logger {
     const child = new Logger({
       ...this.config,
       service: service ?? this.config.service,
-    });
-    child.traceId = this.traceId;
-    child.defaultContext = { ...this.defaultContext, ...context };
-    return child;
+    })
+    child.traceId = this.traceId
+    child.defaultContext = { ...this.defaultContext, ...context }
+    return child
   }
 
   /**
    * Check if a log level should be output
    */
   private shouldLog(level: LogLevelName): boolean {
-    return LogLevel[level] >= LogLevel[this.config.level];
+    return LogLevel[level] >= LogLevel[this.config.level]
   }
 
   /**
    * Create and output a log entry
    */
-  private log(
-    level: LogLevelName,
-    message: string,
-    context?: Record<string, unknown>,
-    error?: Error
-  ): void {
+  private log(level: LogLevelName, message: string, context?: Record<string, unknown>, error?: Error): void {
     if (!this.shouldLog(level)) {
-      return;
+      return
     }
 
     const entry: LogEntry = {
@@ -220,12 +215,12 @@ export class Logger {
       traceId: this.traceId,
       error,
       service: this.config.service,
-    };
+    }
 
     if (this.config.output) {
-      this.config.output(entry);
+      this.config.output(entry)
     } else {
-      defaultOutput(entry, this.config);
+      defaultOutput(entry, this.config)
     }
   }
 
@@ -233,47 +228,47 @@ export class Logger {
    * Log debug message
    */
   debug(message: string, context?: Record<string, unknown>): void {
-    this.log('DEBUG', message, context);
+    this.log('DEBUG', message, context)
   }
 
   /**
    * Log info message
    */
   info(message: string, context?: Record<string, unknown>): void {
-    this.log('INFO', message, context);
+    this.log('INFO', message, context)
   }
 
   /**
    * Log warning message
    */
   warn(message: string, context?: Record<string, unknown>, error?: Error): void {
-    this.log('WARN', message, context, error);
+    this.log('WARN', message, context, error)
   }
 
   /**
    * Log error message
    */
   error(message: string, context?: Record<string, unknown>, error?: Error): void {
-    this.log('ERROR', message, context, error);
+    this.log('ERROR', message, context, error)
   }
 
   /**
    * Log error with automatic error extraction
    */
   errorWithException(message: string, err: unknown, context?: Record<string, unknown>): void {
-    const error = err instanceof Error ? err : new Error(String(err));
-    this.log('ERROR', message, context, error);
+    const error = err instanceof Error ? err : new Error(String(err))
+    this.log('ERROR', message, context, error)
   }
 
   /**
    * Create a timing helper for measuring operation duration
    */
   time(label: string): () => void {
-    const start = Date.now();
+    const start = Date.now()
     return () => {
-      const duration = Date.now() - start;
-      this.debug(`${label} completed`, { durationMs: duration });
-    };
+      const duration = Date.now() - start
+      this.debug(`${label} completed`, { durationMs: duration })
+    }
   }
 }
 
@@ -285,34 +280,34 @@ export class Logger {
  * Create a new logger instance
  */
 export function createLogger(config?: Partial<LoggerConfig>): Logger {
-  return new Logger(config);
+  return new Logger(config)
 }
 
 /**
  * Service-specific loggers
  */
-const loggers = new Map<string, Logger>();
+const loggers = new Map<string, Logger>()
 
 /**
  * Get or create a logger for a specific service
  */
 export function getLogger(service: string): Logger {
-  let logger = loggers.get(service);
+  let logger = loggers.get(service)
   if (!logger) {
-    logger = new Logger({ service });
-    loggers.set(service, logger);
+    logger = new Logger({ service })
+    loggers.set(service, logger)
   }
-  return logger;
+  return logger
 }
 
 /**
  * Reset all loggers (useful for testing)
  */
 export function resetLoggers(): void {
-  loggers.clear();
+  loggers.clear()
 }
 
 /**
  * Default application logger
  */
-export const logger = createLogger({ service: 'supermemory' });
+export const logger = createLogger({ service: 'supermemory' })

@@ -8,10 +8,10 @@
  * - XSS content sanitization
  */
 
-import { Context, MiddlewareHandler, Next } from 'hono';
-import { ZodSchema, ZodError } from 'zod';
-import { ErrorCodes, ErrorResponse } from '../../types/api.types.js';
-import { sanitizeHtml, sanitizeForStorage, isPathSafe } from '../../utils/sanitization.js';
+import { Context, MiddlewareHandler, Next } from 'hono'
+import { ZodSchema, ZodError } from 'zod'
+import { ErrorCodes, ErrorResponse } from '../../types/api.types.js'
+import { sanitizeHtml, sanitizeForStorage, isPathSafe } from '../../utils/sanitization.js'
 
 // ============================================================================
 // Configuration
@@ -21,23 +21,22 @@ import { sanitizeHtml, sanitizeForStorage, isPathSafe } from '../../utils/saniti
  * Default maximum content size in bytes (50KB).
  * Can be overridden via SUPERMEMORY_MAX_CONTENT_SIZE environment variable.
  */
-export const MAX_CONTENT_SIZE =
-  parseInt(process.env.SUPERMEMORY_MAX_CONTENT_SIZE || '', 10) || 50 * 1024;
+export const MAX_CONTENT_SIZE = parseInt(process.env.SUPERMEMORY_MAX_CONTENT_SIZE || '', 10) || 50 * 1024
 
 /**
  * Maximum JSON body size for metadata (10KB).
  */
-export const MAX_METADATA_SIZE = 10 * 1024;
+export const MAX_METADATA_SIZE = 10 * 1024
 
 /**
  * Maximum query string length (10KB).
  */
-export const MAX_QUERY_LENGTH = 10 * 1024;
+export const MAX_QUERY_LENGTH = 10 * 1024
 
 /**
  * Maximum container tag length.
  */
-export const MAX_CONTAINER_TAG_LENGTH = 100;
+export const MAX_CONTAINER_TAG_LENGTH = 100
 
 // ============================================================================
 // Error Helpers
@@ -46,9 +45,12 @@ export const MAX_CONTAINER_TAG_LENGTH = 100;
 /**
  * Creates a standardized validation error response.
  */
-function createValidationErrorResponse(message: string, details?: Record<string, unknown>): {
-  response: ErrorResponse;
-  status: 400;
+function createValidationErrorResponse(
+  message: string,
+  details?: Record<string, unknown>
+): {
+  response: ErrorResponse
+  status: 400
 } {
   return {
     response: {
@@ -60,7 +62,7 @@ function createValidationErrorResponse(message: string, details?: Record<string,
       status: 400,
     },
     status: 400,
-  };
+  }
 }
 
 /**
@@ -76,7 +78,7 @@ function createSecurityErrorResponse(message: string): { response: ErrorResponse
       status: 400,
     },
     status: 400,
-  };
+  }
 }
 
 // ============================================================================
@@ -88,9 +90,9 @@ function createSecurityErrorResponse(message: string): { response: ErrorResponse
  */
 interface ContentSizeLimitOptions {
   /** Maximum content size in bytes */
-  maxSize?: number;
+  maxSize?: number
   /** Whether to include the limit in error messages */
-  includeLimit?: boolean;
+  includeLimit?: boolean
 }
 
 /**
@@ -110,38 +112,38 @@ interface ContentSizeLimitOptions {
  * ```
  */
 export function contentSizeLimit(options: ContentSizeLimitOptions = {}): MiddlewareHandler {
-  const maxSize = options.maxSize ?? MAX_CONTENT_SIZE;
-  const includeLimit = options.includeLimit ?? true;
+  const maxSize = options.maxSize ?? MAX_CONTENT_SIZE
+  const includeLimit = options.includeLimit ?? true
 
   return async (c: Context, next: Next) => {
-    const contentLength = c.req.header('content-length');
+    const contentLength = c.req.header('content-length')
 
     if (contentLength) {
-      const size = parseInt(contentLength, 10);
+      const size = parseInt(contentLength, 10)
 
-      if (!isNaN(size) && size > maxSize) {
+      if (!Number.isNaN(size) && size > maxSize) {
         const { response, status } = createValidationErrorResponse(
           includeLimit
             ? `Content size ${formatBytes(size)} exceeds maximum allowed size of ${formatBytes(maxSize)}`
             : 'Content size exceeds maximum allowed size'
-        );
-        return c.json(response, status);
+        )
+        return c.json(response, status)
       }
     }
 
-    return next();
-  };
+    return next()
+  }
 }
 
 /**
  * Default content size limit middleware (50KB).
  */
-export const defaultContentSizeLimit = contentSizeLimit();
+export const defaultContentSizeLimit = contentSizeLimit()
 
 /**
  * Large content size limit middleware (1MB) for file uploads.
  */
-export const largeContentSizeLimit = contentSizeLimit({ maxSize: 1024 * 1024 });
+export const largeContentSizeLimit = contentSizeLimit({ maxSize: 1024 * 1024 })
 
 // ============================================================================
 // Schema Validation Middleware
@@ -152,11 +154,11 @@ export const largeContentSizeLimit = contentSizeLimit({ maxSize: 1024 * 1024 });
  */
 interface ValidateSchemaOptions {
   /** Whether to sanitize string values in the body */
-  sanitize?: boolean;
+  sanitize?: boolean
   /** Whether to strip HTML from string values */
-  stripHtml?: boolean;
+  stripHtml?: boolean
   /** Fields that should preserve HTML (not be sanitized) */
-  preserveHtmlFields?: string[];
+  preserveHtmlFields?: string[]
 }
 
 /**
@@ -182,49 +184,45 @@ interface ValidateSchemaOptions {
  * });
  * ```
  */
-export function validateSchema<T>(
-  schema: ZodSchema<T>,
-  options: ValidateSchemaOptions = {}
-): MiddlewareHandler {
-  const { sanitize = true, stripHtml: shouldStripHtml = false, preserveHtmlFields = [] } = options;
+export function validateSchema<T>(schema: ZodSchema<T>, options: ValidateSchemaOptions = {}): MiddlewareHandler {
+  const { sanitize = true, stripHtml: shouldStripHtml = false, preserveHtmlFields = [] } = options
 
   return async (c: Context, next: Next) => {
     try {
-      let body = await c.req.json();
+      let body = await c.req.json()
 
       // Apply sanitization if enabled
       if (sanitize && typeof body === 'object' && body !== null) {
         body = sanitizeRequestBody(body, {
           stripHtml: shouldStripHtml,
           preserveFields: preserveHtmlFields,
-        });
+        })
       }
 
       // Validate against schema
-      const validated = schema.parse(body);
+      const validated = schema.parse(body)
 
       // Store validated body for handler access
-      c.set('validatedBody', validated);
+      c.set('validatedBody', validated)
 
-      return next();
+      return next()
     } catch (error) {
       if (error instanceof ZodError) {
-        const formattedErrors = formatZodErrors(error);
-        const { response, status } = createValidationErrorResponse(
-          `Validation failed: ${formattedErrors}`,
-          { fieldErrors: extractFieldErrors(error) }
-        );
-        return c.json(response, status);
+        const formattedErrors = formatZodErrors(error)
+        const { response, status } = createValidationErrorResponse(`Validation failed: ${formattedErrors}`, {
+          fieldErrors: extractFieldErrors(error),
+        })
+        return c.json(response, status)
       }
 
       if (error instanceof SyntaxError) {
-        const { response, status } = createValidationErrorResponse('Invalid JSON in request body');
-        return c.json(response, status);
+        const { response, status } = createValidationErrorResponse('Invalid JSON in request body')
+        return c.json(response, status)
       }
 
-      throw error;
+      throw error
     }
-  };
+  }
 }
 
 // ============================================================================
@@ -252,23 +250,23 @@ export function validateSchema<T>(
  */
 export function validatePathParams(paramNames?: string[]): MiddlewareHandler {
   return async (c: Context, next: Next) => {
-    const params = c.req.param();
+    const params = c.req.param()
 
-    const paramsToCheck = paramNames || Object.keys(params);
+    const paramsToCheck = paramNames || Object.keys(params)
 
     for (const name of paramsToCheck) {
-      const value = params[name];
+      const value = params[name]
 
       if (value && !isPathSafe(value)) {
         const { response, status } = createSecurityErrorResponse(
           'Path contains invalid characters or traversal sequences'
-        );
-        return c.json(response, status);
+        )
+        return c.json(response, status)
       }
     }
 
-    return next();
-  };
+    return next()
+  }
 }
 
 /**
@@ -280,19 +278,19 @@ export function validatePathParams(paramNames?: string[]): MiddlewareHandler {
  */
 export function validateQueryParams(): MiddlewareHandler {
   return async (c: Context, next: Next) => {
-    const url = new URL(c.req.url);
-    const queryString = url.search;
+    const url = new URL(c.req.url)
+    const queryString = url.search
 
     // Check total query string length
     if (queryString.length > MAX_QUERY_LENGTH) {
       const { response, status } = createValidationErrorResponse(
         `Query string exceeds maximum length of ${MAX_QUERY_LENGTH} characters`
-      );
-      return c.json(response, status);
+      )
+      return c.json(response, status)
     }
 
-    return next();
-  };
+    return next()
+  }
 }
 
 // ============================================================================
@@ -304,9 +302,9 @@ export function validateQueryParams(): MiddlewareHandler {
  */
 interface SanitizeOptions {
   /** Whether to strip all HTML tags */
-  stripHtml: boolean;
+  stripHtml: boolean
   /** Fields to preserve (not sanitize) */
-  preserveFields: string[];
+  preserveFields: string[]
 }
 
 /**
@@ -316,17 +314,14 @@ interface SanitizeOptions {
  * @param options - Sanitization options
  * @returns Sanitized body
  */
-function sanitizeRequestBody(
-  body: Record<string, unknown>,
-  options: SanitizeOptions
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+function sanitizeRequestBody(body: Record<string, unknown>, options: SanitizeOptions): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(body)) {
     if (options.preserveFields.includes(key)) {
-      result[key] = value;
+      result[key] = value
     } else if (typeof value === 'string') {
-      result[key] = options.stripHtml ? sanitizeForStorage(value) : sanitizeHtml(value);
+      result[key] = options.stripHtml ? sanitizeForStorage(value) : sanitizeHtml(value)
     } else if (Array.isArray(value)) {
       result[key] = value.map((item) =>
         typeof item === 'object' && item !== null
@@ -336,15 +331,15 @@ function sanitizeRequestBody(
               ? sanitizeForStorage(item)
               : sanitizeHtml(item)
             : item
-      );
+      )
     } else if (typeof value === 'object' && value !== null) {
-      result[key] = sanitizeRequestBody(value as Record<string, unknown>, options);
+      result[key] = sanitizeRequestBody(value as Record<string, unknown>, options)
     } else {
-      result[key] = value;
+      result[key] = value
     }
   }
 
-  return result;
+  return result
 }
 
 /**
@@ -360,29 +355,29 @@ export function sanitizeContent(options: Partial<SanitizeOptions> = {}): Middlew
   const sanitizeOptions: SanitizeOptions = {
     stripHtml: options.stripHtml ?? false,
     preserveFields: options.preserveFields ?? [],
-  };
+  }
 
   return async (c: Context, next: Next) => {
     // Only process JSON bodies
-    const contentType = c.req.header('content-type');
+    const contentType = c.req.header('content-type')
     if (!contentType?.includes('application/json')) {
-      return next();
+      return next()
     }
 
     try {
-      const body = await c.req.json();
+      const body = await c.req.json()
 
       if (typeof body === 'object' && body !== null) {
-        const sanitized = sanitizeRequestBody(body, sanitizeOptions);
-        c.set('sanitizedBody', sanitized);
+        const sanitized = sanitizeRequestBody(body, sanitizeOptions)
+        c.set('sanitizedBody', sanitized)
       }
 
-      return next();
+      return next()
     } catch {
       // If JSON parsing fails, let the next middleware handle it
-      return next();
+      return next()
     }
-  };
+  }
 }
 
 // ============================================================================
@@ -394,15 +389,15 @@ export function sanitizeContent(options: Partial<SanitizeOptions> = {}): Middlew
  */
 interface RequestValidationOptions<T> {
   /** Zod schema for body validation */
-  schema: ZodSchema<T>;
+  schema: ZodSchema<T>
   /** Maximum content size in bytes */
-  maxSize?: number;
+  maxSize?: number
   /** Whether to sanitize string values */
-  sanitize?: boolean;
+  sanitize?: boolean
   /** Whether to strip HTML from strings */
-  stripHtml?: boolean;
+  stripHtml?: boolean
   /** Fields to preserve HTML in */
-  preserveHtmlFields?: string[];
+  preserveHtmlFields?: string[]
 }
 
 /**
@@ -428,21 +423,21 @@ interface RequestValidationOptions<T> {
  * ```
  */
 export function validateRequest<T>(options: RequestValidationOptions<T>): MiddlewareHandler {
-  const sizeLimitMiddleware = contentSizeLimit({ maxSize: options.maxSize });
+  const sizeLimitMiddleware = contentSizeLimit({ maxSize: options.maxSize })
   const schemaMiddleware = validateSchema(options.schema, {
     sanitize: options.sanitize,
     stripHtml: options.stripHtml,
     preserveHtmlFields: options.preserveHtmlFields,
-  });
+  })
 
   return async (c: Context, next: Next) => {
     // Apply size limit
-    const sizeResult = await sizeLimitMiddleware(c, async () => {});
-    if (sizeResult) return sizeResult;
+    const sizeResult = await sizeLimitMiddleware(c, async () => {})
+    if (sizeResult) return sizeResult
 
     // Apply schema validation
-    return schemaMiddleware(c, next);
-  };
+    return schemaMiddleware(c, next)
+  }
 }
 
 // ============================================================================
@@ -455,36 +450,36 @@ export function validateRequest<T>(options: RequestValidationOptions<T>): Middle
 function formatZodErrors(error: ZodError): string {
   return error.issues
     .map((issue) => {
-      const path = issue.path.join('.');
-      return path ? `${path}: ${issue.message}` : issue.message;
+      const path = issue.path.join('.')
+      return path ? `${path}: ${issue.message}` : issue.message
     })
-    .join('; ');
+    .join('; ')
 }
 
 /**
  * Extracts field-level errors from a ZodError.
  */
 function extractFieldErrors(error: ZodError): Record<string, string[]> {
-  const fieldErrors: Record<string, string[]> = {};
+  const fieldErrors: Record<string, string[]> = {}
 
   for (const issue of error.issues) {
-    const path = issue.path.join('.') || '_root';
+    const path = issue.path.join('.') || '_root'
     if (!fieldErrors[path]) {
-      fieldErrors[path] = [];
+      fieldErrors[path] = []
     }
-    fieldErrors[path].push(issue.message);
+    fieldErrors[path].push(issue.message)
   }
 
-  return fieldErrors;
+  return fieldErrors
 }
 
 /**
  * Formats bytes into a human-readable string.
  */
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} bytes`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024) return `${bytes} bytes`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 // ============================================================================
@@ -494,8 +489,8 @@ function formatBytes(bytes: number): string {
 // Extend Hono's context type to include validated body
 declare module 'hono' {
   interface ContextVariableMap {
-    validatedBody: unknown;
-    sanitizedBody: Record<string, unknown>;
+    validatedBody: unknown
+    sanitizedBody: Record<string, unknown>
   }
 }
 
@@ -516,4 +511,4 @@ export default {
   MAX_METADATA_SIZE,
   MAX_QUERY_LENGTH,
   MAX_CONTAINER_TAG_LENGTH,
-};
+}

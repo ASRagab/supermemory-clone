@@ -8,26 +8,22 @@
  * This file extends those base types with service-specific fields.
  */
 
-import {
-  FactType as BaseFactType,
-  FactSemanticCategory,
-  BaseProfileFact,
-} from '../types/profile.base.js';
+import { FactType as BaseFactType, FactSemanticCategory, BaseProfileFact } from '../types/profile.base.js'
 
 /**
  * Type of fact - determines lifecycle and expiration behavior
  * Re-exported from base types for convenience
  */
-export type FactType = BaseFactType;
+export type FactType = BaseFactType
 
 /**
  * Classification result from the fact classifier
  */
 export interface FactClassification {
-  type: FactType;
-  confidence: number;
-  reason: string;
-  suggestedExpirationHours?: number;
+  type: FactType
+  confidence: number
+  reason: string
+  suggestedExpirationHours?: number
 }
 
 /**
@@ -36,22 +32,22 @@ export interface FactClassification {
  */
 export interface ProfileFact extends Omit<BaseProfileFact, 'createdAt' | 'updatedAt'> {
   /** Whether this is a static (long-term) or dynamic (temporary) fact */
-  type: FactType;
+  type: FactType
 
   /** When this fact was extracted */
-  extractedAt: Date;
+  extractedAt: Date
 
   /** When this fact expires (only for dynamic facts) */
-  expiresAt?: Date;
+  expiresAt?: Date
 
   /** Category of the fact for organization */
-  category?: FactCategory;
+  category?: FactCategory
 
   /** Number of times this fact has been reinforced */
-  reinforcementCount: number;
+  reinforcementCount: number
 
   /** Last time this fact was accessed or reinforced */
-  lastAccessedAt: Date;
+  lastAccessedAt: Date
 }
 
 /**
@@ -63,29 +59,29 @@ export interface ProfileFact extends Omit<BaseProfileFact, 'createdAt' | 'update
  *
  * Re-exported from base types for convenience
  */
-export type FactCategory = FactSemanticCategory;
+export type FactCategory = FactSemanticCategory
 
 /**
  * User profile containing all extracted facts
  */
 export interface UserProfile {
   /** Unique identifier for the user/container */
-  containerTag: string;
+  containerTag: string
 
   /** Static facts - long-term, rarely change */
-  staticFacts: ProfileFact[];
+  staticFacts: ProfileFact[]
 
   /** Dynamic facts - temporary, expire over time */
-  dynamicFacts: ProfileFact[];
+  dynamicFacts: ProfileFact[]
 
   /** When the profile was created */
-  createdAt: Date;
+  createdAt: Date
 
   /** When the profile was last updated */
-  updatedAt: Date;
+  updatedAt: Date
 
   /** Profile version for optimistic locking */
-  version: number;
+  version: number
 }
 
 /**
@@ -93,40 +89,40 @@ export interface UserProfile {
  */
 export interface ProfileOptions {
   /** Whether to auto-extract facts from content */
-  autoExtract?: boolean;
+  autoExtract?: boolean
 
   /** Whether to refresh dynamic facts */
-  refreshDynamic?: boolean;
+  refreshDynamic?: boolean
 
   /** Maximum number of dynamic facts to keep */
-  maxDynamicFacts?: number;
+  maxDynamicFacts?: number
 
   /** Default expiration hours for dynamic facts */
-  defaultDynamicExpirationHours?: number;
+  defaultDynamicExpirationHours?: number
 
   /**
    * Custom patterns for classifying facts as static (long-term).
    * If provided, these will be used instead of the default STATIC_FACT_PATTERNS.
    * Set to empty array to disable static pattern matching.
    */
-  staticFactPatterns?: RegExp[];
+  staticFactPatterns?: RegExp[]
 
   /**
    * Custom patterns for classifying facts as dynamic (temporary).
    * If provided, these will be used instead of the default DYNAMIC_FACT_PATTERNS.
    * Set to empty array to disable dynamic pattern matching.
    */
-  dynamicFactPatterns?: RegExp[];
+  dynamicFactPatterns?: RegExp[]
 }
 
 /**
  * Result of fact extraction
  */
 export interface ExtractionResult {
-  facts: ProfileFact[];
-  rawContent: string;
-  extractedAt: Date;
-  processingTimeMs: number;
+  facts: ProfileFact[]
+  rawContent: string
+  extractedAt: Date
+  processingTimeMs: number
 }
 
 /**
@@ -134,13 +130,13 @@ export interface ExtractionResult {
  */
 export interface PromotionCriteria {
   /** Minimum reinforcement count to consider promotion */
-  minReinforcementCount: number;
+  minReinforcementCount: number
 
   /** Minimum age in days before considering promotion */
-  minAgeDays: number;
+  minAgeDays: number
 
   /** Minimum confidence score */
-  minConfidence: number;
+  minConfidence: number
 }
 
 /**
@@ -154,7 +150,7 @@ export const PROFILE_DEFAULTS = {
     minAgeDays: 7,
     minConfidence: 0.8,
   } as PromotionCriteria,
-} as const;
+} as const
 
 // ============================================================================
 // Fact Classification Patterns
@@ -189,7 +185,7 @@ export const STATIC_FACT_PATTERNS: readonly RegExp[] = [
   /\b(specializes in|expert in|proficient in|skilled in)/i,
   /** Matches language ability: speaks, fluent in */
   /\b(speaks|fluent in)\s+\w+/i,
-] as const;
+] as const
 
 /**
  * Default patterns for classifying facts as dynamic (temporary, time-bound).
@@ -218,7 +214,7 @@ export const DYNAMIC_FACT_PATTERNS: readonly RegExp[] = [
   /\b(struggling with|having trouble with|stuck on)/i,
   /** Matches investigation: looking into, investigating, researching */
   /\b(looking into|investigating|researching)/i,
-] as const;
+] as const
 
 /**
  * Get fact patterns from environment variable or return defaults.
@@ -236,18 +232,18 @@ export const DYNAMIC_FACT_PATTERNS: readonly RegExp[] = [
  * ```
  */
 export function getFactPatternsFromEnv(envKey: string, defaults: readonly RegExp[]): RegExp[] {
-  const envValue = typeof process !== 'undefined' ? process.env[envKey] : undefined;
+  const envValue = typeof process !== 'undefined' ? process.env[envKey] : undefined
 
   if (!envValue) {
-    return [...defaults];
+    return [...defaults]
   }
 
   try {
-    const patternStrings = JSON.parse(envValue) as string[];
-    return patternStrings.map((p) => new RegExp(p, 'i'));
+    const patternStrings = JSON.parse(envValue) as string[]
+    return patternStrings.map((p) => new RegExp(p, 'i'))
   } catch {
     // If parsing fails, return defaults
-    return [...defaults];
+    return [...defaults]
   }
 }
 
@@ -257,9 +253,9 @@ export function getFactPatternsFromEnv(envKey: string, defaults: readonly RegExp
  */
 export function getStaticFactPatterns(customPatterns?: RegExp[]): RegExp[] {
   if (customPatterns !== undefined) {
-    return customPatterns;
+    return customPatterns
   }
-  return getFactPatternsFromEnv('SUPERMEMORY_STATIC_PATTERNS', STATIC_FACT_PATTERNS);
+  return getFactPatternsFromEnv('SUPERMEMORY_STATIC_PATTERNS', STATIC_FACT_PATTERNS)
 }
 
 /**
@@ -268,7 +264,7 @@ export function getStaticFactPatterns(customPatterns?: RegExp[]): RegExp[] {
  */
 export function getDynamicFactPatterns(customPatterns?: RegExp[]): RegExp[] {
   if (customPatterns !== undefined) {
-    return customPatterns;
+    return customPatterns
   }
-  return getFactPatternsFromEnv('SUPERMEMORY_DYNAMIC_PATTERNS', DYNAMIC_FACT_PATTERNS);
+  return getFactPatternsFromEnv('SUPERMEMORY_DYNAMIC_PATTERNS', DYNAMIC_FACT_PATTERNS)
 }

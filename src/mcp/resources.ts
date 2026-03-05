@@ -5,7 +5,7 @@
  * Resources use URI patterns to identify different data types.
  */
 
-import { ValidationError } from '../utils/errors.js';
+import { ValidationError } from '../utils/errors.js'
 
 // ============================================================================
 // Resource URI Patterns
@@ -36,8 +36,7 @@ export const RESOURCE_TEMPLATES = [
   {
     uriTemplate: 'memory://search',
     name: 'Search Results',
-    description:
-      'Search for memories. Query params: q (query), container (containerTag), limit, mode',
+    description: 'Search for memories. Query params: q (query), container (containerTag), limit, mode',
     mimeType: 'application/json',
   },
   {
@@ -52,15 +51,15 @@ export const RESOURCE_TEMPLATES = [
     description: 'Get overall supermemory statistics',
     mimeType: 'application/json',
   },
-];
+]
 
 // ============================================================================
 // Resource Parser
 // ============================================================================
 
 export interface ParsedResourceUri {
-  type: 'profile' | 'document' | 'search' | 'facts' | 'stats' | 'unknown';
-  params: Record<string, string>;
+  type: 'profile' | 'document' | 'search' | 'facts' | 'stats' | 'unknown'
+  params: Record<string, string>
 }
 
 /**
@@ -69,49 +68,49 @@ export interface ParsedResourceUri {
 export function parseResourceUri(uri: string): ParsedResourceUri {
   // Handle memory:// protocol
   if (!uri.startsWith('memory://')) {
-    return { type: 'unknown', params: {} };
+    return { type: 'unknown', params: {} }
   }
 
-  const path = uri.substring('memory://'.length);
-  const [pathPart, queryPart] = path.split('?');
+  const path = uri.substring('memory://'.length)
+  const [pathPart, queryPart] = path.split('?')
 
   // Parse query parameters
-  const params: Record<string, string> = {};
+  const params: Record<string, string> = {}
   if (queryPart) {
-    const searchParams = new URLSearchParams(queryPart);
+    const searchParams = new URLSearchParams(queryPart)
     for (const [key, value] of searchParams.entries()) {
-      params[key] = value;
+      params[key] = value
     }
   }
 
   // Parse path
   if (!pathPart) {
-    return { type: 'unknown', params };
+    return { type: 'unknown', params }
   }
 
-  const segments = pathPart.split('/').filter(Boolean);
+  const segments = pathPart.split('/').filter(Boolean)
 
   if (segments[0] === 'profiles' && segments[1]) {
-    return { type: 'profile', params: { containerTag: segments[1], ...params } };
+    return { type: 'profile', params: { containerTag: segments[1], ...params } }
   }
 
   if (segments[0] === 'documents' && segments[1]) {
-    return { type: 'document', params: { id: segments[1], ...params } };
+    return { type: 'document', params: { id: segments[1], ...params } }
   }
 
   if (segments[0] === 'search') {
-    return { type: 'search', params };
+    return { type: 'search', params }
   }
 
   if (segments[0] === 'facts' && segments[1]) {
-    return { type: 'facts', params: { containerTag: segments[1], ...params } };
+    return { type: 'facts', params: { containerTag: segments[1], ...params } }
   }
 
   if (segments[0] === 'stats') {
-    return { type: 'stats', params };
+    return { type: 'stats', params }
   }
 
-  return { type: 'unknown', params };
+  return { type: 'unknown', params }
 }
 
 /**
@@ -126,43 +125,43 @@ export function buildResourceUri(
       if (!params?.containerTag) {
         throw new ValidationError('containerTag required for profile URI', {
           containerTag: ['containerTag parameter is required for profile URIs'],
-        });
+        })
       }
-      return `memory://profiles/${encodeURIComponent(params.containerTag)}`;
+      return `memory://profiles/${encodeURIComponent(params.containerTag)}`
 
     case 'document':
       if (!params?.id) {
         throw new ValidationError('id required for document URI', {
           id: ['id parameter is required for document URIs'],
-        });
+        })
       }
-      return `memory://documents/${encodeURIComponent(params.id)}`;
+      return `memory://documents/${encodeURIComponent(params.id)}`
 
     case 'search': {
-      const searchParams = new URLSearchParams();
-      if (params?.q) searchParams.set('q', params.q);
-      if (params?.container) searchParams.set('container', params.container);
-      if (params?.limit) searchParams.set('limit', params.limit);
-      if (params?.mode) searchParams.set('mode', params.mode);
-      const queryString = searchParams.toString();
-      return queryString ? `memory://search?${queryString}` : 'memory://search';
+      const searchParams = new URLSearchParams()
+      if (params?.q) searchParams.set('q', params.q)
+      if (params?.container) searchParams.set('container', params.container)
+      if (params?.limit) searchParams.set('limit', params.limit)
+      if (params?.mode) searchParams.set('mode', params.mode)
+      const queryString = searchParams.toString()
+      return queryString ? `memory://search?${queryString}` : 'memory://search'
     }
 
     case 'facts':
       if (!params?.containerTag) {
         throw new ValidationError('containerTag required for facts URI', {
           containerTag: ['containerTag parameter is required for facts URIs'],
-        });
+        })
       }
-      return `memory://facts/${encodeURIComponent(params.containerTag)}`;
+      return `memory://facts/${encodeURIComponent(params.containerTag)}`
 
     case 'stats':
-      return 'memory://stats';
+      return 'memory://stats'
 
     default:
       throw new ValidationError(`Unknown resource type: ${type}`, {
         type: [`Invalid resource type '${type}'. Valid types: profiles, documents, search, facts, stats`],
-      });
+      })
   }
 }
 
@@ -171,77 +170,77 @@ export function buildResourceUri(
 // ============================================================================
 
 export interface ProfileResource {
-  uri: string;
-  containerTag: string;
+  uri: string
+  containerTag: string
   staticFacts: Array<{
-    id: string;
-    content: string;
-    category?: string;
-    confidence: number;
-    extractedAt: string;
-  }>;
+    id: string
+    content: string
+    category?: string
+    confidence: number
+    extractedAt: string
+  }>
   dynamicFacts: Array<{
-    id: string;
-    content: string;
-    category?: string;
-    expiresAt?: string;
-    extractedAt: string;
-  }>;
-  createdAt: string;
-  updatedAt: string;
-  version: number;
+    id: string
+    content: string
+    category?: string
+    expiresAt?: string
+    extractedAt: string
+  }>
+  createdAt: string
+  updatedAt: string
+  version: number
 }
 
 export interface DocumentResource {
-  uri: string;
-  id: string;
-  title?: string;
-  content: string;
-  contentType: string;
-  containerTag?: string;
-  sourceUrl?: string;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
+  uri: string
+  id: string
+  title?: string
+  content: string
+  contentType: string
+  containerTag?: string
+  sourceUrl?: string
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
 }
 
 export interface SearchResource {
-  uri: string;
-  query: string;
+  uri: string
+  query: string
   results: Array<{
-    id: string;
-    content: string;
-    similarity: number;
-    containerTag?: string;
-    metadata?: Record<string, unknown>;
-  }>;
-  totalCount: number;
-  searchTimeMs: number;
+    id: string
+    content: string
+    similarity: number
+    containerTag?: string
+    metadata?: Record<string, unknown>
+  }>
+  totalCount: number
+  searchTimeMs: number
 }
 
 export interface FactsResource {
-  uri: string;
-  containerTag: string;
+  uri: string
+  containerTag: string
   facts: Array<{
-    id: string;
-    content: string;
-    type: 'static' | 'dynamic';
-    category?: string;
-    confidence: number;
-    createdAt: string;
-    expiresAt?: string;
-  }>;
-  totalCount: number;
+    id: string
+    content: string
+    type: 'static' | 'dynamic'
+    category?: string
+    confidence: number
+    createdAt: string
+    expiresAt?: string
+  }>
+  totalCount: number
 }
 
 export interface StatsResource {
-  uri: string;
-  totalDocuments: number;
-  totalMemories: number;
-  totalFacts: number;
-  containerTags: string[];
-  indexedVectors: number;
-  lastUpdated: string;
+  uri: string
+  totalDocuments: number
+  totalMemories: number
+  totalFacts: number
+  containerTags: string[]
+  indexedVectors: number
+  lastUpdated: string
 }
 
 // ============================================================================
@@ -249,20 +248,17 @@ export interface StatsResource {
 // ============================================================================
 
 export interface ResourceListItem {
-  uri: string;
-  name: string;
-  description?: string;
-  mimeType?: string;
+  uri: string
+  name: string
+  description?: string
+  mimeType?: string
 }
 
 /**
  * Generate a list of available resources for a given state
  */
-export function generateResourceList(
-  containerTags: string[],
-  documentIds: string[]
-): ResourceListItem[] {
-  const resources: ResourceListItem[] = [];
+export function generateResourceList(containerTags: string[], documentIds: string[]): ResourceListItem[] {
+  const resources: ResourceListItem[] = []
 
   // Add stats resource
   resources.push({
@@ -270,7 +266,7 @@ export function generateResourceList(
     name: 'Supermemory Statistics',
     description: 'Overall statistics and health of the memory system',
     mimeType: 'application/json',
-  });
+  })
 
   // Add search resource
   resources.push({
@@ -278,7 +274,7 @@ export function generateResourceList(
     name: 'Search Memories',
     description: 'Search through stored memories (add ?q=query to search)',
     mimeType: 'application/json',
-  });
+  })
 
   // Add profile resources for each container
   for (const tag of containerTags) {
@@ -287,14 +283,14 @@ export function generateResourceList(
       name: `Profile: ${tag}`,
       description: `User profile and facts for container "${tag}"`,
       mimeType: 'application/json',
-    });
+    })
 
     resources.push({
       uri: buildResourceUri('facts', { containerTag: tag }),
       name: `Facts: ${tag}`,
       description: `All facts for container "${tag}"`,
       mimeType: 'application/json',
-    });
+    })
   }
 
   // Add document resources (limit to first 50 to avoid overwhelming response)
@@ -303,8 +299,8 @@ export function generateResourceList(
       uri: buildResourceUri('document', { id }),
       name: `Document: ${id}`,
       mimeType: 'application/json',
-    });
+    })
   }
 
-  return resources;
+  return resources
 }

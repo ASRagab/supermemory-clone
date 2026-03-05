@@ -5,27 +5,27 @@
  */
 
 // Memory System
-export * from './memory.types.js';
-export * from './memory.repository.js';
+export * from './memory.types.js'
+export * from './memory.repository.js'
 export {
   MemoryService,
   getMemoryService,
   resetMemoryService,
   createMemoryService,
   memoryService,
-} from './memory.service.js';
+} from './memory.service.js'
 
 // Profile System
-export * from './profile.types.js';
-export * from './profile.repository.js';
-export * from './profile.service.js';
+export * from './profile.types.js'
+export * from './profile.repository.js'
+export * from './profile.service.js'
 
 // Document System
-export * from './documents.repository.js';
-export * from './documents.service.js';
+export * from './documents.repository.js'
+export * from './documents.service.js'
 
 // Search & Embedding System
-export * from './search.types.js';
+export * from './search.types.js'
 export {
   EmbeddingService,
   cosineSimilarity,
@@ -33,7 +33,7 @@ export {
   getEmbeddingService,
   resetEmbeddingService,
   embeddingService,
-} from './embedding.service.js';
+} from './embedding.service.js'
 export {
   SearchService,
   createSearchService,
@@ -41,7 +41,7 @@ export {
   getSearchService,
   resetSearchService,
   searchService,
-} from './search.service.js';
+} from './search.service.js'
 
 // Vector Store System
 // Using explicit exports to avoid name collisions with search.types.js
@@ -97,11 +97,11 @@ export {
   migrateVectorStore,
   reindexVectorStore,
   getDefaultVectorStoreConfig,
-} from './vectorstore/index.js';
+} from './vectorstore/index.js'
 
 // Re-export singleton instances for convenience
-export { profileRepository } from './profile.repository.js';
-export { profileService } from './profile.service.js';
+export { profileRepository } from './profile.repository.js'
+export { profileService } from './profile.service.js'
 
 // Relationship Detection System
 // Note: Using explicit exports to avoid name collisions with memory.types.js and search.types.js
@@ -156,19 +156,19 @@ export {
   enhancedMemoryService,
   type EnhancedMemoryServiceConfig,
   DEFAULT_ENHANCED_CONFIG,
-} from './relationships/index.js';
+} from './relationships/index.js'
 
 // Content Extraction Pipeline
-export { ExtractionService } from './extraction.service.js';
-export { ChunkingService } from './chunking.service.js';
-export { PipelineService } from './pipeline.service.js';
+export { ExtractionService } from './extraction.service.js'
+export { ChunkingService } from './chunking.service.js'
+export { PipelineService } from './pipeline.service.js'
 
 // Extractors
-export { TextExtractor } from './extractors/text.extractor.js';
-export { UrlExtractor } from './extractors/url.extractor.js';
-export { PdfExtractor } from './extractors/pdf.extractor.js';
-export { MarkdownExtractor, type MarkdownSection } from './extractors/markdown.extractor.js';
-export { CodeExtractor, type CodeBlock } from './extractors/code.extractor.js';
+export { TextExtractor } from './extractors/text.extractor.js'
+export { UrlExtractor } from './extractors/url.extractor.js'
+export { PdfExtractor } from './extractors/pdf.extractor.js'
+export { MarkdownExtractor, type MarkdownSection } from './extractors/markdown.extractor.js'
+export { CodeExtractor, type CodeBlock } from './extractors/code.extractor.js'
 
 // Secrets Management
 export {
@@ -178,7 +178,7 @@ export {
   type EncryptedSecret,
   type SecretMetadata,
   type SecretValidationResult,
-} from './secrets.service.js';
+} from './secrets.service.js'
 
 // LLM Providers for Memory Extraction
 export {
@@ -232,4 +232,4 @@ export {
   generateRelationshipPrompt,
   parseExtractionResponse,
   parseRelationshipResponse,
-} from './llm/index.js';
+} from './llm/index.js'

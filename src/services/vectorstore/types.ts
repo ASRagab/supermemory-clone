@@ -9,43 +9,33 @@
 /**
  * Supported vector store providers
  */
-export type VectorStoreProvider = 'memory' | 'pgvector';
+export type VectorStoreProvider = 'memory' | 'pgvector'
 
 /**
  * Similarity metrics for vector comparison
  */
-export type SimilarityMetric = 'cosine' | 'euclidean' | 'dot_product';
+export type SimilarityMetric = 'cosine' | 'euclidean' | 'dot_product'
 
 /**
  * Index types for vector search optimization
  */
-export type IndexType = 'flat' | 'hnsw' | 'ivf';
+export type IndexType = 'flat' | 'hnsw' | 'ivf'
 
 /**
  * Metadata filter operators
  */
-export type FilterOperator =
-  | 'eq'
-  | 'ne'
-  | 'gt'
-  | 'gte'
-  | 'lt'
-  | 'lte'
-  | 'in'
-  | 'nin'
-  | 'contains'
-  | 'startsWith';
+export type FilterOperator = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'nin' | 'contains' | 'startsWith'
 
 /**
  * Metadata filter for search queries
  */
 export interface MetadataFilter {
   /** Field name to filter on */
-  key: string;
+  key: string
   /** Filter operator */
-  operator: FilterOperator;
+  operator: FilterOperator
   /** Value to compare against */
-  value: string | number | boolean | Array<string | number>;
+  value: string | number | boolean | Array<string | number>
 }
 
 /**
@@ -53,15 +43,15 @@ export interface MetadataFilter {
  */
 export interface VectorEntry {
   /** Unique identifier */
-  id: string;
+  id: string
   /** Vector embedding */
-  embedding: number[];
+  embedding: number[]
   /** Associated metadata */
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown>
   /** Timestamp of creation */
-  createdAt?: Date;
+  createdAt?: Date
   /** Timestamp of last update */
-  updatedAt?: Date;
+  updatedAt?: Date
 }
 
 /**
@@ -69,43 +59,43 @@ export interface VectorEntry {
  */
 export interface SearchOptions {
   /** Maximum number of results to return */
-  limit?: number;
+  limit?: number
   /** Minimum similarity threshold (0-1 for cosine, varies for others) */
-  threshold?: number;
+  threshold?: number
   /** Metadata filters to apply */
-  filters?: MetadataFilter[];
+  filters?: MetadataFilter[]
   /** Whether to include vectors in results */
-  includeVectors?: boolean;
+  includeVectors?: boolean
   /** Whether to include metadata in results */
-  includeMetadata?: boolean;
+  includeMetadata?: boolean
 }
 
 /**
  * Default search options
  */
 export const DEFAULT_SEARCH_OPTIONS: Required<Omit<SearchOptions, 'filters'>> & {
-  filters?: MetadataFilter[];
+  filters?: MetadataFilter[]
 } = {
   limit: 10,
   threshold: 0.7,
   includeVectors: false,
   includeMetadata: true,
-};
+}
 
 /**
  * Result from a vector similarity search
  */
 export interface VectorSearchResult {
   /** Unique identifier */
-  id: string;
+  id: string
   /** Similarity score */
-  score: number;
+  score: number
   /** Vector embedding (if requested) */
-  embedding?: number[];
+  embedding?: number[]
   /** Associated metadata */
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown>
   /** Distance (if using distance metric) */
-  distance?: number;
+  distance?: number
 }
 
 /**
@@ -113,9 +103,9 @@ export interface VectorSearchResult {
  */
 export interface AddOptions {
   /** Whether to overwrite existing entries with same ID */
-  overwrite?: boolean;
+  overwrite?: boolean
   /** Namespace/collection for the vector */
-  namespace?: string;
+  namespace?: string
 }
 
 /**
@@ -123,13 +113,13 @@ export interface AddOptions {
  */
 export interface DeleteOptions {
   /** Delete by IDs */
-  ids?: string[];
+  ids?: string[]
   /** Delete by metadata filter */
-  filter?: MetadataFilter;
+  filter?: MetadataFilter
   /** Delete all vectors in namespace */
-  deleteAll?: boolean;
+  deleteAll?: boolean
   /** Namespace/collection to delete from */
-  namespace?: string;
+  namespace?: string
 }
 
 /**
@@ -137,25 +127,25 @@ export interface DeleteOptions {
  */
 export interface VectorStoreConfig {
   /** Store provider type */
-  provider: VectorStoreProvider;
+  provider: VectorStoreProvider
   /** Vector dimensions */
-  dimensions: number;
+  dimensions: number
   /** Similarity metric to use */
-  metric?: SimilarityMetric;
+  metric?: SimilarityMetric
   /** Index type for optimization */
-  indexType?: IndexType;
+  indexType?: IndexType
   /** Default namespace */
-  defaultNamespace?: string;
+  defaultNamespace?: string
 
   // Provider-specific options
   /** SQLite database path (for sqlite-vss) */
-  sqlitePath?: string;
+  sqlitePath?: string
   /** Chroma server URL (for chroma) */
-  chromaUrl?: string;
+  chromaUrl?: string
   /** Chroma collection name (for chroma) */
-  chromaCollection?: string;
+  chromaCollection?: string
   /** HNSW parameters */
-  hnswConfig?: HNSWConfig;
+  hnswConfig?: HNSWConfig
 }
 
 /**
@@ -163,11 +153,11 @@ export interface VectorStoreConfig {
  */
 export interface HNSWConfig {
   /** Maximum number of connections per node */
-  M?: number;
+  M?: number
   /** Size of dynamic candidate list during construction */
-  efConstruction?: number;
+  efConstruction?: number
   /** Size of dynamic candidate list during search */
-  efSearch?: number;
+  efSearch?: number
 }
 
 /**
@@ -177,26 +167,26 @@ export const DEFAULT_HNSW_CONFIG: Required<HNSWConfig> = {
   M: 16,
   efConstruction: 200,
   efSearch: 50,
-};
+}
 
 /**
  * Vector store statistics
  */
 export interface VectorStoreStats {
   /** Total number of vectors stored */
-  totalVectors: number;
+  totalVectors: number
   /** Vector dimensions */
-  dimensions: number;
+  dimensions: number
   /** Index type being used */
-  indexType: IndexType;
+  indexType: IndexType
   /** Similarity metric being used */
-  metric: SimilarityMetric;
+  metric: SimilarityMetric
   /** Memory usage in bytes (if available) */
-  memoryUsageBytes?: number;
+  memoryUsageBytes?: number
   /** Index build status */
-  indexBuilt: boolean;
+  indexBuilt: boolean
   /** Namespaces/collections available */
-  namespaces?: string[];
+  namespaces?: string[]
 }
 
 /**
@@ -204,11 +194,11 @@ export interface VectorStoreStats {
  */
 export interface BatchResult {
   /** Number of successful operations */
-  successful: number;
+  successful: number
   /** Number of failed operations */
-  failed: number;
+  failed: number
   /** Error messages for failed operations */
-  errors?: Array<{ id: string; error: string }>;
+  errors?: Array<{ id: string; error: string }>
 }
 
 /**
@@ -216,13 +206,13 @@ export interface BatchResult {
  */
 export interface MigrationOptions {
   /** Source vector store */
-  source: VectorStoreProvider;
+  source: VectorStoreProvider
   /** Target vector store */
-  target: VectorStoreProvider;
+  target: VectorStoreProvider
   /** Batch size for migration */
-  batchSize?: number;
+  batchSize?: number
   /** Progress callback */
-  onProgress?: (progress: MigrationProgress) => void;
+  onProgress?: (progress: MigrationProgress) => void
 }
 
 /**
@@ -230,35 +220,28 @@ export interface MigrationOptions {
  */
 export interface MigrationProgress {
   /** Total vectors to migrate */
-  total: number;
+  total: number
   /** Vectors migrated so far */
-  migrated: number;
+  migrated: number
   /** Percentage complete */
-  percentage: number;
+  percentage: number
   /** Current batch number */
-  currentBatch: number;
+  currentBatch: number
   /** Total batches */
-  totalBatches: number;
+  totalBatches: number
   /** Estimated time remaining in seconds */
-  estimatedTimeRemaining?: number;
+  estimatedTimeRemaining?: number
 }
 
 /**
  * Vector store event types
  */
-export type VectorStoreEvent =
-  | 'add'
-  | 'update'
-  | 'delete'
-  | 'search'
-  | 'index_built'
-  | 'index_rebuilt'
-  | 'error';
+export type VectorStoreEvent = 'add' | 'update' | 'delete' | 'search' | 'index_built' | 'index_rebuilt' | 'error'
 
 /**
  * Vector store event listener
  */
 export interface VectorStoreEventListener {
-  event: VectorStoreEvent;
-  callback: (data: unknown) => void;
+  event: VectorStoreEvent
+  callback: (data: unknown) => void
 }

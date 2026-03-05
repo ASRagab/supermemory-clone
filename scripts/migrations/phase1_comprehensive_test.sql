@@ -17,12 +17,11 @@
 DROP TABLE IF EXISTS memory_embeddings CASCADE;
 
 CREATE TABLE memory_embeddings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    chunk_id UUID NOT NULL,
-    memory_id UUID NOT NULL,
+    memory_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     embedding vector(1536) NOT NULL,
-    model VARCHAR(255) NOT NULL DEFAULT 'text-embedding-3-small',
-    dimensions INTEGER NOT NULL DEFAULT 1536,
+    model VARCHAR(100) NOT NULL DEFAULT 'text-embedding-3-small',
+    model_version VARCHAR(50),
+    normalized BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -118,9 +117,8 @@ RETURNS vector AS $$
     FROM generate_series(1, dims);
 $$ LANGUAGE SQL;
 
-INSERT INTO memory_embeddings (chunk_id, memory_id, embedding)
+INSERT INTO memory_embeddings (memory_id, embedding)
 SELECT
-    gen_random_uuid(),
     gen_random_uuid(),
     generate_random_vector(1536)
 FROM generate_series(1, 1000);
@@ -152,7 +150,7 @@ BEGIN
     start_time := clock_timestamp();
 
     SELECT COUNT(*) INTO res_count
-    FROM (SELECT id FROM memory_embeddings ORDER BY embedding <=> sample_vec LIMIT 10) t;
+    FROM (SELECT memory_id FROM memory_embeddings ORDER BY embedding <=> sample_vec LIMIT 10) t;
 
     exec_time := EXTRACT(MILLISECONDS FROM (clock_timestamp() - start_time));
 

@@ -5,9 +5,9 @@
  * Uses JSON mode for reliable structured output.
  */
 
-import OpenAI from 'openai';
-import { getLogger } from '../../utils/logger.js';
-import { BaseLLMProvider, LLMError } from './base.js';
+import OpenAI from 'openai'
+import { getLogger } from '../../utils/logger.js'
+import { BaseLLMProvider, LLMError } from './base.js'
 import type {
   OpenAILLMConfig,
   LLMProviderType,
@@ -15,9 +15,9 @@ import type {
   DetectedRelationship,
   ExtractionOptions,
   RelationshipDetectionOptions,
-} from './types.js';
-import { LLMErrorCode } from './types.js';
-import type { MemoryType } from '../../types/index.js';
+} from './types.js'
+import { LLMErrorCode } from './types.js'
+import type { MemoryType } from '../../types/index.js'
 import {
   MEMORY_EXTRACTION_SYSTEM_PROMPT,
   MEMORY_EXTRACTION_EXAMPLES,
@@ -25,11 +25,12 @@ import {
   RELATIONSHIP_DETECTION_EXAMPLES,
   generateExtractionPrompt,
   generateRelationshipPrompt,
+  normalizeJsonResponse,
   parseExtractionResponse,
   parseRelationshipResponse,
-} from './prompts.js';
+} from './prompts.js'
 
-const logger = getLogger('OpenAIProvider');
+const logger = getLogger('OpenAIProvider')
 
 // ============================================================================
 // Default Configuration
@@ -42,31 +43,31 @@ const DEFAULT_OPENAI_CONFIG: Partial<OpenAILLMConfig> = {
   timeoutMs: 30000,
   maxRetries: 3,
   retryDelayMs: 1000,
-};
+}
 
 // ============================================================================
 // OpenAI Provider Implementation
 // ============================================================================
 
 export class OpenAILLMProvider extends BaseLLMProvider {
-  readonly type: LLMProviderType = 'openai';
+  readonly type: LLMProviderType = 'openai'
 
-  private client: OpenAI | null = null;
-  private readonly apiKey?: string;
-  private readonly model: string;
-  private readonly baseUrl?: string;
-  private readonly organization?: string;
+  private client: OpenAI | null = null
+  private readonly apiKey?: string
+  private readonly model: string
+  private readonly baseUrl?: string
+  private readonly organization?: string
 
   constructor(config: OpenAILLMConfig) {
     super({
       ...DEFAULT_OPENAI_CONFIG,
       ...config,
-    });
+    })
 
-    this.apiKey = config.apiKey;
-    this.model = config.model ?? DEFAULT_OPENAI_CONFIG.model!;
-    this.baseUrl = config.baseUrl;
-    this.organization = config.organization;
+    this.apiKey = config.apiKey
+    this.model = config.model ?? DEFAULT_OPENAI_CONFIG.model!
+    this.baseUrl = config.baseUrl
+    this.organization = config.organization
 
     if (this.apiKey) {
       this.client = new OpenAI({
@@ -75,13 +76,13 @@ export class OpenAILLMProvider extends BaseLLMProvider {
         organization: this.organization,
         timeout: this.config.timeoutMs,
         maxRetries: 0, // We handle retries ourselves
-      });
+      })
     }
 
     logger.debug('OpenAI provider initialized', {
       model: this.model,
       hasApiKey: !!this.apiKey,
-    });
+    })
   }
 
   // ============================================================================
@@ -89,7 +90,7 @@ export class OpenAILLMProvider extends BaseLLMProvider {
   // ============================================================================
 
   isAvailable(): boolean {
-    return !!this.client && !!this.apiKey;
+    return !!this.client && !!this.apiKey
   }
 
   // ============================================================================
@@ -100,15 +101,15 @@ export class OpenAILLMProvider extends BaseLLMProvider {
     text: string,
     options: ExtractionOptions
   ): Promise<{
-    memories: ExtractedMemory[];
-    rawResponse?: string;
-    tokensUsed?: { prompt: number; completion: number; total: number };
+    memories: ExtractedMemory[]
+    rawResponse?: string
+    tokensUsed?: { prompt: number; completion: number; total: number }
   }> {
     if (!this.client) {
-      throw LLMError.providerUnavailable('openai');
+      throw LLMError.providerUnavailable('openai')
     }
 
-    const userPrompt = generateExtractionPrompt(text, options);
+    const userPrompt = generateExtractionPrompt(text, options)
 
     try {
       const response = await this.client.chat.completions.create({
@@ -126,15 +127,15 @@ export class OpenAILLMProvider extends BaseLLMProvider {
         response_format: { type: 'json_object' },
         temperature: this.config.temperature,
         max_tokens: this.config.maxTokens,
-      });
+      })
 
-      const rawResponse = response.choices[0]?.message?.content;
+      const rawResponse = response.choices[0]?.message?.content
 
       if (!rawResponse) {
-        throw LLMError.invalidResponse('openai', 'Empty response from model');
+        throw LLMError.invalidResponse('openai', 'Empty response from model')
       }
 
-      const parsed = parseExtractionResponse(rawResponse);
+      const parsed = parseExtractionResponse(rawResponse)
 
       // Filter by confidence if specified
       let memories: ExtractedMemory[] = parsed.memories.map((m) => ({
@@ -147,14 +148,14 @@ export class OpenAILLMProvider extends BaseLLMProvider {
           mentions: 1,
         })),
         keywords: m.keywords,
-      }));
+      }))
 
       if (options.minConfidence) {
-        memories = memories.filter((m) => m.confidence >= options.minConfidence!);
+        memories = memories.filter((m) => m.confidence >= options.minConfidence!)
       }
 
       if (options.maxMemories) {
-        memories = memories.slice(0, options.maxMemories);
+        memories = memories.slice(0, options.maxMemories)
       }
 
       return {
@@ -167,9 +168,9 @@ export class OpenAILLMProvider extends BaseLLMProvider {
               total: response.usage.total_tokens,
             }
           : undefined,
-      };
+      }
     } catch (error) {
-      throw this.handleOpenAIError(error);
+      throw this.handleOpenAIError(error)
     }
   }
 
@@ -182,19 +183,19 @@ export class OpenAILLMProvider extends BaseLLMProvider {
     existingMemories: Array<{ id: string; content: string; type: MemoryType }>,
     options: RelationshipDetectionOptions
   ): Promise<{
-    relationships: DetectedRelationship[];
-    supersededMemoryIds: string[];
+    relationships: DetectedRelationship[]
+    supersededMemoryIds: string[]
   }> {
     if (!this.client) {
-      throw LLMError.providerUnavailable('openai');
+      throw LLMError.providerUnavailable('openai')
     }
 
     // If no existing memories, return empty
     if (existingMemories.length === 0) {
-      return { relationships: [], supersededMemoryIds: [] };
+      return { relationships: [], supersededMemoryIds: [] }
     }
 
-    const userPrompt = generateRelationshipPrompt(newMemory, existingMemories, options);
+    const userPrompt = generateRelationshipPrompt(newMemory, existingMemories, options)
 
     try {
       const response = await this.client.chat.completions.create({
@@ -212,15 +213,15 @@ export class OpenAILLMProvider extends BaseLLMProvider {
         response_format: { type: 'json_object' },
         temperature: this.config.temperature,
         max_tokens: this.config.maxTokens,
-      });
+      })
 
-      const rawResponse = response.choices[0]?.message?.content;
+      const rawResponse = response.choices[0]?.message?.content
 
       if (!rawResponse) {
-        throw LLMError.invalidResponse('openai', 'Empty response from model');
+        throw LLMError.invalidResponse('openai', 'Empty response from model')
       }
 
-      const parsed = parseRelationshipResponse(rawResponse);
+      const parsed = parseRelationshipResponse(rawResponse)
 
       // Filter and validate relationships
       let relationships: DetectedRelationship[] = parsed.relationships.map((r) => ({
@@ -229,22 +230,22 @@ export class OpenAILLMProvider extends BaseLLMProvider {
         type: r.type as DetectedRelationship['type'],
         confidence: r.confidence,
         reason: r.reason,
-      }));
+      }))
 
       if (options.minConfidence) {
-        relationships = relationships.filter((r) => r.confidence >= options.minConfidence!);
+        relationships = relationships.filter((r) => r.confidence >= options.minConfidence!)
       }
 
       if (options.maxRelationships) {
-        relationships = relationships.slice(0, options.maxRelationships);
+        relationships = relationships.slice(0, options.maxRelationships)
       }
 
       return {
         relationships,
         supersededMemoryIds: parsed.supersededMemoryIds,
-      };
+      }
     } catch (error) {
-      throw this.handleOpenAIError(error);
+      throw this.handleOpenAIError(error)
     }
   }
 
@@ -256,11 +257,11 @@ export class OpenAILLMProvider extends BaseLLMProvider {
     systemPrompt: string,
     userPrompt: string
   ): Promise<{
-    rawResponse: string;
-    tokensUsed?: { prompt: number; completion: number; total: number };
+    rawResponse: string
+    tokensUsed?: { prompt: number; completion: number; total: number }
   }> {
     if (!this.client) {
-      throw LLMError.providerUnavailable('openai');
+      throw LLMError.providerUnavailable('openai')
     }
 
     try {
@@ -273,15 +274,16 @@ export class OpenAILLMProvider extends BaseLLMProvider {
         response_format: { type: 'json_object' },
         temperature: this.config.temperature,
         max_tokens: this.config.maxTokens,
-      });
+      })
 
-      const rawResponse = response.choices[0]?.message?.content;
+      const rawResponse = response.choices[0]?.message?.content
       if (!rawResponse) {
-        throw LLMError.invalidResponse('openai', 'Empty response from model');
+        throw LLMError.invalidResponse('openai', 'Empty response from model')
       }
+      const normalized = normalizeJsonResponse(rawResponse)
 
       return {
-        rawResponse,
+        rawResponse: normalized,
         tokensUsed: response.usage
           ? {
               prompt: response.usage.prompt_tokens,
@@ -289,9 +291,9 @@ export class OpenAILLMProvider extends BaseLLMProvider {
               total: response.usage.total_tokens,
             }
           : undefined,
-      };
+      }
     } catch (error) {
-      throw this.handleOpenAIError(error);
+      throw this.handleOpenAIError(error)
     }
   }
 
@@ -301,63 +303,53 @@ export class OpenAILLMProvider extends BaseLLMProvider {
 
   private handleOpenAIError(error: unknown): LLMError {
     if (error instanceof LLMError) {
-      return error;
+      return error
     }
 
     // Check for OpenAI API errors by checking error structure
     if (this.isOpenAIApiError(error)) {
-      const status = error.status;
-      const message = error.message;
+      const status = error.status
+      const message = error.message
 
       // Rate limiting
       if (status === 429) {
-        const retryAfter = this.parseRetryAfter(error);
-        return LLMError.rateLimited('openai', retryAfter);
+        const retryAfter = this.parseRetryAfter(error)
+        return LLMError.rateLimited('openai', retryAfter)
       }
 
       // Authentication errors
       if (status === 401) {
-        return LLMError.invalidApiKey('openai');
+        return LLMError.invalidApiKey('openai')
       }
 
       // Content filtering
       if (status === 400 && message.includes('content_filter')) {
-        return new LLMError(
-          'Content was filtered by OpenAI',
-          LLMErrorCode.CONTENT_FILTERED,
-          'openai',
-          false
-        );
+        return new LLMError('Content was filtered by OpenAI', LLMErrorCode.CONTENT_FILTERED, 'openai', false)
       }
 
       // Token limit
       if (status === 400 && message.includes('maximum context length')) {
-        return new LLMError(
-          'Token limit exceeded',
-          LLMErrorCode.TOKEN_LIMIT_EXCEEDED,
-          'openai',
-          false
-        );
+        return new LLMError('Token limit exceeded', LLMErrorCode.TOKEN_LIMIT_EXCEEDED, 'openai', false)
       }
 
       // Server errors (retryable)
       if (status && status >= 500) {
-        return LLMError.providerUnavailable('openai');
+        return LLMError.providerUnavailable('openai')
       }
 
       // Default to invalid response
-      return LLMError.invalidResponse('openai', message);
+      return LLMError.invalidResponse('openai', message)
     }
 
     // Network or timeout errors
     if (error instanceof Error) {
       if (error.message.includes('timeout')) {
-        return LLMError.timeout('openai');
+        return LLMError.timeout('openai')
       }
-      return new LLMError(error.message, LLMErrorCode.PROVIDER_UNAVAILABLE, 'openai', true);
+      return new LLMError(error.message, LLMErrorCode.PROVIDER_UNAVAILABLE, 'openai', true)
     }
 
-    return new LLMError(String(error), LLMErrorCode.PROVIDER_UNAVAILABLE, 'openai', true);
+    return new LLMError(String(error), LLMErrorCode.PROVIDER_UNAVAILABLE, 'openai', true)
   }
 
   /**
@@ -373,24 +365,24 @@ export class OpenAILLMProvider extends BaseLLMProvider {
       typeof (error as Record<string, unknown>).status === 'number' &&
       'message' in error &&
       typeof (error as Record<string, unknown>).message === 'string'
-    );
+    )
   }
 
   private parseRetryAfter(error: {
-    status: number;
-    message: string;
-    headers?: Record<string, string>;
+    status: number
+    message: string
+    headers?: Record<string, string>
   }): number | undefined {
     // Try to parse retry-after header or message
     if (error.headers?.['retry-after']) {
-      const seconds = parseInt(error.headers['retry-after'], 10);
-      if (!isNaN(seconds)) {
-        return seconds * 1000;
+      const seconds = parseInt(error.headers['retry-after'], 10)
+      if (!Number.isNaN(seconds)) {
+        return seconds * 1000
       }
     }
 
     // Default retry delay for rate limits
-    return 60000; // 1 minute
+    return 60000 // 1 minute
   }
 }
 
@@ -402,5 +394,5 @@ export class OpenAILLMProvider extends BaseLLMProvider {
  * Create an OpenAI LLM provider
  */
 export function createOpenAIProvider(config: OpenAILLMConfig): OpenAILLMProvider {
-  return new OpenAILLMProvider(config);
+  return new OpenAILLMProvider(config)
 }

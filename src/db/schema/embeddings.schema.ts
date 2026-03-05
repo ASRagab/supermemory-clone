@@ -1,7 +1,7 @@
-import { pgTable, uuid, varchar, boolean, timestamp, index, check } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { vector } from 'drizzle-orm/pg-core';
-import { memories } from './memories.schema.js';
+import { pgTable, uuid, varchar, boolean, timestamp, index, check } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { vector } from 'drizzle-orm/pg-core'
+import { memories } from './memories.schema.js'
 
 export const memoryEmbeddings = pgTable(
   'memory_embeddings',
@@ -26,7 +26,7 @@ export const memoryEmbeddings = pgTable(
       sql`${table.model} IN ('text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002', 'voyage-large-2', 'voyage-code-2', 'cohere-embed-v3', 'bge-large-en-v1.5', 'custom')`
     ),
   ]
-);
+)
 
-export type MemoryEmbedding = typeof memoryEmbeddings.$inferSelect;
-export type NewMemoryEmbedding = typeof memoryEmbeddings.$inferInsert;
+export type MemoryEmbedding = typeof memoryEmbeddings.$inferSelect
+export type NewMemoryEmbedding = typeof memoryEmbeddings.$inferInsert

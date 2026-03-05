@@ -1,3 +1,8 @@
+-- SUPERSEDED: This migration is superseded by the Drizzle ORM migration
+-- (drizzle/0000_dapper_the_professor.sql). The canonical memory_embeddings
+-- schema uses memory_id as the sole primary key and has no id, chunk_id,
+-- dimensions, or updated_at columns. Do NOT run this migration.
+--
 -- Migration: 004_create_memory_embeddings_standalone.sql
 -- Description: Standalone memory_embeddings table for HNSW testing (no FK dependencies)
 -- Created: 2026-02-02

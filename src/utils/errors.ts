@@ -5,7 +5,7 @@
  * All service-level errors should extend AppError.
  */
 
-import { ZodError, ZodIssue } from 'zod';
+import { ZodError, ZodIssue } from 'zod'
 
 /**
  * Error codes for categorization and handling
@@ -52,9 +52,9 @@ export const ErrorCode = {
 
   // Service unavailable (503)
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-} as const;
+} as const
 
-export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
+export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode]
 
 /**
  * HTTP status codes mapped to error types
@@ -88,18 +88,18 @@ export const ErrorStatusCode: Record<string, number> = {
   VECTOR_DIMENSION_MISMATCH: 400,
   EMPTY_TEXT: 400,
   SERVICE_UNAVAILABLE: 503,
-};
+}
 
 /**
  * Base application error class
  * All custom errors should extend this class
  */
 export class AppError extends Error {
-  readonly code: ErrorCodeType;
-  readonly statusCode: number;
-  readonly details?: unknown;
-  readonly isOperational: boolean;
-  readonly timestamp: Date;
+  readonly code: ErrorCodeType
+  readonly statusCode: number
+  readonly details?: unknown
+  readonly isOperational: boolean
+  readonly timestamp: Date
 
   constructor(
     message: string,
@@ -107,16 +107,16 @@ export class AppError extends Error {
     details?: unknown,
     isOperational: boolean = true
   ) {
-    super(message);
-    this.name = 'AppError';
-    this.code = code;
-    this.statusCode = ErrorStatusCode[code] ?? 500;
-    this.details = details;
-    this.isOperational = isOperational;
-    this.timestamp = new Date();
+    super(message)
+    this.name = 'AppError'
+    this.code = code
+    this.statusCode = ErrorStatusCode[code] ?? 500
+    this.details = details
+    this.isOperational = isOperational
+    this.timestamp = new Date()
 
     // Maintains proper stack trace
-    Error.captureStackTrace(this, this.constructor);
+    Error.captureStackTrace(this, this.constructor)
   }
 
   /**
@@ -130,7 +130,7 @@ export class AppError extends Error {
       statusCode: this.statusCode,
       details: this.details,
       timestamp: this.timestamp.toISOString(),
-    };
+    }
   }
 
   /**
@@ -138,23 +138,18 @@ export class AppError extends Error {
    */
   static from(err: unknown, defaultCode?: ErrorCodeType): AppError {
     if (err instanceof AppError) {
-      return err;
+      return err
     }
 
     if (err instanceof ZodError) {
-      return ValidationError.fromZodError(err);
+      return ValidationError.fromZodError(err)
     }
 
     if (err instanceof Error) {
-      return new AppError(
-        err.message,
-        defaultCode ?? ErrorCode.INTERNAL_ERROR,
-        { originalError: err.name },
-        true
-      );
+      return new AppError(err.message, defaultCode ?? ErrorCode.INTERNAL_ERROR, { originalError: err.name }, true)
     }
 
-    return new AppError(String(err), defaultCode ?? ErrorCode.INTERNAL_ERROR, undefined, true);
+    return new AppError(String(err), defaultCode ?? ErrorCode.INTERNAL_ERROR, undefined, true)
   }
 }
 
@@ -166,46 +161,46 @@ export class AppError extends Error {
  * Validation error for invalid input data
  */
 export class ValidationError extends AppError {
-  readonly fieldErrors: Record<string, string[]>;
+  readonly fieldErrors: Record<string, string[]>
 
   constructor(message: string, fieldErrors: Record<string, string[]> = {}, details?: unknown) {
-    super(message, ErrorCode.VALIDATION_ERROR, details);
-    this.name = 'ValidationError';
-    this.fieldErrors = fieldErrors;
+    super(message, ErrorCode.VALIDATION_ERROR, details)
+    this.name = 'ValidationError'
+    this.fieldErrors = fieldErrors
   }
 
   /**
    * Create from Zod validation error
    */
   static fromZodError(error: ZodError): ValidationError {
-    const fieldErrors: Record<string, string[]> = {};
+    const fieldErrors: Record<string, string[]> = {}
 
     for (const issue of error.issues) {
-      const path = issue.path.join('.');
-      const key = path || '_root';
+      const path = issue.path.join('.')
+      const key = path || '_root'
       if (!fieldErrors[key]) {
-        fieldErrors[key] = [];
+        fieldErrors[key] = []
       }
-      fieldErrors[key].push(issue.message);
+      fieldErrors[key].push(issue.message)
     }
 
     const message = error.issues
       .map((issue: ZodIssue) => {
-        const path = issue.path.join('.');
-        return path ? `${path}: ${issue.message}` : issue.message;
+        const path = issue.path.join('.')
+        return path ? `${path}: ${issue.message}` : issue.message
       })
-      .join('; ');
+      .join('; ')
 
     return new ValidationError(`Validation failed: ${message}`, fieldErrors, {
       zodErrors: error.issues,
-    });
+    })
   }
 
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
       fieldErrors: this.fieldErrors,
-    };
+    }
   }
 }
 
@@ -213,21 +208,15 @@ export class ValidationError extends AppError {
  * Not found error for missing resources
  */
 export class NotFoundError extends AppError {
-  readonly resourceType: string;
-  readonly resourceId?: string;
+  readonly resourceType: string
+  readonly resourceId?: string
 
-  constructor(
-    resourceType: string,
-    resourceId?: string,
-    code: ErrorCodeType = ErrorCode.NOT_FOUND
-  ) {
-    const message = resourceId
-      ? `${resourceType} with ID '${resourceId}' not found`
-      : `${resourceType} not found`;
-    super(message, code);
-    this.name = 'NotFoundError';
-    this.resourceType = resourceType;
-    this.resourceId = resourceId;
+  constructor(resourceType: string, resourceId?: string, code: ErrorCodeType = ErrorCode.NOT_FOUND) {
+    const message = resourceId ? `${resourceType} with ID '${resourceId}' not found` : `${resourceType} not found`
+    super(message, code)
+    this.name = 'NotFoundError'
+    this.resourceType = resourceType
+    this.resourceId = resourceId
   }
 
   override toJSON(): Record<string, unknown> {
@@ -235,7 +224,7 @@ export class NotFoundError extends AppError {
       ...super.toJSON(),
       resourceType: this.resourceType,
       resourceId: this.resourceId,
-    };
+    }
   }
 }
 
@@ -243,12 +232,9 @@ export class NotFoundError extends AppError {
  * Authentication error
  */
 export class AuthenticationError extends AppError {
-  constructor(
-    message: string = 'Authentication required',
-    code: ErrorCodeType = ErrorCode.AUTHENTICATION_ERROR
-  ) {
-    super(message, code);
-    this.name = 'AuthenticationError';
+  constructor(message: string = 'Authentication required', code: ErrorCodeType = ErrorCode.AUTHENTICATION_ERROR) {
+    super(message, code)
+    this.name = 'AuthenticationError'
   }
 }
 
@@ -256,19 +242,19 @@ export class AuthenticationError extends AppError {
  * Authorization error
  */
 export class AuthorizationError extends AppError {
-  readonly requiredPermission?: string;
+  readonly requiredPermission?: string
 
   constructor(message: string = 'Permission denied', requiredPermission?: string) {
-    super(message, ErrorCode.AUTHORIZATION_ERROR);
-    this.name = 'AuthorizationError';
-    this.requiredPermission = requiredPermission;
+    super(message, ErrorCode.AUTHORIZATION_ERROR)
+    this.name = 'AuthorizationError'
+    this.requiredPermission = requiredPermission
   }
 
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
       requiredPermission: this.requiredPermission,
-    };
+    }
   }
 }
 
@@ -276,22 +262,18 @@ export class AuthorizationError extends AppError {
  * Conflict error for duplicate entries or version conflicts
  */
 export class ConflictError extends AppError {
-  readonly conflictType: 'duplicate' | 'version' | 'other';
+  readonly conflictType: 'duplicate' | 'version' | 'other'
 
-  constructor(
-    message: string,
-    conflictType: 'duplicate' | 'version' | 'other' = 'other',
-    details?: unknown
-  ) {
+  constructor(message: string, conflictType: 'duplicate' | 'version' | 'other' = 'other', details?: unknown) {
     const code =
       conflictType === 'duplicate'
         ? ErrorCode.DUPLICATE_ENTRY
         : conflictType === 'version'
           ? ErrorCode.VERSION_CONFLICT
-          : ErrorCode.CONFLICT;
-    super(message, code, details);
-    this.name = 'ConflictError';
-    this.conflictType = conflictType;
+          : ErrorCode.CONFLICT
+    super(message, code, details)
+    this.name = 'ConflictError'
+    this.conflictType = conflictType
   }
 }
 
@@ -299,19 +281,19 @@ export class ConflictError extends AppError {
  * Rate limit error
  */
 export class RateLimitError extends AppError {
-  readonly retryAfterMs?: number;
+  readonly retryAfterMs?: number
 
   constructor(message: string = 'Rate limit exceeded', retryAfterMs?: number) {
-    super(message, ErrorCode.RATE_LIMIT_EXCEEDED);
-    this.name = 'RateLimitError';
-    this.retryAfterMs = retryAfterMs;
+    super(message, ErrorCode.RATE_LIMIT_EXCEEDED)
+    this.name = 'RateLimitError'
+    this.retryAfterMs = retryAfterMs
   }
 
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
       retryAfterMs: this.retryAfterMs,
-    };
+    }
   }
 }
 
@@ -319,12 +301,12 @@ export class RateLimitError extends AppError {
  * Database error
  */
 export class DatabaseError extends AppError {
-  readonly operation?: string;
+  readonly operation?: string
 
   constructor(message: string, operation?: string, details?: unknown) {
-    super(message, ErrorCode.DATABASE_ERROR, details);
-    this.name = 'DatabaseError';
-    this.operation = operation;
+    super(message, ErrorCode.DATABASE_ERROR, details)
+    this.name = 'DatabaseError'
+    this.operation = operation
   }
 }
 
@@ -332,12 +314,12 @@ export class DatabaseError extends AppError {
  * Embedding service error
  */
 export class EmbeddingError extends AppError {
-  readonly provider?: string;
+  readonly provider?: string
 
   constructor(message: string, provider?: string, details?: unknown) {
-    super(message, ErrorCode.EMBEDDING_ERROR, details);
-    this.name = 'EmbeddingError';
-    this.provider = provider;
+    super(message, ErrorCode.EMBEDDING_ERROR, details)
+    this.name = 'EmbeddingError'
+    this.provider = provider
   }
 }
 
@@ -345,12 +327,12 @@ export class EmbeddingError extends AppError {
  * Extraction error
  */
 export class ExtractionError extends AppError {
-  readonly contentType?: string;
+  readonly contentType?: string
 
   constructor(message: string, contentType?: string, details?: unknown) {
-    super(message, ErrorCode.EXTRACTION_ERROR, details);
-    this.name = 'ExtractionError';
-    this.contentType = contentType;
+    super(message, ErrorCode.EXTRACTION_ERROR, details)
+    this.name = 'ExtractionError'
+    this.contentType = contentType
   }
 }
 
@@ -358,14 +340,14 @@ export class ExtractionError extends AppError {
  * External service error
  */
 export class ExternalServiceError extends AppError {
-  readonly serviceName: string;
-  readonly serviceStatus?: number;
+  readonly serviceName: string
+  readonly serviceStatus?: number
 
   constructor(serviceName: string, message: string, serviceStatus?: number, details?: unknown) {
-    super(message, ErrorCode.EXTERNAL_SERVICE_ERROR, details);
-    this.name = 'ExternalServiceError';
-    this.serviceName = serviceName;
-    this.serviceStatus = serviceStatus;
+    super(message, ErrorCode.EXTERNAL_SERVICE_ERROR, details)
+    this.name = 'ExternalServiceError'
+    this.serviceName = serviceName
+    this.serviceStatus = serviceStatus
   }
 }
 
@@ -373,12 +355,12 @@ export class ExternalServiceError extends AppError {
  * Crypto/encryption error
  */
 export class CryptoError extends AppError {
-  readonly operation?: string;
+  readonly operation?: string
 
   constructor(message: string, operation?: string, details?: unknown) {
-    super(message, ErrorCode.CRYPTO_ERROR, details);
-    this.name = 'CryptoError';
-    this.operation = operation;
+    super(message, ErrorCode.CRYPTO_ERROR, details)
+    this.name = 'CryptoError'
+    this.operation = operation
   }
 }
 
@@ -386,12 +368,12 @@ export class CryptoError extends AppError {
  * Configuration error
  */
 export class ConfigurationError extends AppError {
-  readonly configKey?: string;
+  readonly configKey?: string
 
   constructor(message: string, configKey?: string, details?: unknown) {
-    super(message, ErrorCode.CONFIGURATION_ERROR, details);
-    this.name = 'ConfigurationError';
-    this.configKey = configKey;
+    super(message, ErrorCode.CONFIGURATION_ERROR, details)
+    this.name = 'ConfigurationError'
+    this.configKey = configKey
   }
 }
 
@@ -399,17 +381,17 @@ export class ConfigurationError extends AppError {
  * Dependency error for missing required dependencies
  */
 export class DependencyError extends AppError {
-  readonly dependency: string;
-  readonly installCommand?: string;
+  readonly dependency: string
+  readonly installCommand?: string
 
   constructor(dependency: string, installCommand?: string, details?: unknown) {
     const message = installCommand
       ? `Missing dependency '${dependency}'. Run: ${installCommand}`
-      : `Missing dependency '${dependency}'`;
-    super(message, ErrorCode.DEPENDENCY_ERROR, details);
-    this.name = 'DependencyError';
-    this.dependency = dependency;
-    this.installCommand = installCommand;
+      : `Missing dependency '${dependency}'`
+    super(message, ErrorCode.DEPENDENCY_ERROR, details)
+    this.name = 'DependencyError'
+    this.dependency = dependency
+    this.installCommand = installCommand
   }
 }
 
@@ -421,21 +403,21 @@ export class DependencyError extends AppError {
  * Check if error is an AppError
  */
 export function isAppError(error: unknown): error is AppError {
-  return error instanceof AppError;
+  return error instanceof AppError
 }
 
 /**
  * Check if error is a validation error
  */
 export function isValidationError(error: unknown): error is ValidationError {
-  return error instanceof ValidationError;
+  return error instanceof ValidationError
 }
 
 /**
  * Check if error is a not found error
  */
 export function isNotFoundError(error: unknown): error is NotFoundError {
-  return error instanceof NotFoundError;
+  return error instanceof NotFoundError
 }
 
 /**
@@ -443,15 +425,15 @@ export function isNotFoundError(error: unknown): error is NotFoundError {
  */
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof RateLimitError) {
-    return true;
+    return true
   }
   if (error instanceof ExternalServiceError) {
-    return true;
+    return true
   }
   if (error instanceof AppError) {
-    return error.code === ErrorCode.SERVICE_UNAVAILABLE;
+    return error.code === ErrorCode.SERVICE_UNAVAILABLE
   }
-  return false;
+  return false
 }
 
 /**
@@ -459,7 +441,7 @@ export function isRetryableError(error: unknown): boolean {
  */
 export function isOperationalError(error: unknown): boolean {
   if (error instanceof AppError) {
-    return error.isOperational;
+    return error.isOperational
   }
-  return false;
+  return false
 }

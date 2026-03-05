@@ -5,29 +5,22 @@
  * that uses embedding-based relationship detection instead of regex patterns.
  */
 
-import type { Memory, Relationship, MemoryServiceConfig } from '../memory.types.js';
-import type { EmbeddingService } from '../embedding.service.js';
-import { getEmbeddingService } from '../embedding.service.js';
-import { MemoryService, getMemoryService } from '../memory.service.js';
-import { type MemoryRepository, getMemoryRepository } from '../memory.repository.js';
-import { getLogger } from '../../utils/logger.js';
-import type {
-  RelationshipConfig,
-  RelationshipDetectionResult,
-  Contradiction,
-  LLMProvider,
-} from './types.js';
+import type { Memory, Relationship, MemoryServiceConfig } from '../memory.types.js'
+import type { EmbeddingService } from '../embedding.service.js'
+import { getEmbeddingService } from '../embedding.service.js'
+import { MemoryService, getMemoryService } from '../memory.service.js'
+import { type MemoryRepository, getMemoryRepository } from '../memory.repository.js'
+import { getLogger } from '../../utils/logger.js'
+import type { RelationshipConfig, RelationshipDetectionResult, Contradiction, LLMProvider } from './types.js'
 import {
   EmbeddingRelationshipDetector,
   InMemoryVectorStoreAdapter,
   createEmbeddingRelationshipDetector,
-} from './detector.js';
-import {
-  getSharedVectorStore,
-} from './index.js';
-import { isEmbeddingRelationshipsEnabled } from '../../config/feature-flags.js';
+} from './detector.js'
+import { getSharedVectorStore } from './index.js'
+import { isEmbeddingRelationshipsEnabled } from '../../config/feature-flags.js'
 
-const logger = getLogger('EnhancedMemoryService');
+const logger = getLogger('EnhancedMemoryService')
 
 // ============================================================================
 // Enhanced Memory Service Configuration
@@ -38,16 +31,16 @@ const logger = getLogger('EnhancedMemoryService');
  */
 export interface EnhancedMemoryServiceConfig extends MemoryServiceConfig {
   /** Configuration for embedding-based relationship detection */
-  relationshipDetection: Partial<RelationshipConfig>;
+  relationshipDetection: Partial<RelationshipConfig>
 
   /** Whether to use embedding-based detection (true) or regex (false) */
-  useEmbeddingDetection: boolean;
+  useEmbeddingDetection: boolean
 
   /** Whether to automatically index memories for relationship detection */
-  autoIndexMemories: boolean;
+  autoIndexMemories: boolean
 
   /** Whether to detect contradictions */
-  detectContradictions: boolean;
+  detectContradictions: boolean
 }
 
 /**
@@ -63,7 +56,7 @@ export const DEFAULT_ENHANCED_CONFIG: Partial<EnhancedMemoryServiceConfig> = {
     enableContradictionDetection: true,
     enableCausalDetection: true,
   },
-};
+}
 
 // ============================================================================
 // Enhanced Memory Service
@@ -90,34 +83,34 @@ export const DEFAULT_ENHANCED_CONFIG: Partial<EnhancedMemoryServiceConfig> = {
  * ```
  */
 export class EnhancedMemoryService {
-  private readonly baseService: MemoryService;
-  private readonly repository: MemoryRepository;
-  private readonly embeddingService: EmbeddingService;
-  private readonly relationshipDetector: EmbeddingRelationshipDetector;
-  private readonly config: EnhancedMemoryServiceConfig;
-  private readonly vectorStore: InMemoryVectorStoreAdapter;
+  private readonly baseService: MemoryService
+  private readonly repository: MemoryRepository
+  private readonly embeddingService: EmbeddingService
+  private readonly relationshipDetector: EmbeddingRelationshipDetector
+  private readonly config: EnhancedMemoryServiceConfig
+  private readonly vectorStore: InMemoryVectorStoreAdapter
 
   constructor(
     config: Partial<EnhancedMemoryServiceConfig> = {},
     dependencies?: {
-      baseService?: MemoryService;
-      repository?: MemoryRepository;
-      embeddingService?: EmbeddingService;
-      vectorStore?: InMemoryVectorStoreAdapter;
-      llmProvider?: LLMProvider;
+      baseService?: MemoryService
+      repository?: MemoryRepository
+      embeddingService?: EmbeddingService
+      vectorStore?: InMemoryVectorStoreAdapter
+      llmProvider?: LLMProvider
     }
   ) {
     // Merge configuration
     this.config = {
       ...DEFAULT_ENHANCED_CONFIG,
       ...config,
-    } as EnhancedMemoryServiceConfig;
+    } as EnhancedMemoryServiceConfig
 
     // Set up dependencies
-    this.baseService = dependencies?.baseService ?? getMemoryService(config);
-    this.repository = dependencies?.repository ?? getMemoryRepository();
-    this.embeddingService = dependencies?.embeddingService ?? getEmbeddingService();
-    this.vectorStore = dependencies?.vectorStore ?? getSharedVectorStore();
+    this.baseService = dependencies?.baseService ?? getMemoryService(config)
+    this.repository = dependencies?.repository ?? getMemoryRepository()
+    this.embeddingService = dependencies?.embeddingService ?? getEmbeddingService()
+    this.vectorStore = dependencies?.vectorStore ?? getSharedVectorStore()
 
     // Create relationship detector
     this.relationshipDetector = createEmbeddingRelationshipDetector(
@@ -125,12 +118,12 @@ export class EnhancedMemoryService {
       this.vectorStore,
       this.config.relationshipDetection,
       dependencies?.llmProvider
-    );
+    )
 
     logger.debug('EnhancedMemoryService initialized', {
       useEmbeddingDetection: this.config.useEmbeddingDetection,
       autoIndexMemories: this.config.autoIndexMemories,
-    });
+    })
   }
 
   // ============================================================================
@@ -146,81 +139,77 @@ export class EnhancedMemoryService {
   async processAndStoreMemoriesEnhanced(
     content: string,
     options: {
-      containerTag?: string;
-      sourceId?: string;
-      detectRelationships?: boolean;
-      detectContradictions?: boolean;
+      containerTag?: string
+      sourceId?: string
+      detectRelationships?: boolean
+      detectContradictions?: boolean
     } = {}
   ): Promise<{
-    memories: Memory[];
-    relationships: Relationship[];
-    supersededMemoryIds: string[];
-    contradictions: Contradiction[];
-    detectionResults: RelationshipDetectionResult[];
+    memories: Memory[]
+    relationships: Relationship[]
+    supersededMemoryIds: string[]
+    contradictions: Contradiction[]
+    detectionResults: RelationshipDetectionResult[]
   }> {
-    const shouldDetectRelationships =
-      options.detectRelationships ?? this.config.autoDetectRelationships;
-    const shouldDetectContradictions =
-      options.detectContradictions ?? this.config.detectContradictions;
+    const shouldDetectRelationships = options.detectRelationships ?? this.config.autoDetectRelationships
+    const shouldDetectContradictions = options.detectContradictions ?? this.config.detectContradictions
 
     if (!this.config.useEmbeddingDetection || !shouldDetectRelationships) {
       const baseResult = await this.baseService.processAndStoreMemories(content, {
         containerTag: options.containerTag,
         sourceId: options.sourceId,
         detectRelationships: shouldDetectRelationships,
-      });
+      })
 
       return {
         ...baseResult,
         contradictions: [],
         detectionResults: [],
-      };
+      }
     }
 
     logger.debug('Processing content with enhanced detection', {
       containerTag: options.containerTag,
       detectRelationships: shouldDetectRelationships,
       detectContradictions: shouldDetectContradictions,
-    });
+    })
 
     // Step 1: Extract memories using base service
-    const extractedMemories = await this.baseService.extractMemories(content);
+    const extractedMemories = await this.baseService.extractMemories(content)
 
     // Update container tags and source info
     for (const memory of extractedMemories) {
-      memory.containerTag = options.containerTag ?? this.config.defaultContainerTag;
+      memory.containerTag = options.containerTag ?? this.config.defaultContainerTag
       if (options.sourceId) {
-        memory.sourceId = options.sourceId;
+        memory.sourceId = options.sourceId
       }
     }
 
     // Step 2: Generate embeddings for extracted memories
-    const embeddings = await this.embeddingService.batchEmbed(
-      extractedMemories.map((m) => m.content)
-    );
+    const embeddings = await this.embeddingService.batchEmbed(extractedMemories.map((m) => m.content))
 
     // Attach embeddings to memories
     for (let i = 0; i < extractedMemories.length; i++) {
-      const memory = extractedMemories[i];
-      const embedding = embeddings[i];
+      const memory = extractedMemories[i]
+      const embedding = embeddings[i]
       if (memory && embedding) {
-        memory.embedding = embedding;
+        memory.embedding = embedding
       }
     }
 
-    const allRelationships: Relationship[] = [];
-    const allSupersededIds: string[] = [];
-    const allContradictions: Contradiction[] = [];
-    const detectionResults: RelationshipDetectionResult[] = [];
+    const allRelationships: Relationship[] = []
+    const allSupersededIds: string[] = []
+    const allContradictions: Contradiction[] = []
+    const detectionResults: RelationshipDetectionResult[] = []
 
     // Step 3: Process each memory
     for (const memory of extractedMemories) {
       // Store the memory
-      await this.repository.create(memory);
+      await this.repository.create(memory)
 
       // Index for future relationship detection
       if (this.config.autoIndexMemories && memory.embedding) {
-        this.vectorStore.addMemory(memory, memory.embedding);
+        this.vectorStore.addMemory(memory, memory.embedding)
       }
 
       // Detect relationships if enabled
@@ -228,44 +217,34 @@ export class EnhancedMemoryService {
         const result = await this.relationshipDetector.detectRelationships(memory, {
           containerTag: options.containerTag,
           excludeIds: extractedMemories.map((m) => m.id),
-        });
+        })
 
-        detectionResults.push(result);
+        detectionResults.push(result)
 
         // Process detected relationships
         for (const detected of result.relationships) {
-          allRelationships.push(detected.relationship);
+          allRelationships.push(detected.relationship)
 
           // Mark superseded memories
-          if (
-            detected.relationship.type === 'updates' ||
-            detected.relationship.type === 'supersedes'
-          ) {
-            const target = await this.repository.findById(detected.relationship.targetMemoryId);
-            if (
-              target &&
-              memory.containerTag &&
-              target.containerTag &&
-              memory.containerTag !== target.containerTag
-            ) {
-              continue;
+          if (detected.relationship.type === 'updates' || detected.relationship.type === 'supersedes') {
+            const target = await this.repository.findById(detected.relationship.targetMemoryId)
+            if (target && memory.containerTag && target.containerTag && memory.containerTag !== target.containerTag) {
+              continue
             }
 
-            await this.repository.markSuperseded(detected.relationship.targetMemoryId, memory.id);
-            allSupersededIds.push(detected.relationship.targetMemoryId);
+            await this.repository.markSuperseded(detected.relationship.targetMemoryId, memory.id)
+            allSupersededIds.push(detected.relationship.targetMemoryId)
           }
         }
 
         // Store relationships
         if (result.relationships.length > 0) {
-          await this.repository.createRelationshipBatch(
-            result.relationships.map((r) => r.relationship)
-          );
+          await this.repository.createRelationshipBatch(result.relationships.map((r) => r.relationship))
         }
 
         // Collect contradictions
         if (shouldDetectContradictions) {
-          allContradictions.push(...result.contradictions);
+          allContradictions.push(...result.contradictions)
         }
       }
     }
@@ -275,7 +254,7 @@ export class EnhancedMemoryService {
       relationshipsCount: allRelationships.length,
       supersededCount: allSupersededIds.length,
       contradictionsCount: allContradictions.length,
-    });
+    })
 
     return {
       memories: extractedMemories,
@@ -283,7 +262,7 @@ export class EnhancedMemoryService {
       supersededMemoryIds: [...new Set(allSupersededIds)],
       contradictions: allContradictions,
       detectionResults,
-    };
+    }
   }
 
   /**
@@ -292,50 +271,47 @@ export class EnhancedMemoryService {
   async detectRelationshipsEmbedding(
     memory: Memory,
     options: {
-      containerTag?: string;
-      excludeIds?: string[];
+      containerTag?: string
+      excludeIds?: string[]
     } = {}
   ): Promise<RelationshipDetectionResult> {
     // Ensure memory has embedding
     if (!memory.embedding || memory.embedding.length === 0) {
-      memory.embedding = await this.embeddingService.generateEmbedding(memory.content);
+      memory.embedding = await this.embeddingService.generateEmbedding(memory.content)
     }
 
-    return this.relationshipDetector.detectRelationships(memory, options);
+    return this.relationshipDetector.detectRelationships(memory, options)
   }
 
   /**
    * Detect contradictions among a group of memories.
    */
   async detectContradictions(memories: Memory[]): Promise<Contradiction[]> {
-    return this.relationshipDetector.detectContradictionsInGroup(memories);
+    return this.relationshipDetector.detectContradictionsInGroup(memories)
   }
 
   /**
    * Index a memory for relationship detection.
    */
   async indexMemory(memory: Memory): Promise<void> {
-    const embedding =
-      memory.embedding ?? (await this.embeddingService.generateEmbedding(memory.content));
-    this.vectorStore.addMemory(memory, embedding);
+    const embedding = memory.embedding ?? (await this.embeddingService.generateEmbedding(memory.content))
+    this.vectorStore.addMemory(memory, embedding)
   }
 
   /**
    * Batch index memories for relationship detection.
    */
   async batchIndexMemories(memories: Memory[]): Promise<void> {
-    const memoriesToEmbed = memories.filter((m) => !m.embedding || m.embedding.length === 0);
+    const memoriesToEmbed = memories.filter((m) => !m.embedding || m.embedding.length === 0)
 
     if (memoriesToEmbed.length > 0) {
-      const embeddings = await this.embeddingService.batchEmbed(
-        memoriesToEmbed.map((m) => m.content)
-      );
+      const embeddings = await this.embeddingService.batchEmbed(memoriesToEmbed.map((m) => m.content))
 
       for (let i = 0; i < memoriesToEmbed.length; i++) {
-        const memory = memoriesToEmbed[i];
-        const embedding = embeddings[i];
+        const memory = memoriesToEmbed[i]
+        const embedding = embeddings[i]
         if (memory && embedding) {
-          memory.embedding = embedding;
+          memory.embedding = embedding
         }
       }
     }
@@ -343,23 +319,23 @@ export class EnhancedMemoryService {
     const items = memories.map((m) => ({
       memory: m,
       embedding: m.embedding!,
-    }));
+    }))
 
-    this.vectorStore.addMemories(items);
+    this.vectorStore.addMemories(items)
   }
 
   /**
    * Remove a memory from the relationship index.
    */
   removeFromIndex(memoryId: string): boolean {
-    return this.vectorStore.removeMemory(memoryId);
+    return this.vectorStore.removeMemory(memoryId)
   }
 
   /**
    * Clear the relationship index.
    */
   clearIndex(): void {
-    this.vectorStore.clear();
+    this.vectorStore.clear()
   }
 
   // ============================================================================
@@ -367,34 +343,34 @@ export class EnhancedMemoryService {
   // ============================================================================
 
   async extractMemories(content: string): Promise<Memory[]> {
-    return this.baseService.extractMemories(content);
+    return this.baseService.extractMemories(content)
   }
 
   classifyMemoryType(content: string) {
-    return this.baseService.classifyMemoryType(content);
+    return this.baseService.classifyMemoryType(content)
   }
 
   async storeMemory(memory: Memory): Promise<Memory> {
-    const stored = await this.baseService.storeMemory(memory);
+    const stored = await this.baseService.storeMemory(memory)
 
     // Auto-index if enabled
     if (this.config.autoIndexMemories) {
-      await this.indexMemory(stored);
+      await this.indexMemory(stored)
     }
 
-    return stored;
+    return stored
   }
 
   async getMemory(id: string): Promise<Memory | null> {
-    return this.baseService.getMemory(id);
+    return this.baseService.getMemory(id)
   }
 
   async getAllMemories(): Promise<Memory[]> {
-    return this.baseService.getAllMemories();
+    return this.baseService.getAllMemories()
   }
 
   async getLatestMemories(): Promise<Memory[]> {
-    return this.baseService.getLatestMemories();
+    return this.baseService.getLatestMemories()
   }
 
   // ============================================================================
@@ -402,35 +378,35 @@ export class EnhancedMemoryService {
   // ============================================================================
 
   getConfig(): EnhancedMemoryServiceConfig {
-    return { ...this.config };
+    return { ...this.config }
   }
 
   /**
    * Update relationship detection configuration.
    */
   updateRelationshipConfig(updates: Partial<RelationshipConfig>): void {
-    this.relationshipDetector.updateConfig(updates);
+    this.relationshipDetector.updateConfig(updates)
   }
 
   /**
    * Set LLM provider for verification.
    */
   setLLMProvider(provider: LLMProvider): void {
-    this.relationshipDetector.setLLMProvider(provider);
+    this.relationshipDetector.setLLMProvider(provider)
   }
 
   /**
    * Get the underlying relationship detector.
    */
   getRelationshipDetector(): EmbeddingRelationshipDetector {
-    return this.relationshipDetector;
+    return this.relationshipDetector
   }
 
   /**
    * Get the underlying base memory service.
    */
   getBaseService(): MemoryService {
-    return this.baseService;
+    return this.baseService
   }
 }
 
@@ -438,7 +414,7 @@ export class EnhancedMemoryService {
 // Factory Functions
 // ============================================================================
 
-let _enhancedServiceInstance: EnhancedMemoryService | null = null;
+let _enhancedServiceInstance: EnhancedMemoryService | null = null
 
 /**
  * Create an enhanced memory service instance.
@@ -446,33 +422,31 @@ let _enhancedServiceInstance: EnhancedMemoryService | null = null;
 export function createEnhancedMemoryService(
   config?: Partial<EnhancedMemoryServiceConfig>,
   dependencies?: {
-    baseService?: MemoryService;
-    repository?: MemoryRepository;
-    embeddingService?: EmbeddingService;
-    vectorStore?: InMemoryVectorStoreAdapter;
-    llmProvider?: LLMProvider;
+    baseService?: MemoryService
+    repository?: MemoryRepository
+    embeddingService?: EmbeddingService
+    vectorStore?: InMemoryVectorStoreAdapter
+    llmProvider?: LLMProvider
   }
 ): EnhancedMemoryService {
-  return new EnhancedMemoryService(config, dependencies);
+  return new EnhancedMemoryService(config, dependencies)
 }
 
 /**
  * Get the singleton enhanced memory service instance.
  */
-export function getEnhancedMemoryService(
-  config?: Partial<EnhancedMemoryServiceConfig>
-): EnhancedMemoryService {
+export function getEnhancedMemoryService(config?: Partial<EnhancedMemoryServiceConfig>): EnhancedMemoryService {
   if (!_enhancedServiceInstance) {
-    _enhancedServiceInstance = createEnhancedMemoryService(config);
+    _enhancedServiceInstance = createEnhancedMemoryService(config)
   }
-  return _enhancedServiceInstance;
+  return _enhancedServiceInstance
 }
 
 /**
  * Reset the singleton instance (for testing).
  */
 export function resetEnhancedMemoryService(): void {
-  _enhancedServiceInstance = null;
+  _enhancedServiceInstance = null
 }
 
 /**
@@ -480,6 +454,6 @@ export function resetEnhancedMemoryService(): void {
  */
 export const enhancedMemoryService = new Proxy({} as EnhancedMemoryService, {
   get(_, prop) {
-    return getEnhancedMemoryService()[prop as keyof EnhancedMemoryService];
+    return getEnhancedMemoryService()[prop as keyof EnhancedMemoryService]
   },
-});
+})

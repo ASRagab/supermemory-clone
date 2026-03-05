@@ -1,12 +1,5 @@
-import {
-  sqliteTable,
-  text,
-  integer,
-  blob,
-  index,
-  uniqueIndex,
-} from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, blob, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
 
 // Users table
 export const users = sqliteTable(
@@ -23,11 +16,8 @@ export const users = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`),
   },
-  (table) => [
-    uniqueIndex('users_email_idx').on(table.email),
-    uniqueIndex('users_api_key_idx').on(table.apiKey),
-  ]
-);
+  (table) => [uniqueIndex('users_email_idx').on(table.email), uniqueIndex('users_api_key_idx').on(table.apiKey)]
+)
 
 // Spaces (collections/folders for organizing memories)
 export const spaces = sqliteTable(
@@ -48,11 +38,11 @@ export const spaces = sqliteTable(
       .default(sql`(unixepoch())`),
   },
   (table) => [index('spaces_user_id_idx').on(table.userId)]
-);
+)
 
 // Content types enum values
-export const contentTypes = ['note', 'url', 'pdf', 'image', 'tweet', 'document'] as const;
-export type ContentType = (typeof contentTypes)[number];
+export const contentTypes = ['note', 'url', 'pdf', 'image', 'tweet', 'document'] as const
+export type ContentType = (typeof contentTypes)[number]
 
 // Memories table (main content storage)
 export const memories = sqliteTable(
@@ -82,7 +72,7 @@ export const memories = sqliteTable(
     index('memories_content_type_idx').on(table.contentType),
     index('memories_created_at_idx').on(table.createdAt),
   ]
-);
+)
 
 // Chunks table (for RAG - split content into searchable chunks)
 export const chunks = sqliteTable(
@@ -102,11 +92,8 @@ export const chunks = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`),
   },
-  (table) => [
-    index('chunks_memory_id_idx').on(table.memoryId),
-    index('chunks_chunk_index_idx').on(table.chunkIndex),
-  ]
-);
+  (table) => [index('chunks_memory_id_idx').on(table.memoryId), index('chunks_chunk_index_idx').on(table.chunkIndex)]
+)
 
 // Embeddings table (vector storage for semantic search)
 export const embeddings = sqliteTable(
@@ -124,7 +111,7 @@ export const embeddings = sqliteTable(
       .default(sql`(unixepoch())`),
   },
   (table) => [uniqueIndex('embeddings_chunk_id_idx').on(table.chunkId)]
-);
+)
 
 // Tags table
 export const tags = sqliteTable(
@@ -144,7 +131,7 @@ export const tags = sqliteTable(
     index('tags_user_id_idx').on(table.userId),
     uniqueIndex('tags_user_name_idx').on(table.userId, table.name),
   ]
-);
+)
 
 // Memory-Tags junction table
 export const memoryTags = sqliteTable(
@@ -160,11 +147,8 @@ export const memoryTags = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`),
   },
-  (table) => [
-    index('memory_tags_memory_id_idx').on(table.memoryId),
-    index('memory_tags_tag_id_idx').on(table.tagId),
-  ]
-);
+  (table) => [index('memory_tags_memory_id_idx').on(table.memoryId), index('memory_tags_tag_id_idx').on(table.tagId)]
+)
 
 // Search history for analytics and suggestions
 export const searchHistory = sqliteTable(
@@ -184,7 +168,7 @@ export const searchHistory = sqliteTable(
     index('search_history_user_id_idx').on(table.userId),
     index('search_history_created_at_idx').on(table.createdAt),
   ]
-);
+)
 
 // API usage tracking
 export const apiUsage = sqliteTable(
@@ -208,32 +192,32 @@ export const apiUsage = sqliteTable(
     index('api_usage_endpoint_idx').on(table.endpoint),
     index('api_usage_created_at_idx').on(table.createdAt),
   ]
-);
+)
 
 // Type exports for use in application
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
+export type User = typeof users.$inferSelect
+export type NewUser = typeof users.$inferInsert
 
-export type Space = typeof spaces.$inferSelect;
-export type NewSpace = typeof spaces.$inferInsert;
+export type Space = typeof spaces.$inferSelect
+export type NewSpace = typeof spaces.$inferInsert
 
-export type Memory = typeof memories.$inferSelect;
-export type NewMemory = typeof memories.$inferInsert;
+export type Memory = typeof memories.$inferSelect
+export type NewMemory = typeof memories.$inferInsert
 
-export type Chunk = typeof chunks.$inferSelect;
-export type NewChunk = typeof chunks.$inferInsert;
+export type Chunk = typeof chunks.$inferSelect
+export type NewChunk = typeof chunks.$inferInsert
 
-export type Embedding = typeof embeddings.$inferSelect;
-export type NewEmbedding = typeof embeddings.$inferInsert;
+export type Embedding = typeof embeddings.$inferSelect
+export type NewEmbedding = typeof embeddings.$inferInsert
 
-export type Tag = typeof tags.$inferSelect;
-export type NewTag = typeof tags.$inferInsert;
+export type Tag = typeof tags.$inferSelect
+export type NewTag = typeof tags.$inferInsert
 
-export type MemoryTag = typeof memoryTags.$inferSelect;
-export type NewMemoryTag = typeof memoryTags.$inferInsert;
+export type MemoryTag = typeof memoryTags.$inferSelect
+export type NewMemoryTag = typeof memoryTags.$inferInsert
 
-export type SearchHistory = typeof searchHistory.$inferSelect;
-export type NewSearchHistory = typeof searchHistory.$inferInsert;
+export type SearchHistory = typeof searchHistory.$inferSelect
+export type NewSearchHistory = typeof searchHistory.$inferInsert
 
-export type ApiUsage = typeof apiUsage.$inferSelect;
-export type NewApiUsage = typeof apiUsage.$inferInsert;
+export type ApiUsage = typeof apiUsage.$inferSelect
+export type NewApiUsage = typeof apiUsage.$inferInsert

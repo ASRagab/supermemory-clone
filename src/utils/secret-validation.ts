@@ -5,8 +5,8 @@
  * Used during startup and secret rotation to ensure secret quality.
  */
 
-import { randomBytes } from 'crypto';
-import { ValidationError } from './errors.js';
+import { randomBytes } from 'crypto'
+import { ValidationError } from './errors.js'
 
 /** API key format patterns for common providers */
 const API_KEY_PATTERNS = {
@@ -16,43 +16,43 @@ const API_KEY_PATTERNS = {
   stripe: /^sk_(live|test)_[a-zA-Z0-9]{24,}$/,
   aws: /^AKIA[0-9A-Z]{16}$/,
   google: /^AIza[0-9A-Za-z_-]{35}$/,
-} as const;
+} as const
 
 /** Database URL patterns */
 const DATABASE_URL_PATTERNS = {
   postgresql: /^postgresql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)$/,
   mysql: /^mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)$/,
   mongodb: /^mongodb(?:\+srv)?:\/\/([^:]+):([^@]+)@([^/]+)\/(.+)$/,
-} as const;
+} as const
 
-const JWT_PATTERN = /^eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/;
+const JWT_PATTERN = /^eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/
 
 export interface ApiKeyValidation {
-  valid: boolean;
-  format?: keyof typeof API_KEY_PATTERNS;
-  error?: string;
+  valid: boolean
+  format?: keyof typeof API_KEY_PATTERNS
+  error?: string
 }
 
 export interface DatabaseUrlComponents {
-  type: 'postgresql' | 'mysql' | 'mongodb';
-  username: string;
-  password: string;
-  host: string;
-  port: number;
-  database: string;
+  type: 'postgresql' | 'mysql' | 'mongodb'
+  username: string
+  password: string
+  host: string
+  port: number
+  database: string
 }
 
 export interface SecretStrength {
-  entropy: number;
-  strength: 'weak' | 'fair' | 'good' | 'strong';
+  entropy: number
+  strength: 'weak' | 'fair' | 'good' | 'strong'
   diversity: {
-    hasLowercase: boolean;
-    hasUppercase: boolean;
-    hasNumbers: boolean;
-    hasSymbols: boolean;
-    uniqueChars: number;
-  };
-  recommendations: string[];
+    hasLowercase: boolean
+    hasUppercase: boolean
+    hasNumbers: boolean
+    hasSymbols: boolean
+    uniqueChars: number
+  }
+  recommendations: string[]
 }
 
 /**
@@ -61,24 +61,21 @@ export interface SecretStrength {
  * @param expectedFormat - Optional expected format
  * @returns Validation result
  */
-export function validateApiKey(
-  apiKey: string,
-  expectedFormat?: keyof typeof API_KEY_PATTERNS
-): ApiKeyValidation {
+export function validateApiKey(apiKey: string, expectedFormat?: keyof typeof API_KEY_PATTERNS): ApiKeyValidation {
   if (!apiKey || apiKey.trim().length === 0) {
-    return { valid: false, error: 'API key cannot be empty' };
+    return { valid: false, error: 'API key cannot be empty' }
   }
 
   // If specific format expected, check only that format
   if (expectedFormat) {
-    const pattern = API_KEY_PATTERNS[expectedFormat];
+    const pattern = API_KEY_PATTERNS[expectedFormat]
     if (pattern.test(apiKey)) {
-      return { valid: true, format: expectedFormat };
+      return { valid: true, format: expectedFormat }
     }
     return {
       valid: false,
       error: `API key does not match ${expectedFormat} format`,
-    };
+    }
   }
 
   // Check all known formats
@@ -87,7 +84,7 @@ export function validateApiKey(
       return {
         valid: true,
         format: format as keyof typeof API_KEY_PATTERNS,
-      };
+      }
     }
   }
 
@@ -95,7 +92,7 @@ export function validateApiKey(
   return {
     valid: false,
     error: 'API key format not recognized',
-  };
+  }
 }
 
 /**
@@ -106,21 +103,21 @@ export function validateApiKey(
  */
 export function validateDatabaseUrl(url: string): DatabaseUrlComponents {
   if (!url || url.trim().length === 0) {
-    throw new ValidationError('Database URL cannot be empty');
+    throw new ValidationError('Database URL cannot be empty')
   }
 
   const parsers: Array<{
-    type: DatabaseUrlComponents['type'];
-    pattern: RegExp;
-    defaultPort?: number;
+    type: DatabaseUrlComponents['type']
+    pattern: RegExp
+    defaultPort?: number
   }> = [
     { type: 'postgresql', pattern: DATABASE_URL_PATTERNS.postgresql },
     { type: 'mysql', pattern: DATABASE_URL_PATTERNS.mysql },
     { type: 'mongodb', pattern: DATABASE_URL_PATTERNS.mongodb, defaultPort: 27017 },
-  ];
+  ]
 
   for (const { type, pattern, defaultPort } of parsers) {
-    const match = url.match(pattern);
+    const match = url.match(pattern)
     if (match) {
       return {
         type,
@@ -129,13 +126,13 @@ export function validateDatabaseUrl(url: string): DatabaseUrlComponents {
         host: match[3]!,
         port: defaultPort ?? parseInt(match[4]!, 10),
         database: type === 'mongodb' ? match[4]! : match[5]!,
-      };
+      }
     }
   }
 
   throw new ValidationError('Invalid database URL format', {
     url: ['URL must be in format: protocol://username:password@host:port/database'],
-  });
+  })
 }
 
 /**
@@ -144,32 +141,32 @@ export function validateDatabaseUrl(url: string): DatabaseUrlComponents {
  * @returns Strength analysis
  */
 export function checkSecretStrength(secret: string): SecretStrength {
-  const entropy = calculateEntropy(secret);
-  const diversity = analyzeCharacterDiversity(secret);
-  const recommendations: string[] = [];
+  const entropy = calculateEntropy(secret)
+  const diversity = analyzeCharacterDiversity(secret)
+  const recommendations: string[] = []
 
-  let strength: SecretStrength['strength'];
+  let strength: SecretStrength['strength']
   if (entropy < 64) {
-    strength = 'weak';
-    recommendations.push('Increase length to at least 16 characters');
+    strength = 'weak'
+    recommendations.push('Increase length to at least 16 characters')
   } else if (entropy < 96) {
-    strength = 'fair';
-    recommendations.push('Consider using at least 24 characters for better security');
+    strength = 'fair'
+    recommendations.push('Consider using at least 24 characters for better security')
   } else if (entropy < 128) {
-    strength = 'good';
+    strength = 'good'
   } else {
-    strength = 'strong';
+    strength = 'strong'
   }
 
-  if (!diversity.hasLowercase) recommendations.push('Add lowercase letters');
-  if (!diversity.hasUppercase) recommendations.push('Add uppercase letters');
-  if (!diversity.hasNumbers) recommendations.push('Add numbers');
-  if (!diversity.hasSymbols) recommendations.push('Add symbols for maximum security');
+  if (!diversity.hasLowercase) recommendations.push('Add lowercase letters')
+  if (!diversity.hasUppercase) recommendations.push('Add uppercase letters')
+  if (!diversity.hasNumbers) recommendations.push('Add numbers')
+  if (!diversity.hasSymbols) recommendations.push('Add symbols for maximum security')
   if (diversity.uniqueChars < secret.length * 0.5) {
-    recommendations.push('Increase character diversity (too many repeated characters)');
+    recommendations.push('Increase character diversity (too many repeated characters)')
   }
 
-  return { entropy, strength, diversity, recommendations };
+  return { entropy, strength, diversity, recommendations }
 }
 
 /**
@@ -178,15 +175,12 @@ export function checkSecretStrength(secret: string): SecretStrength {
  * @param encoding - Output encoding (default: base64url)
  * @returns Generated secret
  */
-export function generateSecret(
-  length: number = 32,
-  encoding: 'hex' | 'base64' | 'base64url' = 'base64url'
-): string {
+export function generateSecret(length: number = 32, encoding: 'hex' | 'base64' | 'base64url' = 'base64url'): string {
   if (length < 16) {
-    throw new ValidationError('Secret length must be at least 16 bytes');
+    throw new ValidationError('Secret length must be at least 16 bytes')
   }
 
-  return randomBytes(length).toString(encoding);
+  return randomBytes(length).toString(encoding)
 }
 
 /**
@@ -195,7 +189,7 @@ export function generateSecret(
  * @returns True if valid JWT format
  */
 export function validateJwtFormat(token: string): boolean {
-  return JWT_PATTERN.test(token);
+  return JWT_PATTERN.test(token)
 }
 
 /**
@@ -205,10 +199,10 @@ export function validateJwtFormat(token: string): boolean {
  */
 export function sanitizeDatabaseUrl(url: string): string {
   try {
-    const parsed = validateDatabaseUrl(url);
-    return `${parsed.type}://[REDACTED]:[REDACTED]@${parsed.host}:${parsed.port}/${parsed.database}`;
+    const parsed = validateDatabaseUrl(url)
+    return `${parsed.type}://[REDACTED]:[REDACTED]@${parsed.host}:${parsed.port}/${parsed.database}`
   } catch {
-    return '[INVALID_DATABASE_URL]';
+    return '[INVALID_DATABASE_URL]'
   }
 }
 
@@ -220,22 +214,22 @@ export function sanitizeDatabaseUrl(url: string): string {
 export function looksLikeSecret(value: string): boolean {
   // Must be at least 16 chars
   if (value.length < 16) {
-    return false;
+    return false
   }
 
   // Check entropy threshold
-  const entropy = calculateEntropy(value);
+  const entropy = calculateEntropy(value)
   if (entropy < 64) {
-    return false;
+    return false
   }
 
   // Check if it's base64-like (alphanumeric + special chars)
-  const base64Like = /^[a-zA-Z0-9+/=_-]+$/;
+  const base64Like = /^[a-zA-Z0-9+/=_-]+$/
   if (!base64Like.test(value)) {
-    return false;
+    return false
   }
 
-  return true;
+  return true
 }
 
 /**
@@ -244,21 +238,21 @@ export function looksLikeSecret(value: string): boolean {
  * @returns Entropy in bits
  */
 export function calculateEntropy(str: string): number {
-  const len = str.length;
-  if (len === 0) return 0;
+  const len = str.length
+  if (len === 0) return 0
 
-  const frequencies = new Map<string, number>();
+  const frequencies = new Map<string, number>()
   for (const char of str) {
-    frequencies.set(char, (frequencies.get(char) || 0) + 1);
+    frequencies.set(char, (frequencies.get(char) || 0) + 1)
   }
 
-  let entropy = 0;
+  let entropy = 0
   for (const count of frequencies.values()) {
-    const p = count / len;
-    entropy -= p * Math.log2(p);
+    const p = count / len
+    entropy -= p * Math.log2(p)
   }
 
-  return entropy * len;
+  return entropy * len
 }
 
 function analyzeCharacterDiversity(str: string) {
@@ -268,7 +262,7 @@ function analyzeCharacterDiversity(str: string) {
     hasNumbers: /[0-9]/.test(str),
     hasSymbols: /[^a-zA-Z0-9]/.test(str),
     uniqueChars: new Set(str).size,
-  };
+  }
 }
 
 /** Export secret patterns for use in secret detection */
@@ -276,4 +270,4 @@ export const SECRET_FORMAT_PATTERNS = {
   apiKey: API_KEY_PATTERNS,
   databaseUrl: DATABASE_URL_PATTERNS,
   jwt: JWT_PATTERN,
-} as const;
+} as const

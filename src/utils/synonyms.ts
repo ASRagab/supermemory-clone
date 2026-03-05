@@ -22,7 +22,7 @@ export const ACTION_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
   start: ['begin', 'launch', 'initiate', 'commence', 'activate'],
   stop: ['end', 'halt', 'terminate', 'cease', 'pause'],
   send: ['transmit', 'dispatch', 'deliver', 'forward', 'submit'],
-} as const;
+} as const
 
 /**
  * Common technical abbreviations with their full forms.
@@ -53,22 +53,22 @@ export const ABBREVIATION_EXPANSIONS: Readonly<Record<string, string>> = {
   prod: 'production',
   ui: 'user interface',
   ux: 'user experience',
-} as const;
+} as const
 
 /**
  * Options for query expansion
  */
 export interface QueryExpansionOptions {
   /** Include synonym expansions (default: true) */
-  includeSynonyms?: boolean;
+  includeSynonyms?: boolean
   /** Expand abbreviations (default: true) */
-  expandAbbreviations?: boolean;
+  expandAbbreviations?: boolean
   /** Maximum synonyms to include per term (default: 2) */
-  maxSynonymsPerTerm?: number;
+  maxSynonymsPerTerm?: number
   /** Custom synonym mappings to merge with defaults */
-  customSynonyms?: Record<string, string[]>;
+  customSynonyms?: Record<string, string[]>
   /** Custom abbreviation expansions to merge with defaults */
-  customAbbreviations?: Record<string, string>;
+  customAbbreviations?: Record<string, string>
 }
 
 /**
@@ -85,20 +85,16 @@ export interface QueryExpansionOptions {
  * getSynonyms('create', 2); // ['make', 'build']
  * ```
  */
-export function getSynonyms(
-  term: string,
-  limit?: number,
-  customSynonyms?: Record<string, string[]>
-): string[] {
-  const lowerTerm = term.toLowerCase();
-  const allSynonyms = { ...ACTION_SYNONYMS, ...customSynonyms };
-  const synonyms = allSynonyms[lowerTerm];
+export function getSynonyms(term: string, limit?: number, customSynonyms?: Record<string, string[]>): string[] {
+  const lowerTerm = term.toLowerCase()
+  const allSynonyms = { ...ACTION_SYNONYMS, ...customSynonyms }
+  const synonyms = allSynonyms[lowerTerm]
 
   if (!synonyms) {
-    return [];
+    return []
   }
 
-  return limit !== undefined ? [...synonyms].slice(0, limit) : [...synonyms];
+  return limit !== undefined ? [...synonyms].slice(0, limit) : [...synonyms]
 }
 
 /**
@@ -118,9 +114,9 @@ export function expandAbbreviation(
   abbreviation: string,
   customAbbreviations?: Record<string, string>
 ): string | undefined {
-  const lowerAbbr = abbreviation.toLowerCase();
-  const allAbbreviations = { ...ABBREVIATION_EXPANSIONS, ...customAbbreviations };
-  return allAbbreviations[lowerAbbr];
+  const lowerAbbr = abbreviation.toLowerCase()
+  const allAbbreviations = { ...ABBREVIATION_EXPANSIONS, ...customAbbreviations }
+  return allAbbreviations[lowerAbbr]
 }
 
 /**
@@ -143,32 +139,32 @@ export function expandQuery(query: string, options: QueryExpansionOptions = {}):
     maxSynonymsPerTerm = 2,
     customSynonyms,
     customAbbreviations,
-  } = options;
+  } = options
 
   const tokens = query
     .toLowerCase()
     .split(/\s+/)
-    .filter((t) => t.length > 0);
-  const expanded: string[] = [...tokens];
+    .filter((t) => t.length > 0)
+  const expanded: string[] = [...tokens]
 
   if (includeSynonyms) {
     for (const token of tokens) {
-      const synonyms = getSynonyms(token, maxSynonymsPerTerm, customSynonyms);
-      expanded.push(...synonyms);
+      const synonyms = getSynonyms(token, maxSynonymsPerTerm, customSynonyms)
+      expanded.push(...synonyms)
     }
   }
 
   if (expandAbbreviations) {
     for (const token of tokens) {
-      const expansion = expandAbbreviation(token, customAbbreviations);
+      const expansion = expandAbbreviation(token, customAbbreviations)
       if (expansion) {
-        expanded.push(expansion);
+        expanded.push(expansion)
       }
     }
   }
 
   // Remove duplicates and return
-  return [...new Set(expanded)].join(' ');
+  return [...new Set(expanded)].join(' ')
 }
 
 /**
@@ -178,7 +174,7 @@ export function expandQuery(query: string, options: QueryExpansionOptions = {}):
  * @returns True if synonyms exist for this term
  */
 export function hasSynonyms(term: string): boolean {
-  return term.toLowerCase() in ACTION_SYNONYMS;
+  return term.toLowerCase() in ACTION_SYNONYMS
 }
 
 /**
@@ -188,5 +184,5 @@ export function hasSynonyms(term: string): boolean {
  * @returns True if this is a known abbreviation
  */
 export function isAbbreviation(term: string): boolean {
-  return term.toLowerCase() in ABBREVIATION_EXPANSIONS;
+  return term.toLowerCase() in ABBREVIATION_EXPANSIONS
 }

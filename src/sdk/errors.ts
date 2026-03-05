@@ -8,9 +8,9 @@
  */
 export class SupermemoryError extends Error {
   constructor(message?: string) {
-    super(message);
-    this.name = 'SupermemoryError';
-    Object.setPrototypeOf(this, new.target.prototype);
+    super(message)
+    this.name = 'SupermemoryError'
+    Object.setPrototypeOf(this, new.target.prototype)
   }
 }
 
@@ -22,40 +22,40 @@ export class APIError<
   THeaders extends Headers | undefined = Headers | undefined,
   TError = unknown,
 > extends SupermemoryError {
-  readonly status: TStatus;
-  readonly headers: THeaders;
-  readonly error: TError;
-  readonly request_id?: string;
+  readonly status: TStatus
+  readonly headers: THeaders
+  readonly error: TError
+  readonly request_id?: string
 
   constructor(status: TStatus, error: TError, message: string | undefined, headers: THeaders) {
-    super(message || APIError.makeMessage(status, error));
-    this.status = status;
-    this.headers = headers;
-    this.error = error;
-    this.name = 'APIError';
+    super(message || APIError.makeMessage(status, error))
+    this.status = status
+    this.headers = headers
+    this.error = error
+    this.name = 'APIError'
 
     // Extract request ID from headers if available
     if (headers && typeof headers.get === 'function') {
-      this.request_id = headers.get('x-request-id') || undefined;
+      this.request_id = headers.get('x-request-id') || undefined
     }
   }
 
   private static makeMessage(status: number | undefined, error: unknown): string {
     if (typeof error === 'string') {
-      return error;
+      return error
     }
 
     if (error && typeof error === 'object') {
-      const errorObj = error as Record<string, unknown>;
+      const errorObj = error as Record<string, unknown>
       if (typeof errorObj.message === 'string') {
-        return errorObj.message;
+        return errorObj.message
       }
       if (typeof errorObj.error === 'string') {
-        return errorObj.error;
+        return errorObj.error
       }
     }
 
-    return status ? `Request failed with status ${status}` : 'Request failed';
+    return status ? `Request failed with status ${status}` : 'Request failed'
   }
 
   /**
@@ -68,29 +68,29 @@ export class APIError<
     headers: Headers | undefined
   ): APIError {
     if (!status) {
-      return new APIConnectionError({ message });
+      return new APIConnectionError({ message })
     }
 
     switch (status) {
       case 400:
-        return new BadRequestError(status, error, message, headers);
+        return new BadRequestError(status, error, message, headers)
       case 401:
-        return new AuthenticationError(status, error, message, headers);
+        return new AuthenticationError(status, error, message, headers)
       case 403:
-        return new PermissionDeniedError(status, error, message, headers);
+        return new PermissionDeniedError(status, error, message, headers)
       case 404:
-        return new NotFoundError(status, error, message, headers);
+        return new NotFoundError(status, error, message, headers)
       case 409:
-        return new ConflictError(status, error, message, headers);
+        return new ConflictError(status, error, message, headers)
       case 422:
-        return new UnprocessableEntityError(status, error, message, headers);
+        return new UnprocessableEntityError(status, error, message, headers)
       case 429:
-        return new RateLimitError(status, error, message, headers);
+        return new RateLimitError(status, error, message, headers)
       default:
         if (status >= 500) {
-          return new InternalServerError(status, error, message, headers);
+          return new InternalServerError(status, error, message, headers)
         }
-        return new APIError(status, error, message, headers);
+        return new APIError(status, error, message, headers)
     }
   }
 }
@@ -100,8 +100,8 @@ export class APIError<
  */
 export class APIUserAbortError extends APIError<undefined, undefined, undefined> {
   constructor(message?: string) {
-    super(undefined, undefined, message || 'Request was aborted', undefined);
-    this.name = 'APIUserAbortError';
+    super(undefined, undefined, message || 'Request was aborted', undefined)
+    this.name = 'APIUserAbortError'
   }
 }
 
@@ -109,12 +109,12 @@ export class APIUserAbortError extends APIError<undefined, undefined, undefined>
  * Error thrown when a connection to the API cannot be established
  */
 export class APIConnectionError extends APIError<undefined, undefined, undefined> {
-  override readonly cause?: Error;
+  override readonly cause?: Error
 
   constructor({ message, cause }: { message?: string; cause?: Error } = {}) {
-    super(undefined, undefined, message || 'Connection error', undefined);
-    this.name = 'APIConnectionError';
-    this.cause = cause;
+    super(undefined, undefined, message || 'Connection error', undefined)
+    this.name = 'APIConnectionError'
+    this.cause = cause
   }
 }
 
@@ -123,8 +123,8 @@ export class APIConnectionError extends APIError<undefined, undefined, undefined
  */
 export class APIConnectionTimeoutError extends APIConnectionError {
   constructor({ message }: { message?: string } = {}) {
-    super({ message: message || 'Request timed out' });
-    this.name = 'APIConnectionTimeoutError';
+    super({ message: message || 'Request timed out' })
+    this.name = 'APIConnectionTimeoutError'
   }
 }
 
@@ -132,14 +132,9 @@ export class APIConnectionTimeoutError extends APIConnectionError {
  * Error thrown for 400 Bad Request responses
  */
 export class BadRequestError extends APIError<400, Headers | undefined> {
-  constructor(
-    status: 400,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'BadRequestError';
+  constructor(status: 400, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'BadRequestError'
   }
 }
 
@@ -147,14 +142,9 @@ export class BadRequestError extends APIError<400, Headers | undefined> {
  * Error thrown for 401 Unauthorized responses
  */
 export class AuthenticationError extends APIError<401, Headers | undefined> {
-  constructor(
-    status: 401,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'AuthenticationError';
+  constructor(status: 401, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'AuthenticationError'
   }
 }
 
@@ -162,14 +152,9 @@ export class AuthenticationError extends APIError<401, Headers | undefined> {
  * Error thrown for 403 Forbidden responses
  */
 export class PermissionDeniedError extends APIError<403, Headers | undefined> {
-  constructor(
-    status: 403,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'PermissionDeniedError';
+  constructor(status: 403, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'PermissionDeniedError'
   }
 }
 
@@ -177,14 +162,9 @@ export class PermissionDeniedError extends APIError<403, Headers | undefined> {
  * Error thrown for 404 Not Found responses
  */
 export class NotFoundError extends APIError<404, Headers | undefined> {
-  constructor(
-    status: 404,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'NotFoundError';
+  constructor(status: 404, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'NotFoundError'
   }
 }
 
@@ -192,14 +172,9 @@ export class NotFoundError extends APIError<404, Headers | undefined> {
  * Error thrown for 409 Conflict responses
  */
 export class ConflictError extends APIError<409, Headers | undefined> {
-  constructor(
-    status: 409,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'ConflictError';
+  constructor(status: 409, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'ConflictError'
   }
 }
 
@@ -207,14 +182,9 @@ export class ConflictError extends APIError<409, Headers | undefined> {
  * Error thrown for 422 Unprocessable Entity responses
  */
 export class UnprocessableEntityError extends APIError<422, Headers | undefined> {
-  constructor(
-    status: 422,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'UnprocessableEntityError';
+  constructor(status: 422, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'UnprocessableEntityError'
   }
 }
 
@@ -222,24 +192,19 @@ export class UnprocessableEntityError extends APIError<422, Headers | undefined>
  * Error thrown for 429 Rate Limit responses
  */
 export class RateLimitError extends APIError<429, Headers | undefined> {
-  readonly retryAfter?: number;
+  readonly retryAfter?: number
 
-  constructor(
-    status: 429,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'RateLimitError';
+  constructor(status: 429, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'RateLimitError'
 
     // Extract retry-after header if available
     if (headers && typeof headers.get === 'function') {
-      const retryAfter = headers.get('retry-after');
+      const retryAfter = headers.get('retry-after')
       if (retryAfter) {
-        const parsed = parseInt(retryAfter, 10);
-        if (!isNaN(parsed)) {
-          this.retryAfter = parsed;
+        const parsed = parseInt(retryAfter, 10)
+        if (!Number.isNaN(parsed)) {
+          this.retryAfter = parsed
         }
       }
     }
@@ -250,14 +215,9 @@ export class RateLimitError extends APIError<429, Headers | undefined> {
  * Error thrown for 5xx Internal Server Error responses
  */
 export class InternalServerError extends APIError<number, Headers | undefined> {
-  constructor(
-    status: number,
-    error: unknown,
-    message: string | undefined,
-    headers: Headers | undefined
-  ) {
-    super(status, error, message, headers);
-    this.name = 'InternalServerError';
+  constructor(status: number, error: unknown, message: string | undefined, headers: Headers | undefined) {
+    super(status, error, message, headers)
+    this.name = 'InternalServerError'
   }
 }
 
@@ -265,14 +225,14 @@ export class InternalServerError extends APIError<number, Headers | undefined> {
  * Type guard to check if an error is a Supermemory API error
  */
 export function isAPIError(error: unknown): error is APIError {
-  return error instanceof APIError;
+  return error instanceof APIError
 }
 
 /**
  * Type guard to check if an error is a rate limit error
  */
 export function isRateLimitError(error: unknown): error is RateLimitError {
-  return error instanceof RateLimitError;
+  return error instanceof RateLimitError
 }
 
 /**
@@ -280,17 +240,17 @@ export function isRateLimitError(error: unknown): error is RateLimitError {
  */
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof APIConnectionError) {
-    return true;
+    return true
   }
   if (error instanceof RateLimitError) {
-    return true;
+    return true
   }
   if (error instanceof InternalServerError) {
-    return true;
+    return true
   }
   // Also retry on generic network errors (e.g., fetch failures)
   if (error instanceof Error) {
-    const message = error.message.toLowerCase();
+    const message = error.message.toLowerCase()
     if (
       message.includes('network') ||
       message.includes('fetch') ||
@@ -299,8 +259,8 @@ export function isRetryableError(error: unknown): boolean {
       message.includes('timeout') ||
       message.includes('connection')
     ) {
-      return true;
+      return true
     }
   }
-  return false;
+  return false
 }

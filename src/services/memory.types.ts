@@ -14,12 +14,12 @@ import type {
   MemoryRelationship,
   RelationshipType as BaseRelationshipType,
   Entity,
-} from '../types/index.js';
+} from '../types/index.js'
 
 // Re-export base types for convenience
-export type { BaseMemory, MemoryRelationship, Entity };
-export type MemoryType = BaseMemoryType;
-export type RelationshipType = BaseRelationshipType;
+export type { BaseMemory, MemoryRelationship, Entity }
+export type MemoryType = BaseMemoryType
+export type RelationshipType = BaseRelationshipType
 
 /**
  * Service-level memory type (compatible with base Memory)
@@ -27,13 +27,13 @@ export type RelationshipType = BaseRelationshipType;
  */
 export interface Memory extends BaseMemory {
   /** Source content this memory was extracted from */
-  sourceContent?: string;
+  sourceContent?: string
 
   /** Source identifier (URL, document ID, etc.) */
-  sourceId?: string;
+  sourceId?: string
 
   /** Confidence score of extraction (0-1) - moved to top level for convenience */
-  confidence: number;
+  confidence: number
 }
 
 /**
@@ -41,53 +41,53 @@ export interface Memory extends BaseMemory {
  */
 export interface Relationship {
   /** Unique identifier */
-  id: string;
+  id: string
 
   /** Source memory ID */
-  sourceMemoryId: string;
+  sourceMemoryId: string
 
   /** Target memory ID */
-  targetMemoryId: string;
+  targetMemoryId: string
 
   /** Type of relationship */
-  type: BaseRelationshipType;
+  type: BaseRelationshipType
 
   /** Confidence score for this relationship (0-1) */
-  confidence: number;
+  confidence: number
 
   /** Optional description of the relationship */
-  description?: string;
+  description?: string
 
   /** Timestamp of creation */
-  createdAt: Date;
+  createdAt: Date
 
   /** Additional metadata */
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown>
 }
 
 /**
  * Confidence levels for memory extraction and relationships
  */
-export type ConfidenceLevel = 'high' | 'medium' | 'low';
+export type ConfidenceLevel = 'high' | 'medium' | 'low'
 
 /**
  * Result of memory extraction from content
  */
 export interface MemoryExtractionResult {
   /** Extracted memories */
-  memories: Memory[];
+  memories: Memory[]
 
   /** Raw extraction response (for debugging) */
-  rawResponse?: string;
+  rawResponse?: string
 
   /** Processing statistics */
   stats: {
-    totalExtracted: number;
-    factsCount: number;
-    preferencesCount: number;
-    episodesCount: number;
-    processingTimeMs: number;
-  };
+    totalExtracted: number
+    factsCount: number
+    preferencesCount: number
+    episodesCount: number
+    processingTimeMs: number
+  }
 }
 
 /**
@@ -95,19 +95,19 @@ export interface MemoryExtractionResult {
  */
 export interface RelationshipDetectionResult {
   /** Detected relationships */
-  relationships: Relationship[];
+  relationships: Relationship[]
 
   /** Memories that should be marked as superseded */
-  supersededMemoryIds: string[];
+  supersededMemoryIds: string[]
 
   /** Processing statistics */
   stats: {
-    totalRelationships: number;
-    updatesCount: number;
-    extendsCount: number;
-    contradictsCount: number;
-    processingTimeMs: number;
-  };
+    totalRelationships: number
+    updatesCount: number
+    extendsCount: number
+    contradictsCount: number
+    processingTimeMs: number
+  }
 }
 
 /**
@@ -115,16 +115,16 @@ export interface RelationshipDetectionResult {
  */
 export interface UpdateCheckResult {
   /** Whether the new memory updates an existing one */
-  isUpdate: boolean;
+  isUpdate: boolean
 
   /** The existing memory being updated (if applicable) */
-  existingMemory?: Memory;
+  existingMemory?: Memory
 
   /** Confidence of the update detection */
-  confidence: number;
+  confidence: number
 
   /** Reason for the determination */
-  reason: string;
+  reason: string
 }
 
 /**
@@ -132,16 +132,16 @@ export interface UpdateCheckResult {
  */
 export interface ExtensionCheckResult {
   /** Whether the new memory extends an existing one */
-  isExtension: boolean;
+  isExtension: boolean
 
   /** The existing memory being extended (if applicable) */
-  existingMemory?: Memory;
+  existingMemory?: Memory
 
   /** Confidence of the extension detection */
-  confidence: number;
+  confidence: number
 
   /** Reason for the determination */
-  reason: string;
+  reason: string
 }
 
 /**
@@ -149,28 +149,28 @@ export interface ExtensionCheckResult {
  */
 export interface MemoryQueryOptions {
   /** Filter by container tag */
-  containerTag?: string;
+  containerTag?: string
 
   /** Filter by memory type */
-  type?: BaseMemoryType;
+  type?: BaseMemoryType
 
   /** Only return latest versions */
-  latestOnly?: boolean;
+  latestOnly?: boolean
 
   /** Minimum confidence threshold */
-  minConfidence?: number;
+  minConfidence?: number
 
   /** Maximum number of results */
-  limit?: number;
+  limit?: number
 
   /** Offset for pagination */
-  offset?: number;
+  offset?: number
 
   /** Sort field */
-  sortBy?: 'createdAt' | 'updatedAt' | 'confidence';
+  sortBy?: 'createdAt' | 'updatedAt' | 'confidence'
 
   /** Sort direction */
-  sortOrder?: 'asc' | 'desc';
+  sortOrder?: 'asc' | 'desc'
 }
 
 /**
@@ -178,10 +178,10 @@ export interface MemoryQueryOptions {
  */
 export interface SemanticSearchOptions extends MemoryQueryOptions {
   /** Query text to search for */
-  query: string;
+  query: string
 
   /** Similarity threshold (0-1) */
-  similarityThreshold?: number;
+  similarityThreshold?: number
 }
 
 /**
@@ -189,29 +189,29 @@ export interface SemanticSearchOptions extends MemoryQueryOptions {
  */
 export interface MemoryServiceConfig {
   /** Default container tag for new memories */
-  defaultContainerTag: string;
+  defaultContainerTag: string
 
   /** Minimum confidence threshold for storing memories */
-  minConfidenceThreshold: number;
+  minConfidenceThreshold: number
 
   /** Whether to automatically detect relationships */
-  autoDetectRelationships: boolean;
+  autoDetectRelationships: boolean
 
   /** Maximum memories to compare for relationship detection */
-  maxRelationshipComparisons: number;
+  maxRelationshipComparisons: number
 
   /** Embedding model configuration */
   embeddingConfig?: {
-    model: string;
-    dimensions: number;
-  };
+    model: string
+    dimensions: number
+  }
 
   /** LLM configuration for extraction */
   llmConfig?: {
-    model: string;
-    temperature: number;
-    maxTokens: number;
-  };
+    model: string
+    temperature: number
+    maxTokens: number
+  }
 }
 
 /**
@@ -231,4 +231,4 @@ export const DEFAULT_MEMORY_CONFIG: MemoryServiceConfig = {
     temperature: 0.1,
     maxTokens: 2000,
   },
-};
+}

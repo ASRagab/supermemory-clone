@@ -12,63 +12,56 @@
  * Target: 15+ integration tests
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { config as dotenvConfig } from 'dotenv';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { config as dotenvConfig } from 'dotenv'
 
 // ============================================================================
 // Mock Implementations
 // ============================================================================
 
 interface StartupValidationResult {
-  valid: boolean;
-  missingSecrets: string[];
-  weakSecrets: string[];
-  warnings: string[];
+  valid: boolean
+  missingSecrets: string[]
+  weakSecrets: string[]
+  warnings: string[]
 }
 
 interface RotationResult {
-  success: boolean;
-  oldSecretValid: boolean;
-  newSecretValid: boolean;
-  downtime: number;
+  success: boolean
+  oldSecretValid: boolean
+  newSecretValid: boolean
+  downtime: number
 }
 
 class SecretsIntegrationService {
-  private requiredSecrets = [
-    'DATABASE_URL',
-    'AUTH_TOKEN',
-    'ENCRYPTION_KEY',
-  ];
+  private requiredSecrets = ['DATABASE_URL', 'AUTH_TOKEN', 'ENCRYPTION_KEY']
 
-  private optionalSecrets = [
-    'OPENAI_API_KEY',
-    'ANTHROPIC_API_KEY',
-  ];
+  private optionalSecrets = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']
 
   /**
    * Validate all required secrets at startup
    */
   validateStartup(): StartupValidationResult {
-    const missingSecrets: string[] = [];
-    const weakSecrets: string[] = [];
-    const warnings: string[] = [];
+    const missingSecrets: string[] = []
+    const weakSecrets: string[] = []
+    const warnings: string[] = []
 
     // Check required secrets
     for (const key of this.requiredSecrets) {
-      const value = process.env[key];
+      const value = process.env[key]
       if (!value) {
-        missingSecrets.push(key);
+        missingSecrets.push(key)
       } else if (this.isWeakSecret(value)) {
-        weakSecrets.push(key);
-        warnings.push(`Warning: ${key} has weak entropy`);
+        weakSecrets.push(key)
+        warnings.push(`Warning: ${key} has weak entropy`)
       }
     }
 
     // Check optional secrets
     for (const key of this.optionalSecrets) {
-      const value = process.env[key];
+      const value = process.env[key]
       if (value && this.isWeakSecret(value)) {
-        warnings.push(`Warning: ${key} has weak entropy (optional)`);
+        warnings.push(`Warning: ${key} has weak entropy (optional)`)
       }
     }
 
@@ -77,7 +70,7 @@ class SecretsIntegrationService {
       missingSecrets,
       weakSecrets,
       warnings,
-    };
+    }
   }
 
   /**
@@ -85,31 +78,25 @@ class SecretsIntegrationService {
    */
   private isWeakSecret(secret: string): boolean {
     // Check length
-    if (secret.length < 16) return true;
+    if (secret.length < 16) return true
 
     // Check entropy
-    const uniqueChars = new Set(secret).size;
-    if (uniqueChars < 8) return true;
+    const uniqueChars = new Set(secret).size
+    if (uniqueChars < 8) return true
 
     // Check common patterns
-    const commonPatterns = [
-      'password',
-      '123456',
-      'admin',
-      'test',
-      'secret',
-    ];
+    const commonPatterns = ['password', '123456', 'admin', 'test', 'secret']
 
-    return commonPatterns.some(pattern => secret.toLowerCase().includes(pattern));
+    return commonPatterns.some((pattern) => secret.toLowerCase().includes(pattern))
   }
 
   /**
    * Fail fast if required secrets are missing
    */
   failFastValidation(): void {
-    const result = this.validateStartup();
+    const result = this.validateStartup()
     if (!result.valid) {
-      throw new Error(`Missing required secrets: ${result.missingSecrets.join(', ')}`);
+      throw new Error(`Missing required secrets: ${result.missingSecrets.join(', ')}`)
     }
   }
 
@@ -117,79 +104,79 @@ class SecretsIntegrationService {
    * Rotate secret without downtime
    */
   async rotateSecret(secretKey: string, newValue: string): Promise<RotationResult> {
-    const oldValue = process.env[secretKey];
+    const oldValue = process.env[secretKey]
     if (!oldValue) {
-      throw new Error(`Secret ${secretKey} not found`);
+      throw new Error(`Secret ${secretKey} not found`)
     }
 
-    const startTime = Date.now();
+    const startTime = Date.now()
 
     // Phase 1: Both old and new secrets are valid
-    const oldValid = true;
-    process.env[secretKey] = newValue;
-    const newValid = true;
+    const oldValid = true
+    process.env[secretKey] = newValue
+    const newValid = true
 
     // Simulate validation delay
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10))
 
-    const downtime = Date.now() - startTime;
+    const downtime = Date.now() - startTime
 
     return {
       success: true,
       oldSecretValid: oldValid,
       newSecretValid: newValid,
       downtime,
-    };
+    }
   }
 
   /**
    * Validate database URL format
    */
   validateDatabaseUrl(url: string): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
+    const errors: string[] = []
 
     // Check protocol
     if (!url.startsWith('postgresql://') && !url.startsWith('postgres://')) {
-      errors.push('Database URL must use postgresql:// protocol');
+      errors.push('Database URL must use postgresql:// protocol')
     }
 
     // Check format
-    const urlPattern = /^postgres(ql)?:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)$/;
+    const urlPattern = /^postgres(ql)?:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)$/
     if (!urlPattern.test(url)) {
-      errors.push('Invalid database URL format');
+      errors.push('Invalid database URL format')
     }
 
     return {
       valid: errors.length === 0,
       errors,
-    };
+    }
   }
 
   /**
    * Validate API key format
    */
   validateApiKey(key: string): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
+    const errors: string[] = []
 
     // Check prefix
     if (!key.startsWith('sk-') && !key.startsWith('api-')) {
-      errors.push('API key must start with sk- or api-');
+      errors.push('API key must start with sk- or api-')
     }
 
     // Check length
     if (key.length < 32) {
-      errors.push('API key must be at least 32 characters');
+      errors.push('API key must be at least 32 characters')
     }
 
     // Check format
     if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
-      errors.push('API key contains invalid characters');
+      errors.push('API key contains invalid characters')
     }
 
     return {
       valid: errors.length === 0,
       errors,
-    };
+    }
   }
 
   /**
@@ -197,8 +184,8 @@ class SecretsIntegrationService {
    */
   integrateWithAuth(apiSecretKey: string): boolean {
     // Validate secret for auth service
-    const validation = this.validateApiKey(apiSecretKey);
-    return validation.valid;
+    const validation = this.validateApiKey(apiSecretKey)
+    return validation.valid
   }
 
   /**
@@ -206,8 +193,8 @@ class SecretsIntegrationService {
    */
   integrateWithDatabase(databaseUrl: string): boolean {
     // Validate database URL
-    const validation = this.validateDatabaseUrl(databaseUrl);
-    return validation.valid;
+    const validation = this.validateDatabaseUrl(databaseUrl)
+    return validation.valid
   }
 }
 
@@ -216,17 +203,17 @@ class SecretsIntegrationService {
 // ============================================================================
 
 describe('Secrets Integration Tests', () => {
-  let service: SecretsIntegrationService;
-  let originalEnv: NodeJS.ProcessEnv;
+  let service: SecretsIntegrationService
+  let originalEnv: NodeJS.ProcessEnv
 
   beforeEach(() => {
-    service = new SecretsIntegrationService();
-    originalEnv = { ...process.env };
-  });
+    service = new SecretsIntegrationService()
+    originalEnv = { ...process.env }
+  })
 
   afterEach(() => {
-    process.env = originalEnv;
-  });
+    process.env = originalEnv
+  })
 
   // ============================================================================
   // Startup Validation Tests
@@ -234,62 +221,62 @@ describe('Secrets Integration Tests', () => {
 
   describe('Startup Validation', () => {
     it('should pass validation when all required secrets are present', () => {
-      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
-      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
-      process.env.ENCRYPTION_KEY = 'b'.repeat(32);
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db'
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40)
+      process.env.ENCRYPTION_KEY = 'b'.repeat(32)
 
-      const result = service.validateStartup();
+      const result = service.validateStartup()
 
-      expect(result.valid).toBe(true);
-      expect(result.missingSecrets).toHaveLength(0);
-    });
+      expect(result.valid).toBe(true)
+      expect(result.missingSecrets).toHaveLength(0)
+    })
 
     it('should detect missing required secrets', () => {
-      delete process.env.DATABASE_URL;
-      delete process.env.AUTH_TOKEN;
+      delete process.env.DATABASE_URL
+      delete process.env.AUTH_TOKEN
 
-      const result = service.validateStartup();
+      const result = service.validateStartup()
 
-      expect(result.valid).toBe(false);
-      expect(result.missingSecrets).toContain('DATABASE_URL');
-      expect(result.missingSecrets).toContain('AUTH_TOKEN');
-    });
+      expect(result.valid).toBe(false)
+      expect(result.missingSecrets).toContain('DATABASE_URL')
+      expect(result.missingSecrets).toContain('AUTH_TOKEN')
+    })
 
     it('should detect weak secrets', () => {
-      process.env.DATABASE_URL = 'postgresql://user:password123@localhost:5432/db';
-      process.env.AUTH_TOKEN = 'test';
-      process.env.ENCRYPTION_KEY = 'weak';
+      process.env.DATABASE_URL = 'postgresql://user:password123@localhost:5432/db'
+      process.env.AUTH_TOKEN = 'test'
+      process.env.ENCRYPTION_KEY = 'weak'
 
-      const result = service.validateStartup();
+      const result = service.validateStartup()
 
-      expect(result.weakSecrets.length).toBeGreaterThan(0);
-      expect(result.warnings.length).toBeGreaterThan(0);
-    });
+      expect(result.weakSecrets.length).toBeGreaterThan(0)
+      expect(result.warnings.length).toBeGreaterThan(0)
+    })
 
     it('should warn about weak optional secrets', () => {
-      process.env.DATABASE_URL = 'postgresql://user:strong-random-pass-123@localhost:5432/db';
-      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
-      process.env.ENCRYPTION_KEY = 'b'.repeat(32);
-      process.env.OPENAI_API_KEY = 'test'; // Weak optional
+      process.env.DATABASE_URL = 'postgresql://user:strong-random-pass-123@localhost:5432/db'
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40)
+      process.env.ENCRYPTION_KEY = 'b'.repeat(32)
+      process.env.OPENAI_API_KEY = 'test' // Weak optional
 
-      const result = service.validateStartup();
+      const result = service.validateStartup()
 
-      expect(result.valid).toBe(true); // Still valid
-      expect(result.warnings.some(w => w.includes('OPENAI_API_KEY'))).toBe(true);
-    });
+      expect(result.valid).toBe(true) // Still valid
+      expect(result.warnings.some((w) => w.includes('OPENAI_API_KEY'))).toBe(true)
+    })
 
     it('should not fail for missing optional secrets', () => {
-      process.env.DATABASE_URL = 'postgresql://user:strong-pass-xyz@localhost:5432/db';
-      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
-      process.env.ENCRYPTION_KEY = 'b'.repeat(32);
-      delete process.env.OPENAI_API_KEY;
+      process.env.DATABASE_URL = 'postgresql://user:strong-pass-xyz@localhost:5432/db'
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40)
+      process.env.ENCRYPTION_KEY = 'b'.repeat(32)
+      delete process.env.OPENAI_API_KEY
 
-      const result = service.validateStartup();
+      const result = service.validateStartup()
 
-      expect(result.valid).toBe(true);
-      expect(result.missingSecrets).not.toContain('OPENAI_API_KEY');
-    });
-  });
+      expect(result.valid).toBe(true)
+      expect(result.missingSecrets).not.toContain('OPENAI_API_KEY')
+    })
+  })
 
   // ============================================================================
   // Fail Fast Tests
@@ -297,32 +284,32 @@ describe('Secrets Integration Tests', () => {
 
   describe('Fail Fast on Missing Secrets', () => {
     it('should throw error when required secrets are missing', () => {
-      delete process.env.DATABASE_URL;
+      delete process.env.DATABASE_URL
 
-      expect(() => service.failFastValidation()).toThrow('Missing required secrets');
-    });
+      expect(() => service.failFastValidation()).toThrow('Missing required secrets')
+    })
 
     it('should not throw when all required secrets are present', () => {
-      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
-      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
-      process.env.ENCRYPTION_KEY = 'b'.repeat(32);
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db'
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40)
+      process.env.ENCRYPTION_KEY = 'b'.repeat(32)
 
-      expect(() => service.failFastValidation()).not.toThrow();
-    });
+      expect(() => service.failFastValidation()).not.toThrow()
+    })
 
     it('should list all missing secrets in error message', () => {
-      delete process.env.DATABASE_URL;
-      delete process.env.AUTH_TOKEN;
+      delete process.env.DATABASE_URL
+      delete process.env.AUTH_TOKEN
 
       try {
-        service.failFastValidation();
-        expect.fail('Should have thrown');
+        service.failFastValidation()
+        expect.fail('Should have thrown')
       } catch (error: any) {
-        expect(error.message).toContain('DATABASE_URL');
-        expect(error.message).toContain('AUTH_TOKEN');
+        expect(error.message).toContain('DATABASE_URL')
+        expect(error.message).toContain('AUTH_TOKEN')
       }
-    });
-  });
+    })
+  })
 
   // ============================================================================
   // Secret Rotation Tests
@@ -330,42 +317,42 @@ describe('Secrets Integration Tests', () => {
 
   describe('Secret Rotation Without Downtime', () => {
     it('should rotate secret successfully', async () => {
-      process.env.AUTH_TOKEN = 'old-secret-value';
-      const newSecret = 'new-secret-value-with-high-entropy';
+      process.env.AUTH_TOKEN = 'old-secret-value'
+      const newSecret = 'new-secret-value-with-high-entropy'
 
-      const result = await service.rotateSecret('AUTH_TOKEN', newSecret);
+      const result = await service.rotateSecret('AUTH_TOKEN', newSecret)
 
-      expect(result.success).toBe(true);
-      expect(process.env.AUTH_TOKEN).toBe(newSecret);
-    });
+      expect(result.success).toBe(true)
+      expect(process.env.AUTH_TOKEN).toBe(newSecret)
+    })
 
     it('should have minimal downtime during rotation', async () => {
-      process.env.AUTH_TOKEN = 'old-secret';
-      const newSecret = 'new-secret';
+      process.env.AUTH_TOKEN = 'old-secret'
+      const newSecret = 'new-secret'
 
-      const result = await service.rotateSecret('AUTH_TOKEN', newSecret);
+      const result = await service.rotateSecret('AUTH_TOKEN', newSecret)
 
-      expect(result.downtime).toBeLessThan(100); // Less than 100ms
-    });
+      expect(result.downtime).toBeLessThan(100) // Less than 100ms
+    })
 
     it('should maintain both old and new secrets during transition', async () => {
-      process.env.AUTH_TOKEN = 'old-secret';
-      const newSecret = 'new-secret';
+      process.env.AUTH_TOKEN = 'old-secret'
+      const newSecret = 'new-secret'
 
-      const result = await service.rotateSecret('AUTH_TOKEN', newSecret);
+      const result = await service.rotateSecret('AUTH_TOKEN', newSecret)
 
-      expect(result.oldSecretValid).toBe(true);
-      expect(result.newSecretValid).toBe(true);
-    });
+      expect(result.oldSecretValid).toBe(true)
+      expect(result.newSecretValid).toBe(true)
+    })
 
     it('should throw error when rotating non-existent secret', async () => {
-      delete process.env.NON_EXISTENT_SECRET;
+      delete process.env.NON_EXISTENT_SECRET
 
       await expect(service.rotateSecret('NON_EXISTENT_SECRET', 'new-value')).rejects.toThrow(
         'Secret NON_EXISTENT_SECRET not found'
-      );
-    });
-  });
+      )
+    })
+  })
 
   // ============================================================================
   // Database Integration Tests
@@ -373,43 +360,43 @@ describe('Secrets Integration Tests', () => {
 
   describe('Database Config Integration', () => {
     it('should validate correct PostgreSQL URL', () => {
-      const url = 'postgresql://user:password@localhost:5432/dbname';
-      const result = service.validateDatabaseUrl(url);
+      const url = 'postgresql://user:password@localhost:5432/dbname'
+      const result = service.validateDatabaseUrl(url)
 
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
 
     it('should reject invalid protocol', () => {
-      const url = 'mysql://user:password@localhost:3306/dbname';
-      const result = service.validateDatabaseUrl(url);
+      const url = 'mysql://user:password@localhost:3306/dbname'
+      const result = service.validateDatabaseUrl(url)
 
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Database URL must use postgresql:// protocol');
-    });
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('Database URL must use postgresql:// protocol')
+    })
 
     it('should reject malformed URL', () => {
-      const url = 'postgresql://invalid-format';
-      const result = service.validateDatabaseUrl(url);
+      const url = 'postgresql://invalid-format'
+      const result = service.validateDatabaseUrl(url)
 
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Invalid database URL format');
-    });
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('Invalid database URL format')
+    })
 
     it('should integrate with database config', () => {
-      const validUrl = 'postgresql://user:pass@localhost:5432/db';
-      const result = service.integrateWithDatabase(validUrl);
+      const validUrl = 'postgresql://user:pass@localhost:5432/db'
+      const result = service.integrateWithDatabase(validUrl)
 
-      expect(result).toBe(true);
-    });
+      expect(result).toBe(true)
+    })
 
     it('should reject invalid database config', () => {
-      const invalidUrl = 'invalid-url';
-      const result = service.integrateWithDatabase(invalidUrl);
+      const invalidUrl = 'invalid-url'
+      const result = service.integrateWithDatabase(invalidUrl)
 
-      expect(result).toBe(false);
-    });
-  });
+      expect(result).toBe(false)
+    })
+  })
 
   // ============================================================================
   // Auth Service Integration Tests
@@ -417,51 +404,51 @@ describe('Secrets Integration Tests', () => {
 
   describe('Auth Service Integration', () => {
     it('should validate correct API key format', () => {
-      const key = 'sk-mem_' + 'a'.repeat(40);
-      const result = service.validateApiKey(key);
+      const key = 'sk-mem_' + 'a'.repeat(40)
+      const result = service.validateApiKey(key)
 
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
 
     it('should reject API key without prefix', () => {
-      const key = 'invalid-api-key';
-      const result = service.validateApiKey(key);
+      const key = 'invalid-api-key'
+      const result = service.validateApiKey(key)
 
-      expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-    });
+      expect(result.valid).toBe(false)
+      expect(result.errors.length).toBeGreaterThan(0)
+    })
 
     it('should reject short API key', () => {
-      const key = 'sk-short';
-      const result = service.validateApiKey(key);
+      const key = 'sk-short'
+      const result = service.validateApiKey(key)
 
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('32 characters'))).toBe(true);
-    });
+      expect(result.valid).toBe(false)
+      expect(result.errors.some((e) => e.includes('32 characters'))).toBe(true)
+    })
 
     it('should reject API key with invalid characters', () => {
-      const key = 'sk-invalid@#$%^&*()';
-      const result = service.validateApiKey(key);
+      const key = 'sk-invalid@#$%^&*()'
+      const result = service.validateApiKey(key)
 
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('invalid characters'))).toBe(true);
-    });
+      expect(result.valid).toBe(false)
+      expect(result.errors.some((e) => e.includes('invalid characters'))).toBe(true)
+    })
 
     it('should integrate with auth service', () => {
-      const validKey = 'sk-mem_' + 'a'.repeat(40);
-      const result = service.integrateWithAuth(validKey);
+      const validKey = 'sk-mem_' + 'a'.repeat(40)
+      const result = service.integrateWithAuth(validKey)
 
-      expect(result).toBe(true);
-    });
+      expect(result).toBe(true)
+    })
 
     it('should reject invalid auth config', () => {
-      const invalidKey = 'invalid';
-      const result = service.integrateWithAuth(invalidKey);
+      const invalidKey = 'invalid'
+      const result = service.integrateWithAuth(invalidKey)
 
-      expect(result).toBe(false);
-    });
-  });
+      expect(result).toBe(false)
+    })
+  })
 
   // ============================================================================
   // Environment Configuration Tests
@@ -470,25 +457,25 @@ describe('Secrets Integration Tests', () => {
   describe('Environment Configuration', () => {
     it('should load configuration from .env file', () => {
       // Simulate dotenv loading
-      process.env.TEST_SECRET = 'loaded-from-env';
+      process.env.TEST_SECRET = 'loaded-from-env'
 
-      expect(process.env.TEST_SECRET).toBe('loaded-from-env');
-    });
+      expect(process.env.TEST_SECRET).toBe('loaded-from-env')
+    })
 
     it('should prioritize environment variables over defaults', () => {
-      process.env.API_PORT = '8080';
-      const port = process.env.API_PORT || '3000';
+      process.env.API_PORT = '8080'
+      const port = process.env.API_PORT || '3000'
 
-      expect(port).toBe('8080');
-    });
+      expect(port).toBe('8080')
+    })
 
     it('should use defaults when env vars are missing', () => {
-      delete process.env.API_PORT;
-      const port = process.env.API_PORT || '3000';
+      delete process.env.API_PORT
+      const port = process.env.API_PORT || '3000'
 
-      expect(port).toBe('3000');
-    });
-  });
+      expect(port).toBe('3000')
+    })
+  })
 
   // ============================================================================
   // Cross-Service Integration Tests
@@ -496,25 +483,25 @@ describe('Secrets Integration Tests', () => {
 
   describe('Cross-Service Integration', () => {
     it('should validate secrets for multiple services', () => {
-      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
-      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40);
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db'
+      process.env.AUTH_TOKEN = 'sk-' + 'a'.repeat(40)
 
-      const dbValid = service.integrateWithDatabase(process.env.DATABASE_URL);
-      const authValid = service.integrateWithAuth(process.env.AUTH_TOKEN);
+      const dbValid = service.integrateWithDatabase(process.env.DATABASE_URL)
+      const authValid = service.integrateWithAuth(process.env.AUTH_TOKEN)
 
-      expect(dbValid).toBe(true);
-      expect(authValid).toBe(true);
-    });
+      expect(dbValid).toBe(true)
+      expect(authValid).toBe(true)
+    })
 
     it('should detect configuration conflicts', () => {
-      process.env.DATABASE_URL = 'invalid-db-url';
-      process.env.AUTH_TOKEN = 'invalid-key';
+      process.env.DATABASE_URL = 'invalid-db-url'
+      process.env.AUTH_TOKEN = 'invalid-key'
 
-      const dbValid = service.integrateWithDatabase(process.env.DATABASE_URL);
-      const authValid = service.integrateWithAuth(process.env.AUTH_TOKEN);
+      const dbValid = service.integrateWithDatabase(process.env.DATABASE_URL)
+      const authValid = service.integrateWithAuth(process.env.AUTH_TOKEN)
 
-      expect(dbValid).toBe(false);
-      expect(authValid).toBe(false);
-    });
-  });
-});
+      expect(dbValid).toBe(false)
+      expect(authValid).toBe(false)
+    })
+  })
+})

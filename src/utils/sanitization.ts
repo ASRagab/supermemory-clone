@@ -7,10 +7,10 @@
  * Uses isomorphic-dompurify for cross-platform (Node.js/browser) XSS prevention.
  */
 
-import DOMPurifyDefault from 'isomorphic-dompurify';
+import DOMPurifyDefault from 'isomorphic-dompurify'
 
 // Use the sanitize function directly to avoid type conflicts between dompurify versions
-const sanitize = DOMPurifyDefault.sanitize.bind(DOMPurifyDefault);
+const sanitize = DOMPurifyDefault.sanitize.bind(DOMPurifyDefault)
 
 // ============================================================================
 // Configuration
@@ -20,11 +20,11 @@ const sanitize = DOMPurifyDefault.sanitize.bind(DOMPurifyDefault);
  * DOMPurify configuration type (subset of options we use)
  */
 interface SanitizeConfig {
-  ALLOWED_TAGS?: string[];
-  ALLOWED_ATTR?: string[];
-  ALLOW_DATA_ATTR?: boolean;
-  FORBID_TAGS?: string[];
-  FORBID_ATTR?: string[];
+  ALLOWED_TAGS?: string[]
+  ALLOWED_ATTR?: string[]
+  ALLOW_DATA_ATTR?: boolean
+  FORBID_TAGS?: string[]
+  FORBID_ATTR?: string[]
 }
 
 /**
@@ -70,7 +70,7 @@ const DEFAULT_SANITIZE_CONFIG: SanitizeConfig = {
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
   FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
-};
+}
 
 /**
  * Strict sanitization configuration for storage.
@@ -80,20 +80,9 @@ const STORAGE_SANITIZE_CONFIG: SanitizeConfig = {
   ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'b', 'i', 'code', 'pre', 'ul', 'ol', 'li'],
   ALLOWED_ATTR: [],
   ALLOW_DATA_ATTR: false,
-  FORBID_TAGS: [
-    'script',
-    'style',
-    'iframe',
-    'object',
-    'embed',
-    'form',
-    'input',
-    'button',
-    'a',
-    'img',
-  ],
+  FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'a', 'img'],
   FORBID_ATTR: ['href', 'src', 'onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
-};
+}
 
 // ============================================================================
 // Core Sanitization Functions
@@ -119,10 +108,10 @@ const STORAGE_SANITIZE_CONFIG: SanitizeConfig = {
  */
 export function sanitizeHtml(content: string, config?: SanitizeConfig): string {
   if (!content || typeof content !== 'string') {
-    return '';
+    return ''
   }
 
-  return sanitize(content, config ?? DEFAULT_SANITIZE_CONFIG);
+  return sanitize(content, config ?? DEFAULT_SANITIZE_CONFIG)
 }
 
 /**
@@ -144,10 +133,10 @@ export function sanitizeHtml(content: string, config?: SanitizeConfig): string {
  */
 export function sanitizeForStorage(content: string): string {
   if (!content || typeof content !== 'string') {
-    return '';
+    return ''
   }
 
-  return sanitize(content, STORAGE_SANITIZE_CONFIG);
+  return sanitize(content, STORAGE_SANITIZE_CONFIG)
 }
 
 /**
@@ -168,14 +157,14 @@ export function sanitizeForStorage(content: string): string {
  */
 export function stripHtml(content: string): string {
   if (!content || typeof content !== 'string') {
-    return '';
+    return ''
   }
 
   // First sanitize to remove any malicious content, then strip tags
-  const sanitized = sanitize(content, { ALLOWED_TAGS: [] });
+  const sanitized = sanitize(content, { ALLOWED_TAGS: [] })
 
   // Decode any HTML entities that remain
-  return decodeHtmlEntities(sanitized);
+  return decodeHtmlEntities(sanitized)
 }
 
 /**
@@ -193,20 +182,18 @@ function decodeHtmlEntities(text: string): string {
     '&#039;': "'",
     '&apos;': "'",
     '&nbsp;': ' ',
-  };
+  }
 
-  let decoded = text;
+  let decoded = text
   for (const [entity, char] of Object.entries(entities)) {
-    decoded = decoded.replace(new RegExp(entity, 'g'), char);
+    decoded = decoded.replace(new RegExp(entity, 'g'), char)
   }
 
   // Handle numeric entities
-  decoded = decoded.replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)));
-  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
-    String.fromCharCode(parseInt(hex, 16))
-  );
+  decoded = decoded.replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)))
+  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
 
-  return decoded;
+  return decoded
 }
 
 // ============================================================================
@@ -216,7 +203,7 @@ function decodeHtmlEntities(text: string): string {
 /**
  * Allowed URL protocols for links and resources.
  */
-const ALLOWED_PROTOCOLS = ['http:', 'https:', 'mailto:'];
+const ALLOWED_PROTOCOLS = ['http:', 'https:', 'mailto:']
 
 /**
  * Sanitizes a URL by validating the protocol and structure.
@@ -236,34 +223,34 @@ const ALLOWED_PROTOCOLS = ['http:', 'https:', 'mailto:'];
  */
 export function sanitizeUrl(url: string): string {
   if (!url || typeof url !== 'string') {
-    return '';
+    return ''
   }
 
-  const trimmed = url.trim();
+  const trimmed = url.trim()
 
   // Check for empty URL
   if (!trimmed) {
-    return '';
+    return ''
   }
 
   try {
-    const parsed = new URL(trimmed);
+    const parsed = new URL(trimmed)
 
     // Validate protocol
     if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
-      return '';
+      return ''
     }
 
     // Reconstruct the URL to normalize it
-    return parsed.toString();
+    return parsed.toString()
   } catch {
     // If URL parsing fails, it might be a relative URL - return as-is if safe
     if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
       // Relative URL starting with / - generally safe
-      return trimmed;
+      return trimmed
     }
 
-    return '';
+    return ''
   }
 }
 
@@ -274,7 +261,7 @@ export function sanitizeUrl(url: string): string {
  * @returns True if the URL is considered safe
  */
 export function isUrlSafe(url: string): boolean {
-  return sanitizeUrl(url) !== '' || url === '';
+  return sanitizeUrl(url) !== '' || url === ''
 }
 
 // ============================================================================
@@ -293,7 +280,7 @@ const DANGEROUS_PATH_PATTERNS = [
   /%252e%252e/gi, // Double URL-encoded ..
   /%c0%ae/gi, // UTF-8 encoded .
   /%c1%9c/gi, // UTF-8 encoded /
-];
+]
 
 /**
  * Sanitizes a file path to prevent path traversal attacks.
@@ -314,35 +301,35 @@ const DANGEROUS_PATH_PATTERNS = [
  */
 export function sanitizePath(path: string): string | null {
   if (!path || typeof path !== 'string') {
-    return null;
+    return null
   }
 
-  const trimmed = path.trim();
+  const trimmed = path.trim()
 
   // Check for dangerous patterns
   for (const pattern of DANGEROUS_PATH_PATTERNS) {
     if (pattern.test(trimmed)) {
-      return null;
+      return null
     }
   }
 
   // Additional validation: no control characters
   // eslint-disable-next-line no-control-regex
   if (/[\x00-\x1f\x7f]/.test(trimmed)) {
-    return null;
+    return null
   }
 
   // Normalize path separators
-  const normalized = trimmed.replace(/\\/g, '/');
+  const normalized = trimmed.replace(/\\/g, '/')
 
   // Split and filter path components
   const components = normalized.split('/').filter((component) => {
     // Remove empty components and single dots
-    return component && component !== '.';
-  });
+    return component && component !== '.'
+  })
 
   // Rejoin and return
-  return components.join('/');
+  return components.join('/')
 }
 
 /**
@@ -352,7 +339,7 @@ export function sanitizePath(path: string): string | null {
  * @returns True if the path is considered safe
  */
 export function isPathSafe(path: string): boolean {
-  return sanitizePath(path) !== null;
+  return sanitizePath(path) !== null
 }
 
 // ============================================================================
@@ -367,11 +354,11 @@ export function isPathSafe(path: string): boolean {
  */
 export function containsHtml(content: string): boolean {
   if (!content || typeof content !== 'string') {
-    return false;
+    return false
   }
 
   // Check for HTML tags
-  return /<[a-z][\s\S]*>/i.test(content);
+  return /<[a-z][\s\S]*>/i.test(content)
 }
 
 /**
@@ -382,7 +369,7 @@ export function containsHtml(content: string): boolean {
  */
 export function containsScript(content: string): boolean {
   if (!content || typeof content !== 'string') {
-    return false;
+    return false
   }
 
   const scriptPatterns = [
@@ -391,9 +378,9 @@ export function containsScript(content: string): boolean {
     /on\w+\s*=/gi, // Event handlers like onclick=, onerror=
     /data:text\/html/gi,
     /vbscript:/gi,
-  ];
+  ]
 
-  return scriptPatterns.some((pattern) => pattern.test(content));
+  return scriptPatterns.some((pattern) => pattern.test(content))
 }
 
 // ============================================================================
@@ -411,29 +398,29 @@ export function containsScript(content: string): boolean {
  */
 export function sanitizeMarkdown(markdown: string): string {
   if (!markdown || typeof markdown !== 'string') {
-    return '';
+    return ''
   }
 
-  let sanitized = markdown;
+  let sanitized = markdown
 
   // Escape HTML tags that aren't part of standard Markdown
-  sanitized = sanitized.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
-  sanitized = sanitized.replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '');
-  sanitized = sanitized.replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '');
+  sanitized = sanitized.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+  sanitized = sanitized.replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+  sanitized = sanitized.replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
 
   // Sanitize link URLs in Markdown [text](url) format
   sanitized = sanitized.replace(/\[([^\]]*)\]\(([^)]*)\)/g, (_, text, url) => {
-    const safeUrl = sanitizeUrl(url);
-    return safeUrl ? `[${text}](${safeUrl})` : text;
-  });
+    const safeUrl = sanitizeUrl(url)
+    return safeUrl ? `[${text}](${safeUrl})` : text
+  })
 
   // Sanitize image URLs in Markdown ![alt](url) format
   sanitized = sanitized.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, (_, alt, url) => {
-    const safeUrl = sanitizeUrl(url);
-    return safeUrl ? `![${alt}](${safeUrl})` : alt;
-  });
+    const safeUrl = sanitizeUrl(url)
+    return safeUrl ? `![${alt}](${safeUrl})` : alt
+  })
 
-  return sanitized;
+  return sanitized
 }
 
 // ============================================================================
@@ -443,7 +430,7 @@ export function sanitizeMarkdown(markdown: string): string {
 /**
  * Maximum depth for JSON object traversal to prevent DoS.
  */
-const MAX_JSON_DEPTH = 10;
+const MAX_JSON_DEPTH = 10
 
 /**
  * Sanitizes a JSON object by removing potentially dangerous properties
@@ -455,11 +442,11 @@ const MAX_JSON_DEPTH = 10;
  */
 export function sanitizeJsonObject<T extends Record<string, unknown>>(obj: T, depth = 0): T {
   if (depth > MAX_JSON_DEPTH) {
-    return {} as T;
+    return {} as T
   }
 
   if (obj === null || typeof obj !== 'object') {
-    return obj;
+    return obj
   }
 
   if (Array.isArray(obj)) {
@@ -469,30 +456,30 @@ export function sanitizeJsonObject<T extends Record<string, unknown>>(obj: T, de
         : typeof item === 'string'
           ? stripHtml(item)
           : item
-    ) as unknown as T;
+    ) as unknown as T
   }
 
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(obj)) {
     // Skip prototype pollution vectors
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-      continue;
+      continue
     }
 
     if (typeof value === 'string') {
       // Sanitize string values
-      result[key] = stripHtml(value);
+      result[key] = stripHtml(value)
     } else if (typeof value === 'object' && value !== null) {
       // Recursively sanitize nested objects
-      result[key] = sanitizeJsonObject(value as Record<string, unknown>, depth + 1);
+      result[key] = sanitizeJsonObject(value as Record<string, unknown>, depth + 1)
     } else {
       // Preserve other primitive values
-      result[key] = value;
+      result[key] = value
     }
   }
 
-  return result as T;
+  return result as T
 }
 
 // ============================================================================
@@ -511,4 +498,4 @@ export default {
   containsScript,
   sanitizeMarkdown,
   sanitizeJsonObject,
-};
+}

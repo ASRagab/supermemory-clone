@@ -1,14 +1,14 @@
-import { Context, MiddlewareHandler } from 'hono';
-import { AuthContext, ErrorCodes } from '../../types/api.types.js';
+import { Context, MiddlewareHandler } from 'hono'
+import { AuthContext, ErrorCodes } from '../../types/api.types.js'
 
 function isAuthEnabled(): boolean {
-  const raw = process.env.AUTH_ENABLED;
-  return raw === 'true' || raw === '1';
+  const raw = process.env.AUTH_ENABLED
+  return raw === 'true' || raw === '1'
 }
 
 declare module 'hono' {
   interface ContextVariableMap {
-    auth: AuthContext;
+    auth: AuthContext
   }
 }
 
@@ -19,11 +19,11 @@ declare module 'hono' {
  */
 export const authMiddleware: MiddlewareHandler = async (c: Context, next) => {
   if (!isAuthEnabled()) {
-    c.set('auth', { userId: 'anonymous', apiKey: '', scopes: ['*'] });
-    return next();
+    c.set('auth', { userId: 'anonymous', apiKey: '', scopes: ['*'] })
+    return next()
   }
 
-  const configuredToken = process.env.AUTH_TOKEN;
+  const configuredToken = process.env.AUTH_TOKEN
   if (!configuredToken) {
     return c.json(
       {
@@ -34,10 +34,10 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next) => {
         status: 500,
       },
       500
-    );
+    )
   }
 
-  const authHeader = c.req.header('Authorization');
+  const authHeader = c.req.header('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
     return c.json(
       {
@@ -48,10 +48,10 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next) => {
         status: 401,
       },
       401
-    );
+    )
   }
 
-  const token = authHeader.slice('Bearer '.length).trim();
+  const token = authHeader.slice('Bearer '.length).trim()
   if (!token || token !== configuredToken) {
     return c.json(
       {
@@ -62,12 +62,12 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next) => {
         status: 401,
       },
       401
-    );
+    )
   }
 
-  c.set('auth', { userId: 'authenticated', apiKey: token, scopes: ['*'] });
-  return next();
-};
+  c.set('auth', { userId: 'authenticated', apiKey: token, scopes: ['*'] })
+  return next()
+}
 
 /**
  * Scope checks are intentionally no-op in minimal auth mode.
@@ -75,6 +75,6 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next) => {
  */
 export const requireScopes = (..._requiredScopes: string[]): MiddlewareHandler => {
   return async (_c: Context, next) => {
-    return next();
-  };
-};
+    return next()
+  }
+}

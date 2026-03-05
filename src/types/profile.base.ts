@@ -5,7 +5,7 @@
  * across profile.types.ts and types/index.ts
  */
 
-import { z } from 'zod';
+import { z } from 'zod'
 
 // ============================================================================
 // Base Schemas
@@ -19,9 +19,9 @@ export const FactLifecycleCategorySchema = z.enum([
   'static', // Long-term, rarely changes
   'dynamic', // Temporary, expires over time
   'inferred', // Derived from other facts
-]);
+])
 
-export type FactLifecycleCategory = z.infer<typeof FactLifecycleCategorySchema>;
+export type FactLifecycleCategory = z.infer<typeof FactLifecycleCategorySchema>
 
 /**
  * Fact semantic category - describes what the fact is about
@@ -37,16 +37,16 @@ export const FactSemanticCategorySchema = z.enum([
   'goal', // Objectives, aspirations
   'context', // Current situation, temporary context
   'other', // Uncategorized
-]);
+])
 
-export type FactSemanticCategory = z.infer<typeof FactSemanticCategorySchema>;
+export type FactSemanticCategory = z.infer<typeof FactSemanticCategorySchema>
 
 /**
  * Fact type - static or dynamic lifecycle
  */
-export const FactTypeSchema = z.enum(['static', 'dynamic']);
+export const FactTypeSchema = z.enum(['static', 'dynamic'])
 
-export type FactType = z.infer<typeof FactTypeSchema>;
+export type FactType = z.infer<typeof FactTypeSchema>
 
 // ============================================================================
 // Base ProfileFact Schema
@@ -74,9 +74,9 @@ export const BaseProfileFactSchema = z.object({
 
   /** Source content or document this was extracted from */
   sourceId: z.string().optional(),
-});
+})
 
-export type BaseProfileFact = z.infer<typeof BaseProfileFactSchema>;
+export type BaseProfileFact = z.infer<typeof BaseProfileFactSchema>
 
 // ============================================================================
 // Service Layer ProfileFact (extended version)
@@ -104,9 +104,9 @@ export const ServiceProfileFactSchema = BaseProfileFactSchema.extend({
 
   /** Last time this fact was accessed or reinforced */
   lastAccessedAt: z.date(),
-});
+})
 
-export type ServiceProfileFact = z.infer<typeof ServiceProfileFactSchema>;
+export type ServiceProfileFact = z.infer<typeof ServiceProfileFactSchema>
 
 // ============================================================================
 // Type Layer ProfileFact (API version)
@@ -128,6 +128,6 @@ export const TypeProfileFactSchema = BaseProfileFactSchema.extend({
 
   /** Source identifier */
   source: z.string().optional(),
-});
+})
 
-export type TypeProfileFact = z.infer<typeof TypeProfileFactSchema>;
+export type TypeProfileFact = z.infer<typeof TypeProfileFactSchema>

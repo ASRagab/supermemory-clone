@@ -1,6 +1,6 @@
-import { pgTable, uuid, varchar, decimal, boolean, jsonb, timestamp, index, check, unique } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { memories } from './memories.schema.js';
+import { pgTable, uuid, varchar, decimal, boolean, jsonb, timestamp, index, check, unique } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { memories } from './memories.schema.js'
 
 export const memoryRelationships = pgTable(
   'memory_relationships',
@@ -27,31 +27,16 @@ export const memoryRelationships = pgTable(
     index('idx_memory_rel_bidirectional')
       .on(table.sourceMemoryId, table.targetMemoryId)
       .where(sql`${table.bidirectional} = TRUE`),
-    index('idx_memory_rel_graph').on(
-      table.sourceMemoryId,
-      table.targetMemoryId,
-      table.relationshipType,
-      table.weight
-    ),
+    index('idx_memory_rel_graph').on(table.sourceMemoryId, table.targetMemoryId, table.relationshipType, table.weight),
     check(
       'memory_relationships_type_check',
       sql`${table.relationshipType} IN ('updates', 'extends', 'derives', 'contradicts', 'supports', 'relates', 'temporal', 'causal', 'part_of', 'similar')`
     ),
-    check(
-      'memory_relationships_weight_check',
-      sql`${table.weight} >= 0 AND ${table.weight} <= 1`
-    ),
-    check(
-      'memory_relationships_no_self_loop',
-      sql`${table.sourceMemoryId} != ${table.targetMemoryId}`
-    ),
-    unique('memory_relationships_unique_edge').on(
-      table.sourceMemoryId,
-      table.targetMemoryId,
-      table.relationshipType
-    ),
+    check('memory_relationships_weight_check', sql`${table.weight} >= 0 AND ${table.weight} <= 1`),
+    check('memory_relationships_no_self_loop', sql`${table.sourceMemoryId} != ${table.targetMemoryId}`),
+    unique('memory_relationships_unique_edge').on(table.sourceMemoryId, table.targetMemoryId, table.relationshipType),
   ]
-);
+)
 
-export type MemoryRelationship = typeof memoryRelationships.$inferSelect;
-export type NewMemoryRelationship = typeof memoryRelationships.$inferInsert;
+export type MemoryRelationship = typeof memoryRelationships.$inferSelect
+export type NewMemoryRelationship = typeof memoryRelationships.$inferInsert

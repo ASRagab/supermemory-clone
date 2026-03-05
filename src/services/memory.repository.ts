@@ -12,57 +12,44 @@ import {
   SemanticSearchOptions,
   RelationshipType,
   type MemoryType,
-} from './memory.types.js';
-import { getLogger } from '../utils/logger.js';
-import { DatabaseError } from '../utils/errors.js';
-import {
-  validate,
-  uuidSchema,
-  memoryQueryOptionsSchema,
-  validateContainerTag,
-} from '../utils/validation.js';
-import { isEmbeddingRelationshipsEnabled } from '../config/feature-flags.js';
-import { getEmbeddingService, cosineSimilarity } from './embedding.service.js';
-import { getPostgresDatabase } from '../db/postgres.js';
-import { getDatabaseUrl, isPostgresUrl } from '../db/client.js';
-import { memories as memoriesTable } from '../db/schema/memories.schema.js';
-import { memoryRelationships } from '../db/schema/relationships.schema.js';
-import { memoryEmbeddings } from '../db/schema/embeddings.schema.js';
-import { and, asc, desc, eq, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
+} from './memory.types.js'
+import { getLogger } from '../utils/logger.js'
+import { DatabaseError } from '../utils/errors.js'
+import { validate, uuidSchema, memoryQueryOptionsSchema, validateContainerTag } from '../utils/validation.js'
+import { isEmbeddingRelationshipsEnabled } from '../config/feature-flags.js'
+import { getEmbeddingService, cosineSimilarity } from './embedding.service.js'
+import { getPostgresDatabase } from '../db/postgres.js'
+import { getDatabaseUrl, isPostgresUrl } from '../db/client.js'
+import { memories as memoriesTable } from '../db/schema/memories.schema.js'
+import { memoryRelationships } from '../db/schema/relationships.schema.js'
+import { memoryEmbeddings } from '../db/schema/embeddings.schema.js'
+import { and, asc, desc, eq, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
 
-const logger = getLogger('MemoryRepository');
+const logger = getLogger('MemoryRepository')
 
-let _db: ReturnType<typeof getPostgresDatabase> | null = null;
+let _db: ReturnType<typeof getPostgresDatabase> | null = null
 
 function getDb(): ReturnType<typeof getPostgresDatabase> {
-  if (_db) return _db;
-  const databaseUrl = getDatabaseUrl();
+  if (_db) return _db
+  const databaseUrl = getDatabaseUrl()
   if (!isPostgresUrl(databaseUrl)) {
     throw new Error(
       'MemoryRepository requires a PostgreSQL DATABASE_URL. SQLite is only supported in tests and is not compatible with memory repository persistence.'
-    );
+    )
   }
-  _db = getPostgresDatabase(databaseUrl);
-  return _db;
+  _db = getPostgresDatabase(databaseUrl)
+  return _db
 }
 
 const db = new Proxy({} as ReturnType<typeof getPostgresDatabase>, {
   get(_target, prop) {
-    return getDb()[prop as keyof ReturnType<typeof getPostgresDatabase>];
+    return getDb()[prop as keyof ReturnType<typeof getPostgresDatabase>]
   },
-});
+})
 
-const dbMemoryTypes = new Set(['fact', 'preference', 'episode', 'belief', 'skill', 'context']);
-const memoryTypes = new Set<MemoryType>([
-  'fact',
-  'event',
-  'preference',
-  'skill',
-  'relationship',
-  'context',
-  'note',
-]);
+const dbMemoryTypes = new Set(['fact', 'preference', 'episode', 'belief', 'skill', 'context'])
+const memoryTypes = new Set<MemoryType>(['fact', 'event', 'preference', 'skill', 'relationship', 'context', 'note'])
 
 const relationshipTypes = new Set<RelationshipType>([
   'updates',
@@ -71,89 +58,86 @@ const relationshipTypes = new Set<RelationshipType>([
   'contradicts',
   'related',
   'supersedes',
-]);
+])
 
 function isMemoryType(value: unknown): value is MemoryType {
-  return typeof value === 'string' && memoryTypes.has(value as MemoryType);
+  return typeof value === 'string' && memoryTypes.has(value as MemoryType)
 }
 
 function isRelationshipType(value: unknown): value is RelationshipType {
-  return typeof value === 'string' && relationshipTypes.has(value as RelationshipType);
+  return typeof value === 'string' && relationshipTypes.has(value as RelationshipType)
 }
 
 function mapMemoryTypeToDb(type: MemoryType): { dbType: string; originalType?: MemoryType } {
   if (dbMemoryTypes.has(type)) {
-    return { dbType: type };
+    return { dbType: type }
   }
 
   switch (type) {
     case 'event':
-      return { dbType: 'episode', originalType: type };
+      return { dbType: 'episode', originalType: type }
     case 'relationship':
-      return { dbType: 'fact', originalType: type };
+      return { dbType: 'fact', originalType: type }
     case 'note':
-      return { dbType: 'context', originalType: type };
+      return { dbType: 'context', originalType: type }
     default:
-      return { dbType: 'fact', originalType: type };
+      return { dbType: 'fact', originalType: type }
   }
 }
 
 function mapMemoryTypeFromDb(dbType: string, metadata: Record<string, unknown>): MemoryType {
-  const original = metadata.originalType;
+  const original = metadata.originalType
   if (isMemoryType(original)) {
-    return original;
+    return original
   }
 
   if (dbMemoryTypes.has(dbType)) {
-    return dbType as MemoryType;
+    return dbType as MemoryType
   }
 
-  return 'fact';
+  return 'fact'
 }
 
 function mapRelationshipTypeToDb(type: RelationshipType): {
-  dbType: string;
-  originalType?: RelationshipType;
+  dbType: string
+  originalType?: RelationshipType
 } {
   if (type === 'related') {
-    return { dbType: 'relates', originalType: type };
+    return { dbType: 'relates', originalType: type }
   }
   if (type === 'supersedes') {
-    return { dbType: 'updates', originalType: type };
+    return { dbType: 'updates', originalType: type }
   }
-  return { dbType: type };
+  return { dbType: type }
 }
 
-function mapRelationshipTypeFromDb(
-  dbType: string,
-  metadata: Record<string, unknown>
-): RelationshipType {
-  const original = metadata.originalType;
+function mapRelationshipTypeFromDb(dbType: string, metadata: Record<string, unknown>): RelationshipType {
+  const original = metadata.originalType
   if (isRelationshipType(original)) {
-    return original;
+    return original
   }
 
-  if (dbType === 'relates') return 'related';
-  if (dbType === 'updates') return 'updates';
-  return (dbType as RelationshipType) ?? 'related';
+  if (dbType === 'relates') return 'related'
+  if (dbType === 'updates') return 'updates'
+  return (dbType as RelationshipType) ?? 'related'
 }
 
 function generateSimilarityHash(content: string): string {
-  const normalized = content.toLowerCase().replace(/\s+/g, ' ').trim();
-  return createHash('sha256').update(normalized).digest('hex');
+  const normalized = content.toLowerCase().replace(/\s+/g, ' ').trim()
+  return createHash('sha256').update(normalized).digest('hex')
 }
 
 function normalizeMetadata(metadata?: Record<string, unknown> | null): Record<string, unknown> {
   if (metadata && typeof metadata === 'object') {
-    return { ...metadata };
+    return { ...metadata }
   }
-  return {};
+  return {}
 }
 
 function mapDbMemory(row: typeof memoriesTable.$inferSelect): Memory {
-  const metadata = normalizeMetadata(row.metadata as Record<string, unknown> | null);
-  const type = mapMemoryTypeFromDb(row.memoryType, metadata);
-  const confidence = row.confidenceScore ? parseFloat(row.confidenceScore) : 1;
+  const metadata = normalizeMetadata(row.metadata as Record<string, unknown> | null)
+  const type = mapMemoryTypeFromDb(row.memoryType, metadata)
+  const confidence = row.confidenceScore ? parseFloat(row.confidenceScore) : 1
 
   return {
     id: row.id,
@@ -167,13 +151,13 @@ function mapDbMemory(row: typeof memoriesTable.$inferSelect): Memory {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     confidence,
-  };
+  }
 }
 
 function mapDbRelationship(row: typeof memoryRelationships.$inferSelect): Relationship {
-  const metadata = normalizeMetadata(row.metadata as Record<string, unknown> | null);
-  const description = typeof metadata.description === 'string' ? metadata.description : undefined;
-  const type = mapRelationshipTypeFromDb(row.relationshipType, metadata);
+  const metadata = normalizeMetadata(row.metadata as Record<string, unknown> | null)
+  const description = typeof metadata.description === 'string' ? metadata.description : undefined
+  const type = mapRelationshipTypeFromDb(row.relationshipType, metadata)
 
   return {
     id: row.id,
@@ -184,7 +168,7 @@ function mapDbRelationship(row: typeof memoryRelationships.$inferSelect): Relati
     description,
     createdAt: row.createdAt,
     metadata,
-  };
+  }
 }
 
 // ============================================================================
@@ -195,8 +179,8 @@ function mapDbRelationship(row: typeof memoryRelationships.$inferSelect): Relati
  * Memory store interface - retained for test compatibility
  */
 export interface MemoryStore {
-  memories: Map<string, Memory>;
-  relationships: Map<string, Relationship>;
+  memories: Map<string, Memory>
+  relationships: Map<string, Relationship>
 }
 
 /**
@@ -207,7 +191,7 @@ export function createMemoryStore(): MemoryStore {
   return {
     memories: new Map(),
     relationships: new Map(),
-  };
+  }
 }
 
 // ============================================================================
@@ -215,173 +199,168 @@ export function createMemoryStore(): MemoryStore {
 // ============================================================================
 
 export class InMemoryMemoryRepository {
-  private readonly store: MemoryStore;
+  private readonly store: MemoryStore
 
   constructor(store: MemoryStore) {
-    this.store = store;
+    this.store = store
   }
 
   getStore(): MemoryStore {
-    return this.store;
+    return this.store
   }
 
   async create(memory: Memory): Promise<Memory> {
     if (memory.containerTag !== undefined) {
-      validateContainerTag(memory.containerTag);
+      validateContainerTag(memory.containerTag)
     }
     try {
-      logger.debug('Creating memory', { id: memory.id, type: memory.type });
+      logger.debug('Creating memory', { id: memory.id, type: memory.type })
 
       if (!memory.id) {
-        throw new DatabaseError('Memory ID is required', 'create');
+        throw new DatabaseError('Memory ID is required', 'create')
       }
 
       if (this.store.memories.has(memory.id)) {
         throw new DatabaseError(`Memory with ID ${memory.id} already exists`, 'create', {
           existingId: memory.id,
-        });
+        })
       }
 
-      this.store.memories.set(memory.id, { ...memory });
-      logger.info('Memory created', { id: memory.id });
-      return memory;
+      this.store.memories.set(memory.id, { ...memory })
+      logger.info('Memory created', { id: memory.id })
+      return memory
     } catch (error) {
       if (error instanceof DatabaseError) {
-        throw error;
+        throw error
       }
-      logger.errorWithException('Failed to create memory', error, { memoryId: memory.id });
-      throw new DatabaseError('Failed to create memory', 'create', { originalError: error });
+      logger.errorWithException('Failed to create memory', error, { memoryId: memory.id })
+      throw new DatabaseError('Failed to create memory', 'create', { originalError: error })
     }
   }
 
   async createBatch(memories: Memory[]): Promise<Memory[]> {
     for (const memory of memories) {
       if (memory.containerTag !== undefined) {
-        validateContainerTag(memory.containerTag);
+        validateContainerTag(memory.containerTag)
       }
     }
     try {
-      logger.debug('Creating memories batch', { count: memories.length });
+      logger.debug('Creating memories batch', { count: memories.length })
 
-      const created: Memory[] = [];
+      const created: Memory[] = []
       for (const memory of memories) {
-        this.store.memories.set(memory.id, { ...memory });
-        created.push(memory);
+        this.store.memories.set(memory.id, { ...memory })
+        created.push(memory)
       }
 
-      logger.info('Memories batch created', { count: created.length });
-      return created;
+      logger.info('Memories batch created', { count: created.length })
+      return created
     } catch (error) {
-      logger.errorWithException('Failed to create memories batch', error);
+      logger.errorWithException('Failed to create memories batch', error)
       throw new DatabaseError('Failed to create memories batch', 'createBatch', {
         originalError: error,
-      });
+      })
     }
   }
 
   async update(id: string, updates: Partial<Memory>): Promise<Memory | null> {
     if (updates.containerTag !== undefined) {
-      validateContainerTag(updates.containerTag);
+      validateContainerTag(updates.containerTag)
     }
     try {
-      validate(uuidSchema, id);
-      logger.debug('Updating memory', { id });
+      validate(uuidSchema, id)
+      logger.debug('Updating memory', { id })
 
-      const existing = this.store.memories.get(id);
+      const existing = this.store.memories.get(id)
       if (!existing) {
-        logger.warn('Memory not found for update', { id });
-        return null;
+        logger.warn('Memory not found for update', { id })
+        return null
       }
 
       const updated: Memory = {
         ...existing,
         ...updates,
         updatedAt: new Date(),
-      };
-      this.store.memories.set(id, updated);
+      }
+      this.store.memories.set(id, updated)
 
-      logger.info('Memory updated', { id });
-      return updated;
+      logger.info('Memory updated', { id })
+      return updated
     } catch (error) {
-      logger.errorWithException('Failed to update memory', error, { memoryId: id });
+      logger.errorWithException('Failed to update memory', error, { memoryId: id })
       throw new DatabaseError('Failed to update memory', 'update', {
         originalError: error,
         memoryId: id,
-      });
+      })
     }
   }
 
   async delete(id: string): Promise<boolean> {
     try {
-      validate(uuidSchema, id);
-      logger.debug('Deleting memory', { id });
+      validate(uuidSchema, id)
+      logger.debug('Deleting memory', { id })
 
       for (const [relId, rel] of this.store.relationships) {
         if (rel.sourceMemoryId === id || rel.targetMemoryId === id) {
-          this.store.relationships.delete(relId);
+          this.store.relationships.delete(relId)
         }
       }
 
-      const deleted = this.store.memories.delete(id);
+      const deleted = this.store.memories.delete(id)
       if (deleted) {
-        logger.info('Memory deleted', { id });
+        logger.info('Memory deleted', { id })
       } else {
-        logger.warn('Memory not found for deletion', { id });
+        logger.warn('Memory not found for deletion', { id })
       }
-      return deleted;
+      return deleted
     } catch (error) {
-      logger.errorWithException('Failed to delete memory', error, { memoryId: id });
+      logger.errorWithException('Failed to delete memory', error, { memoryId: id })
       throw new DatabaseError('Failed to delete memory', 'delete', {
         originalError: error,
         memoryId: id,
-      });
+      })
     }
   }
 
   async findById(id: string): Promise<Memory | null> {
     try {
-      validate(uuidSchema, id);
-      logger.debug('Finding memory by ID', { id });
-      return this.store.memories.get(id) || null;
+      validate(uuidSchema, id)
+      logger.debug('Finding memory by ID', { id })
+      return this.store.memories.get(id) || null
     } catch (error) {
-      logger.errorWithException('Failed to find memory', error, { memoryId: id });
+      logger.errorWithException('Failed to find memory', error, { memoryId: id })
       throw new DatabaseError('Failed to find memory', 'findById', {
         originalError: error,
         memoryId: id,
-      });
+      })
     }
   }
 
-  async findByContainerTag(
-    containerTag: string,
-    options: MemoryQueryOptions = {}
-  ): Promise<Memory[]> {
-    validateContainerTag(containerTag);
+  async findByContainerTag(containerTag: string, options: MemoryQueryOptions = {}): Promise<Memory[]> {
+    validateContainerTag(containerTag)
     try {
-      const validatedOptions = validate(memoryQueryOptionsSchema, options);
+      const validatedOptions = validate(memoryQueryOptionsSchema, options)
       logger.debug('Finding memories by container tag', {
         containerTag,
         options: validatedOptions,
-      });
+      })
 
-      let results = Array.from(this.store.memories.values()).filter(
-        (m) => m.containerTag === containerTag
-      );
+      let results = Array.from(this.store.memories.values()).filter((m) => m.containerTag === containerTag)
 
       if (validatedOptions.latestOnly) {
-        results = results.filter((m) => m.isLatest);
+        results = results.filter((m) => m.isLatest)
       }
 
       if (validatedOptions.type) {
-        results = results.filter((m) => m.type === validatedOptions.type);
+        results = results.filter((m) => m.type === validatedOptions.type)
       }
 
       if (validatedOptions.minConfidence !== undefined) {
-        results = results.filter((m) => m.confidence >= validatedOptions.minConfidence!);
+        results = results.filter((m) => m.confidence >= validatedOptions.minConfidence!)
       }
 
-      const sortBy = validatedOptions.sortBy || 'createdAt';
-      const sortOrder = validatedOptions.sortOrder || 'desc';
+      const sortBy = validatedOptions.sortBy || 'createdAt'
+      const sortOrder = validatedOptions.sortOrder || 'desc'
       results.sort((a, b) => {
         const aVal =
           sortBy === 'createdAt'
@@ -390,7 +369,7 @@ export class InMemoryMemoryRepository {
               ? a.updatedAt
               : sortBy === 'confidence'
                 ? a.confidence
-                : a.createdAt;
+                : a.createdAt
         const bVal =
           sortBy === 'createdAt'
             ? b.createdAt
@@ -398,73 +377,70 @@ export class InMemoryMemoryRepository {
               ? b.updatedAt
               : sortBy === 'confidence'
                 ? b.confidence
-                : b.createdAt;
+                : b.createdAt
 
         if (aVal instanceof Date && bVal instanceof Date) {
-          return sortOrder === 'desc'
-            ? bVal.getTime() - aVal.getTime()
-            : aVal.getTime() - bVal.getTime();
+          return sortOrder === 'desc' ? bVal.getTime() - aVal.getTime() : aVal.getTime() - bVal.getTime()
         }
         if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+          return sortOrder === 'desc' ? bVal - aVal : aVal - bVal
         }
-        return 0;
-      });
+        return 0
+      })
 
-      const offset = validatedOptions.offset ?? 0;
-      const limit = validatedOptions.limit ?? 100;
-      return results.slice(offset, offset + limit);
+      const offset = validatedOptions.offset ?? 0
+      const limit = validatedOptions.limit ?? 100
+      return results.slice(offset, offset + limit)
     } catch (error) {
       logger.errorWithException('Failed to find memories by container tag', error, {
         containerTag,
-      });
+      })
       throw new DatabaseError('Failed to find memories', 'findByContainerTag', {
         originalError: error,
-      });
+      })
     }
   }
 
   async findRelated(
     memoryId: string,
     options: {
-      relationshipTypes?: RelationshipType[];
-      depth?: number;
-      limit?: number;
+      relationshipTypes?: RelationshipType[]
+      depth?: number
+      limit?: number
     } = {}
   ): Promise<{ memory: Memory; relationship: Relationship }[]> {
     try {
-      validate(uuidSchema, memoryId);
-      logger.debug('Finding related memories', { memoryId, options });
+      validate(uuidSchema, memoryId)
+      logger.debug('Finding related memories', { memoryId, options })
 
-      const { relationshipTypes, depth = 1, limit = 50 } = options;
-      const results: { memory: Memory; relationship: Relationship }[] = [];
-      const visited = new Set<string>();
-      const queue: { id: string; currentDepth: number }[] = [{ id: memoryId, currentDepth: 0 }];
+      const { relationshipTypes, depth = 1, limit = 50 } = options
+      const results: { memory: Memory; relationship: Relationship }[] = []
+      const visited = new Set<string>()
+      const queue: { id: string; currentDepth: number }[] = [{ id: memoryId, currentDepth: 0 }]
 
       while (queue.length > 0 && results.length < limit) {
-        const current = queue.shift()!;
+        const current = queue.shift()!
 
         if (visited.has(current.id) || current.currentDepth >= depth) {
-          continue;
+          continue
         }
-        visited.add(current.id);
+        visited.add(current.id)
 
         for (const rel of this.store.relationships.values()) {
           if (rel.sourceMemoryId === current.id || rel.targetMemoryId === current.id) {
             if (relationshipTypes && !relationshipTypes.includes(rel.type)) {
-              continue;
+              continue
             }
 
-            const relatedId =
-              rel.sourceMemoryId === current.id ? rel.targetMemoryId : rel.sourceMemoryId;
+            const relatedId = rel.sourceMemoryId === current.id ? rel.targetMemoryId : rel.sourceMemoryId
 
             if (!visited.has(relatedId)) {
-              const relatedMemory = this.store.memories.get(relatedId);
+              const relatedMemory = this.store.memories.get(relatedId)
               if (relatedMemory) {
-                results.push({ memory: relatedMemory, relationship: rel });
+                results.push({ memory: relatedMemory, relationship: rel })
 
                 if (current.currentDepth + 1 < depth) {
-                  queue.push({ id: relatedId, currentDepth: current.currentDepth + 1 });
+                  queue.push({ id: relatedId, currentDepth: current.currentDepth + 1 })
                 }
               }
             }
@@ -472,106 +448,106 @@ export class InMemoryMemoryRepository {
         }
       }
 
-      return results.slice(0, limit);
+      return results.slice(0, limit)
     } catch (error) {
-      logger.errorWithException('Failed to find related memories', error, { memoryId });
+      logger.errorWithException('Failed to find related memories', error, { memoryId })
       throw new DatabaseError('Failed to find related memories', 'findRelated', {
         originalError: error,
-      });
+      })
     }
   }
 
   async semanticSearch(options: SemanticSearchOptions): Promise<Memory[]> {
     try {
-      logger.debug('Performing semantic search', { query: options.query.substring(0, 50) });
+      logger.debug('Performing semantic search', { query: options.query.substring(0, 50) })
 
-      const limit = options.limit ?? 20;
-      let candidates = Array.from(this.store.memories.values());
+      const limit = options.limit ?? 20
+      let candidates = Array.from(this.store.memories.values())
       if (options.containerTag) {
-        candidates = candidates.filter((m) => m.containerTag === options.containerTag);
+        candidates = candidates.filter((m) => m.containerTag === options.containerTag)
       }
 
       if (options.latestOnly) {
-        candidates = candidates.filter((m) => m.isLatest);
+        candidates = candidates.filter((m) => m.isLatest)
       }
 
       if (options.type) {
-        candidates = candidates.filter((m) => m.type === options.type);
+        candidates = candidates.filter((m) => m.type === options.type)
       }
 
       if (!isEmbeddingRelationshipsEnabled()) {
-        const query = options.query.toLowerCase();
-        const results = candidates.filter((m) => m.content.toLowerCase().includes(query));
-        results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        return results.slice(0, limit);
+        const query = options.query.toLowerCase()
+        const results = candidates.filter((m) => m.content.toLowerCase().includes(query))
+        results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        return results.slice(0, limit)
       }
 
       if (candidates.length === 0) {
-        return [];
+        return []
       }
 
-      const embeddingService = getEmbeddingService();
-      const queryEmbedding = await embeddingService.generateEmbedding(options.query);
+      const embeddingService = getEmbeddingService()
+      const queryEmbedding = await embeddingService.generateEmbedding(options.query)
 
       const scored = await Promise.all(
         candidates.map(async (memory) => {
           if (!memory.embedding || memory.embedding.length === 0) {
-            memory.embedding = await embeddingService.generateEmbedding(memory.content);
+            memory.embedding = await embeddingService.generateEmbedding(memory.content)
           }
 
-          const similarity = cosineSimilarity(queryEmbedding, memory.embedding);
-          return { memory, similarity };
+          const similarity = cosineSimilarity(queryEmbedding, memory.embedding)
+          return { memory, similarity }
         })
-      );
+      )
 
-      const threshold = options.similarityThreshold ?? 0;
-      const filtered = scored.filter((item) => item.similarity >= threshold);
+      const threshold = options.similarityThreshold ?? 0
+      const filtered = scored.filter((item) => item.similarity >= threshold)
 
       filtered.sort((a, b) => {
         if (b.similarity !== a.similarity) {
-          return b.similarity - a.similarity;
+          return b.similarity - a.similarity
         }
-        return b.memory.createdAt.getTime() - a.memory.createdAt.getTime();
-      });
+        return b.memory.createdAt.getTime() - a.memory.createdAt.getTime()
+      })
 
-      return filtered.slice(0, limit).map((item) => item.memory);
+      return filtered.slice(0, limit).map((item) => item.memory)
     } catch (error) {
-      logger.errorWithException('Failed to perform semantic search', error);
+      logger.errorWithException('Failed to perform semantic search', error)
       throw new DatabaseError('Failed to perform semantic search', 'semanticSearch', {
         originalError: error,
-      });
+      })
     }
   }
 
   async findPotentialRelations(
     memory: Memory,
     options: {
-      containerTag?: string;
-      limit?: number;
-      excludeIds?: string[];
+      containerTag?: string
+      limit?: number
+      excludeIds?: string[]
     } = {}
   ): Promise<Memory[]> {
     try {
-      logger.debug('Finding potential relations', { memoryId: memory.id });
+      logger.debug('Finding potential relations', { memoryId: memory.id })
 
-      const { containerTag, limit = 100, excludeIds = [] } = options;
+      const { containerTag, limit = 100, excludeIds = [] } = options
 
       let results = Array.from(this.store.memories.values()).filter(
         (m) => m.isLatest && !excludeIds.includes(m.id) && m.id !== memory.id
-      );
+      )
 
       if (containerTag) {
-        results = results.filter((m) => m.containerTag === containerTag);
+        results = results.filter((m) => m.containerTag === containerTag)
       }
 
-      results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 
-      return results.slice(0, limit);
+      return results.slice(0, limit)
     } catch (error) {
-      logger.errorWithException('Failed to find potential relations', error);
+      logger.errorWithException('Failed to find potential relations', error)
       throw new DatabaseError('Failed to find potential relations', 'findPotentialRelations', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -582,138 +558,138 @@ export class InMemoryMemoryRepository {
         type: relationship.type,
         source: relationship.sourceMemoryId,
         target: relationship.targetMemoryId,
-      });
+      })
 
-      this.store.relationships.set(relationship.id, { ...relationship });
-      logger.info('Relationship created', { id: relationship.id });
-      return relationship;
+      this.store.relationships.set(relationship.id, { ...relationship })
+      logger.info('Relationship created', { id: relationship.id })
+      return relationship
     } catch (error) {
-      logger.errorWithException('Failed to create relationship', error);
+      logger.errorWithException('Failed to create relationship', error)
       throw new DatabaseError('Failed to create relationship', 'createRelationship', {
         originalError: error,
-      });
+      })
     }
   }
 
   async createRelationshipBatch(relationships: Relationship[]): Promise<Relationship[]> {
     try {
-      logger.debug('Creating relationships batch', { count: relationships.length });
+      logger.debug('Creating relationships batch', { count: relationships.length })
 
-      const created: Relationship[] = [];
+      const created: Relationship[] = []
       for (const rel of relationships) {
-        this.store.relationships.set(rel.id, { ...rel });
-        created.push(rel);
+        this.store.relationships.set(rel.id, { ...rel })
+        created.push(rel)
       }
 
-      logger.info('Relationships batch created', { count: created.length });
-      return created;
+      logger.info('Relationships batch created', { count: created.length })
+      return created
     } catch (error) {
-      logger.errorWithException('Failed to create relationships batch', error);
+      logger.errorWithException('Failed to create relationships batch', error)
       throw new DatabaseError('Failed to create relationships batch', 'createRelationshipBatch', {
         originalError: error,
-      });
+      })
     }
   }
 
   async findRelationships(
     memoryId: string,
     options: {
-      types?: RelationshipType[];
-      direction?: 'source' | 'target' | 'both';
+      types?: RelationshipType[]
+      direction?: 'source' | 'target' | 'both'
     } = {}
   ): Promise<Relationship[]> {
     try {
-      validate(uuidSchema, memoryId);
-      logger.debug('Finding relationships', { memoryId, options });
+      validate(uuidSchema, memoryId)
+      logger.debug('Finding relationships', { memoryId, options })
 
-      const { types, direction = 'both' } = options;
+      const { types, direction = 'both' } = options
 
       const results = Array.from(this.store.relationships.values()).filter((rel) => {
         const matchesDirection =
           direction === 'both' ||
           (direction === 'source' && rel.sourceMemoryId === memoryId) ||
-          (direction === 'target' && rel.targetMemoryId === memoryId);
+          (direction === 'target' && rel.targetMemoryId === memoryId)
 
-        if (!matchesDirection) return false;
+        if (!matchesDirection) return false
 
         if (direction === 'both') {
           if (rel.sourceMemoryId !== memoryId && rel.targetMemoryId !== memoryId) {
-            return false;
+            return false
           }
         }
 
-        if (types && !types.includes(rel.type)) return false;
+        if (types && !types.includes(rel.type)) return false
 
-        return true;
-      });
+        return true
+      })
 
-      return results;
+      return results
     } catch (error) {
-      logger.errorWithException('Failed to find relationships', error, { memoryId });
+      logger.errorWithException('Failed to find relationships', error, { memoryId })
       throw new DatabaseError('Failed to find relationships', 'findRelationships', {
         originalError: error,
-      });
+      })
     }
   }
 
   async deleteRelationship(id: string): Promise<boolean> {
     try {
-      validate(uuidSchema, id);
-      logger.debug('Deleting relationship', { id });
+      validate(uuidSchema, id)
+      logger.debug('Deleting relationship', { id })
 
-      const deleted = this.store.relationships.delete(id);
+      const deleted = this.store.relationships.delete(id)
       if (deleted) {
-        logger.info('Relationship deleted', { id });
+        logger.info('Relationship deleted', { id })
       }
-      return deleted;
+      return deleted
     } catch (error) {
-      logger.errorWithException('Failed to delete relationship', error, { relationshipId: id });
+      logger.errorWithException('Failed to delete relationship', error, { relationshipId: id })
       throw new DatabaseError('Failed to delete relationship', 'deleteRelationship', {
         originalError: error,
-      });
+      })
     }
   }
 
   async markSuperseded(memoryId: string, supersededById: string): Promise<Memory | null> {
-    logger.debug('Marking memory as superseded', { memoryId, supersededById });
+    logger.debug('Marking memory as superseded', { memoryId, supersededById })
     return this.update(memoryId, {
       isLatest: false,
       supersededBy: supersededById,
-    });
+    })
   }
 
   async getAllMemories(): Promise<Memory[]> {
-    return Array.from(this.store.memories.values());
+    return Array.from(this.store.memories.values())
   }
 
   async getAllRelationships(): Promise<Relationship[]> {
-    return Array.from(this.store.relationships.values());
+    return Array.from(this.store.relationships.values())
   }
 
   async clearAll(): Promise<void> {
-    logger.debug('Clearing all memory data');
-    this.store.memories.clear();
-    this.store.relationships.clear();
-    logger.info('All memory data cleared');
+    logger.debug('Clearing all memory data')
+    this.store.memories.clear()
+    this.store.relationships.clear()
+    logger.info('All memory data cleared')
   }
 
   async getStats(): Promise<{
-    totalMemories: number;
-    latestMemories: number;
-    totalRelationships: number;
-    byType: Record<string, number>;
-    byContainerTag: Record<string, number>;
+    totalMemories: number
+    latestMemories: number
+    totalRelationships: number
+    byType: Record<string, number>
+    byContainerTag: Record<string, number>
   }> {
-    const memories = Array.from(this.store.memories.values());
-    const relationships = Array.from(this.store.relationships.values());
+    const memories = Array.from(this.store.memories.values())
+    const relationships = Array.from(this.store.relationships.values())
 
-    const byType: Record<string, number> = {};
-    const byContainerTag: Record<string, number> = {};
+    const byType: Record<string, number> = {}
+    const byContainerTag: Record<string, number> = {}
 
     for (const memory of memories) {
-      byType[memory.type] = (byType[memory.type] || 0) + 1;
-      const tag = memory.containerTag ?? 'default';
-      byContainerTag[tag] = (byContainerTag[tag] || 0) + 1;
+      byType[memory.type] = (byType[memory.type] || 0) + 1
+      const tag = memory.containerTag ?? 'default'
+      byContainerTag[tag] = (byContainerTag[tag] || 0) + 1
     }
 
     return {
@@ -722,101 +698,101 @@ export class InMemoryMemoryRepository {
       totalRelationships: relationships.length,
       byType,
       byContainerTag,
-    };
+    }
   }
 
   exportData(): {
-    memories: Memory[];
-    relationships: Relationship[];
-    exportedAt: string;
-    version: number;
+    memories: Memory[]
+    relationships: Relationship[]
+    exportedAt: string
+    version: number
   } {
     return {
       memories: Array.from(this.store.memories.values()),
       relationships: Array.from(this.store.relationships.values()),
       exportedAt: new Date().toISOString(),
       version: 1,
-    };
+    }
   }
 
   async importData(data: {
-    memories: Memory[];
-    relationships: Relationship[];
+    memories: Memory[]
+    relationships: Relationship[]
   }): Promise<{ memoriesImported: number; relationshipsImported: number }> {
     logger.debug('Importing data', {
       memoryCount: data.memories.length,
       relationshipCount: data.relationships.length,
-    });
+    })
 
-    this.store.memories.clear();
-    this.store.relationships.clear();
+    this.store.memories.clear()
+    this.store.relationships.clear()
 
     for (const memory of data.memories) {
       const normalizedMemory: Memory = {
         ...memory,
         createdAt: new Date(memory.createdAt),
         updatedAt: new Date(memory.updatedAt),
-      };
-      this.store.memories.set(normalizedMemory.id, normalizedMemory);
+      }
+      this.store.memories.set(normalizedMemory.id, normalizedMemory)
     }
 
     for (const rel of data.relationships) {
       const normalizedRel: Relationship = {
         ...rel,
         createdAt: new Date(rel.createdAt),
-      };
-      this.store.relationships.set(normalizedRel.id, normalizedRel);
+      }
+      this.store.relationships.set(normalizedRel.id, normalizedRel)
     }
 
     logger.info('Data imported', {
       memoriesImported: data.memories.length,
       relationshipsImported: data.relationships.length,
-    });
+    })
 
     return {
       memoriesImported: data.memories.length,
       relationshipsImported: data.relationships.length,
-    };
+    }
   }
 
   async saveToFile(filePath: string): Promise<void> {
-    const { writeFile, mkdir } = await import('node:fs/promises');
-    const { dirname } = await import('node:path');
-    const { existsSync } = await import('node:fs');
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { dirname } = await import('node:path')
+    const { existsSync } = await import('node:fs')
 
-    const dir = dirname(filePath);
+    const dir = dirname(filePath)
     if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true });
+      await mkdir(dir, { recursive: true })
     }
 
-    const data = this.exportData();
-    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    logger.info('Data saved to file', { filePath, memoryCount: data.memories.length });
+    const data = this.exportData()
+    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+    logger.info('Data saved to file', { filePath, memoryCount: data.memories.length })
   }
 
   async loadFromFile(filePath: string): Promise<boolean> {
-    const { readFile } = await import('node:fs/promises');
-    const { existsSync } = await import('node:fs');
+    const { readFile } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
 
     if (!existsSync(filePath)) {
-      logger.debug('No persistence file found', { filePath });
-      return false;
+      logger.debug('No persistence file found', { filePath })
+      return false
     }
 
     try {
-      const content = await readFile(filePath, 'utf-8');
+      const content = await readFile(filePath, 'utf-8')
       const data = JSON.parse(content) as {
-        memories: Memory[];
-        relationships: Relationship[];
-        version: number;
-      };
+        memories: Memory[]
+        relationships: Relationship[]
+        version: number
+      }
 
-      await this.importData(data);
-      logger.info('Data loaded from file', { filePath });
-      return true;
+      await this.importData(data)
+      logger.info('Data loaded from file', { filePath })
+      return true
     } catch (error) {
-      logger.errorWithException('Failed to load data from file', error, { filePath });
-      return false;
+      logger.errorWithException('Failed to load data from file', error, { filePath })
+      return false
     }
   }
 }
@@ -830,17 +806,17 @@ export class InMemoryMemoryRepository {
  * Accepts a store via constructor for compatibility with older tests
  */
 export class PostgresMemoryRepository {
-  private readonly store: MemoryStore;
+  private readonly store: MemoryStore
 
   constructor(store?: MemoryStore) {
-    this.store = store ?? createMemoryStore();
+    this.store = store ?? createMemoryStore()
   }
 
   /**
    * Get the underlying store (for testing/debugging)
    */
   getStore(): MemoryStore {
-    return this.store;
+    return this.store
   }
 
   /**
@@ -848,26 +824,26 @@ export class PostgresMemoryRepository {
    */
   async create(memory: Memory): Promise<Memory> {
     if (memory.containerTag !== undefined) {
-      validateContainerTag(memory.containerTag);
+      validateContainerTag(memory.containerTag)
     }
     try {
-      logger.debug('Creating memory', { id: memory.id, type: memory.type });
+      logger.debug('Creating memory', { id: memory.id, type: memory.type })
 
       if (!memory.id) {
-        throw new DatabaseError('Memory ID is required', 'create');
+        throw new DatabaseError('Memory ID is required', 'create')
       }
 
-      const existing = await db.select().from(memoriesTable).where(eq(memoriesTable.id, memory.id));
+      const existing = await db.select().from(memoriesTable).where(eq(memoriesTable.id, memory.id))
       if (existing.length > 0) {
         throw new DatabaseError(`Memory with ID ${memory.id} already exists`, 'create', {
           existingId: memory.id,
-        });
+        })
       }
 
-      const metadata = normalizeMetadata(memory.metadata);
-      const { dbType, originalType } = mapMemoryTypeToDb(memory.type);
+      const metadata = normalizeMetadata(memory.metadata)
+      const { dbType, originalType } = mapMemoryTypeToDb(memory.type)
       if (originalType) {
-        metadata.originalType = originalType;
+        metadata.originalType = originalType
       }
 
       await db.insert(memoriesTable).values({
@@ -883,16 +859,16 @@ export class PostgresMemoryRepository {
         updatedAt: memory.updatedAt ?? new Date(),
         createdAt: memory.createdAt ?? new Date(),
         version: 1,
-      });
+      })
 
-      logger.info('Memory created', { id: memory.id });
-      return memory;
+      logger.info('Memory created', { id: memory.id })
+      return memory
     } catch (error) {
       if (error instanceof DatabaseError) {
-        throw error;
+        throw error
       }
-      logger.errorWithException('Failed to create memory', error, { memoryId: memory.id });
-      throw new DatabaseError('Failed to create memory', 'create', { originalError: error });
+      logger.errorWithException('Failed to create memory', error, { memoryId: memory.id })
+      throw new DatabaseError('Failed to create memory', 'create', { originalError: error })
     }
   }
 
@@ -902,21 +878,21 @@ export class PostgresMemoryRepository {
   async createBatch(memories: Memory[]): Promise<Memory[]> {
     for (const memory of memories) {
       if (memory.containerTag !== undefined) {
-        validateContainerTag(memory.containerTag);
+        validateContainerTag(memory.containerTag)
       }
     }
     try {
-      logger.debug('Creating memories batch', { count: memories.length });
+      logger.debug('Creating memories batch', { count: memories.length })
 
       if (memories.length === 0) {
-        return [];
+        return []
       }
 
       const values = memories.map((memory) => {
-        const metadata = normalizeMetadata(memory.metadata);
-        const { dbType, originalType } = mapMemoryTypeToDb(memory.type);
+        const metadata = normalizeMetadata(memory.metadata)
+        const { dbType, originalType } = mapMemoryTypeToDb(memory.type)
         if (originalType) {
-          metadata.originalType = originalType;
+          metadata.originalType = originalType
         }
 
         return {
@@ -932,17 +908,17 @@ export class PostgresMemoryRepository {
           updatedAt: memory.updatedAt ?? new Date(),
           createdAt: memory.createdAt ?? new Date(),
           version: 1,
-        };
-      });
+        }
+      })
 
-      await db.insert(memoriesTable).values(values);
-      logger.info('Memories batch created', { count: memories.length });
-      return memories;
+      await db.insert(memoriesTable).values(values)
+      logger.info('Memories batch created', { count: memories.length })
+      return memories
     } catch (error) {
-      logger.errorWithException('Failed to create memories batch', error);
+      logger.errorWithException('Failed to create memories batch', error)
       throw new DatabaseError('Failed to create memories batch', 'createBatch', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -951,76 +927,72 @@ export class PostgresMemoryRepository {
    */
   async update(id: string, updates: Partial<Memory>): Promise<Memory | null> {
     if (updates.containerTag !== undefined) {
-      validateContainerTag(updates.containerTag);
+      validateContainerTag(updates.containerTag)
     }
     try {
-      validate(uuidSchema, id);
-      logger.debug('Updating memory', { id });
+      validate(uuidSchema, id)
+      logger.debug('Updating memory', { id })
 
-      const existing = await db.select().from(memoriesTable).where(eq(memoriesTable.id, id));
+      const existing = await db.select().from(memoriesTable).where(eq(memoriesTable.id, id))
       if (existing.length === 0) {
-        logger.warn('Memory not found for update', { id });
-        return null;
+        logger.warn('Memory not found for update', { id })
+        return null
       }
 
-      const current = existing[0]!;
+      const current = existing[0]!
       const metadata = updates.metadata
         ? normalizeMetadata(updates.metadata)
-        : normalizeMetadata(current.metadata as Record<string, unknown> | null);
+        : normalizeMetadata(current.metadata as Record<string, unknown> | null)
 
       const updateData: Partial<typeof memoriesTable.$inferInsert> = {
         updatedAt: new Date(),
-      };
+      }
 
       if (updates.content !== undefined) {
-        updateData.content = updates.content;
-        updateData.similarityHash = generateSimilarityHash(updates.content);
+        updateData.content = updates.content
+        updateData.similarityHash = generateSimilarityHash(updates.content)
       }
 
       if (updates.type !== undefined) {
-        const { dbType, originalType } = mapMemoryTypeToDb(updates.type);
-        updateData.memoryType = dbType;
+        const { dbType, originalType } = mapMemoryTypeToDb(updates.type)
+        updateData.memoryType = dbType
         if (originalType) {
-          metadata.originalType = originalType;
+          metadata.originalType = originalType
         }
       }
 
       if (updates.isLatest !== undefined) {
-        updateData.isLatest = updates.isLatest;
+        updateData.isLatest = updates.isLatest
       }
 
       if (updates.supersededBy !== undefined) {
-        updateData.supersedesId = updates.supersededBy ?? null;
+        updateData.supersedesId = updates.supersededBy ?? null
       }
 
       if (updates.containerTag !== undefined) {
-        updateData.containerTag = updates.containerTag ?? 'default';
+        updateData.containerTag = updates.containerTag ?? 'default'
       }
 
       if (updates.confidence !== undefined) {
-        updateData.confidenceScore = updates.confidence.toString();
+        updateData.confidenceScore = updates.confidence.toString()
       }
 
-      updateData.metadata = metadata;
+      updateData.metadata = metadata
 
-      const [updatedRow] = await db
-        .update(memoriesTable)
-        .set(updateData)
-        .where(eq(memoriesTable.id, id))
-        .returning();
+      const [updatedRow] = await db.update(memoriesTable).set(updateData).where(eq(memoriesTable.id, id)).returning()
 
       if (!updatedRow) {
-        return null;
+        return null
       }
 
-      logger.info('Memory updated', { id });
-      return mapDbMemory(updatedRow);
+      logger.info('Memory updated', { id })
+      return mapDbMemory(updatedRow)
     } catch (error) {
-      logger.errorWithException('Failed to update memory', error, { memoryId: id });
+      logger.errorWithException('Failed to update memory', error, { memoryId: id })
       throw new DatabaseError('Failed to update memory', 'update', {
         originalError: error,
         memoryId: id,
-      });
+      })
     }
   }
 
@@ -1029,27 +1001,24 @@ export class PostgresMemoryRepository {
    */
   async delete(id: string): Promise<boolean> {
     try {
-      validate(uuidSchema, id);
-      logger.debug('Deleting memory', { id });
+      validate(uuidSchema, id)
+      logger.debug('Deleting memory', { id })
 
-      const deleted = await db
-        .delete(memoriesTable)
-        .where(eq(memoriesTable.id, id))
-        .returning({ id: memoriesTable.id });
+      const deleted = await db.delete(memoriesTable).where(eq(memoriesTable.id, id)).returning({ id: memoriesTable.id })
 
       if (deleted.length > 0) {
-        logger.info('Memory deleted', { id });
-        return true;
+        logger.info('Memory deleted', { id })
+        return true
       }
 
-      logger.warn('Memory not found for deletion', { id });
-      return false;
+      logger.warn('Memory not found for deletion', { id })
+      return false
     } catch (error) {
-      logger.errorWithException('Failed to delete memory', error, { memoryId: id });
+      logger.errorWithException('Failed to delete memory', error, { memoryId: id })
       throw new DatabaseError('Failed to delete memory', 'delete', {
         originalError: error,
         memoryId: id,
-      });
+      })
     }
   }
 
@@ -1058,61 +1027,58 @@ export class PostgresMemoryRepository {
    */
   async findById(id: string): Promise<Memory | null> {
     try {
-      validate(uuidSchema, id);
-      logger.debug('Finding memory by ID', { id });
-      const [memory] = await db.select().from(memoriesTable).where(eq(memoriesTable.id, id));
-      return memory ? mapDbMemory(memory) : null;
+      validate(uuidSchema, id)
+      logger.debug('Finding memory by ID', { id })
+      const [memory] = await db.select().from(memoriesTable).where(eq(memoriesTable.id, id))
+      return memory ? mapDbMemory(memory) : null
     } catch (error) {
-      logger.errorWithException('Failed to find memory', error, { memoryId: id });
+      logger.errorWithException('Failed to find memory', error, { memoryId: id })
       throw new DatabaseError('Failed to find memory', 'findById', {
         originalError: error,
         memoryId: id,
-      });
+      })
     }
   }
 
   /**
    * Find memories by container tag
    */
-  async findByContainerTag(
-    containerTag: string,
-    options: MemoryQueryOptions = {}
-  ): Promise<Memory[]> {
-    validateContainerTag(containerTag);
+  async findByContainerTag(containerTag: string, options: MemoryQueryOptions = {}): Promise<Memory[]> {
+    validateContainerTag(containerTag)
     try {
-      const validatedOptions = validate(memoryQueryOptionsSchema, options);
+      const validatedOptions = validate(memoryQueryOptionsSchema, options)
       logger.debug('Finding memories by container tag', {
         containerTag,
         options: validatedOptions,
-      });
+      })
 
-      const conditions = [eq(memoriesTable.containerTag, containerTag)];
+      const conditions = [eq(memoriesTable.containerTag, containerTag)]
 
       if (validatedOptions.latestOnly) {
-        conditions.push(eq(memoriesTable.isLatest, true));
+        conditions.push(eq(memoriesTable.isLatest, true))
       }
 
       if (validatedOptions.type) {
-        const { dbType } = mapMemoryTypeToDb(validatedOptions.type);
-        conditions.push(eq(memoriesTable.memoryType, dbType));
+        const { dbType } = mapMemoryTypeToDb(validatedOptions.type)
+        conditions.push(eq(memoriesTable.memoryType, dbType))
       }
 
       if (validatedOptions.minConfidence !== undefined) {
-        conditions.push(sql`${memoriesTable.confidenceScore} >= ${validatedOptions.minConfidence}`);
+        conditions.push(sql`${memoriesTable.confidenceScore} >= ${validatedOptions.minConfidence}`)
       }
 
-      const sortBy = validatedOptions.sortBy || 'createdAt';
-      const sortOrder = validatedOptions.sortOrder || 'desc';
+      const sortBy = validatedOptions.sortBy || 'createdAt'
+      const sortOrder = validatedOptions.sortOrder || 'desc'
       const orderField =
         sortBy === 'updatedAt'
           ? memoriesTable.updatedAt
           : sortBy === 'confidence'
             ? memoriesTable.confidenceScore
-            : memoriesTable.createdAt;
+            : memoriesTable.createdAt
 
-      const orderBy = sortOrder === 'asc' ? asc(orderField) : desc(orderField);
-      const limit = validatedOptions.limit ?? 100;
-      const offset = validatedOptions.offset ?? 0;
+      const orderBy = sortOrder === 'asc' ? asc(orderField) : desc(orderField)
+      const limit = validatedOptions.limit ?? 100
+      const offset = validatedOptions.offset ?? 0
 
       const rows = await db
         .select()
@@ -1120,16 +1086,16 @@ export class PostgresMemoryRepository {
         .where(and(...conditions))
         .orderBy(orderBy)
         .limit(limit)
-        .offset(offset);
+        .offset(offset)
 
-      return rows.map(mapDbMemory);
+      return rows.map(mapDbMemory)
     } catch (error) {
       logger.errorWithException('Failed to find memories by container tag', error, {
         containerTag,
-      });
+      })
       throw new DatabaseError('Failed to find memories', 'findByContainerTag', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1139,58 +1105,57 @@ export class PostgresMemoryRepository {
   async findRelated(
     memoryId: string,
     options: {
-      relationshipTypes?: RelationshipType[];
-      depth?: number;
-      limit?: number;
+      relationshipTypes?: RelationshipType[]
+      depth?: number
+      limit?: number
     } = {}
   ): Promise<{ memory: Memory; relationship: Relationship }[]> {
     try {
-      validate(uuidSchema, memoryId);
-      logger.debug('Finding related memories', { memoryId, options });
+      validate(uuidSchema, memoryId)
+      logger.debug('Finding related memories', { memoryId, options })
 
-      const { relationshipTypes: types, depth = 1, limit = 50 } = options;
-      const results: { memory: Memory; relationship: Relationship }[] = [];
-      const visited = new Set<string>();
-      const queue: { id: string; currentDepth: number }[] = [{ id: memoryId, currentDepth: 0 }];
+      const { relationshipTypes: types, depth = 1, limit = 50 } = options
+      const results: { memory: Memory; relationship: Relationship }[] = []
+      const visited = new Set<string>()
+      const queue: { id: string; currentDepth: number }[] = [{ id: memoryId, currentDepth: 0 }]
 
       while (queue.length > 0 && results.length < limit) {
-        const current = queue.shift()!;
+        const current = queue.shift()!
 
         if (visited.has(current.id) || current.currentDepth >= depth) {
-          continue;
+          continue
         }
-        visited.add(current.id);
+        visited.add(current.id)
 
         const relationships = await this.findRelationships(current.id, {
           types,
           direction: 'both',
-        });
+        })
 
         for (const rel of relationships) {
-          const relatedId =
-            rel.sourceMemoryId === current.id ? rel.targetMemoryId : rel.sourceMemoryId;
+          const relatedId = rel.sourceMemoryId === current.id ? rel.targetMemoryId : rel.sourceMemoryId
 
           if (visited.has(relatedId)) {
-            continue;
+            continue
           }
 
-          const relatedMemory = await this.findById(relatedId);
+          const relatedMemory = await this.findById(relatedId)
           if (relatedMemory) {
-            results.push({ memory: relatedMemory, relationship: rel });
+            results.push({ memory: relatedMemory, relationship: rel })
 
             if (current.currentDepth + 1 < depth) {
-              queue.push({ id: relatedId, currentDepth: current.currentDepth + 1 });
+              queue.push({ id: relatedId, currentDepth: current.currentDepth + 1 })
             }
           }
         }
       }
 
-      return results.slice(0, limit);
+      return results.slice(0, limit)
     } catch (error) {
-      logger.errorWithException('Failed to find related memories', error, { memoryId });
+      logger.errorWithException('Failed to find related memories', error, { memoryId })
       throw new DatabaseError('Failed to find related memories', 'findRelated', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1199,24 +1164,24 @@ export class PostgresMemoryRepository {
    */
   async semanticSearch(options: SemanticSearchOptions): Promise<Memory[]> {
     try {
-      logger.debug('Performing semantic search', { query: options.query.substring(0, 50) });
+      logger.debug('Performing semantic search', { query: options.query.substring(0, 50) })
 
-      const limit = options.limit ?? 20;
+      const limit = options.limit ?? 20
 
       if (!isEmbeddingRelationshipsEnabled()) {
-        const conditions = [sql`${memoriesTable.content} ILIKE ${`%${options.query}%`}`];
+        const conditions = [sql`${memoriesTable.content} ILIKE ${`%${options.query}%`}`]
 
         if (options.containerTag) {
-          conditions.push(eq(memoriesTable.containerTag, options.containerTag));
+          conditions.push(eq(memoriesTable.containerTag, options.containerTag))
         }
 
         if (options.latestOnly) {
-          conditions.push(eq(memoriesTable.isLatest, true));
+          conditions.push(eq(memoriesTable.isLatest, true))
         }
 
         if (options.type) {
-          const { dbType } = mapMemoryTypeToDb(options.type);
-          conditions.push(eq(memoriesTable.memoryType, dbType));
+          const { dbType } = mapMemoryTypeToDb(options.type)
+          conditions.push(eq(memoriesTable.memoryType, dbType))
         }
 
         const rows = await db
@@ -1224,36 +1189,36 @@ export class PostgresMemoryRepository {
           .from(memoriesTable)
           .where(and(...conditions))
           .orderBy(desc(memoriesTable.createdAt))
-          .limit(limit);
+          .limit(limit)
 
-        return rows.map(mapDbMemory);
+        return rows.map(mapDbMemory)
       }
 
-      const embeddingService = getEmbeddingService();
-      const queryEmbedding = await embeddingService.generateEmbedding(options.query);
-      const queryVector = `[${queryEmbedding.join(',')}]`;
-      const similarityThreshold = options.similarityThreshold ?? 0;
+      const embeddingService = getEmbeddingService()
+      const queryEmbedding = await embeddingService.generateEmbedding(options.query)
+      const queryVector = `[${queryEmbedding.join(',')}]`
+      const similarityThreshold = options.similarityThreshold ?? 0
 
-      const whereClauses = [sql`1 = 1`];
+      const whereClauses = [sql`1 = 1`]
 
       if (options.containerTag) {
-        whereClauses.push(eq(memoriesTable.containerTag, options.containerTag));
+        whereClauses.push(eq(memoriesTable.containerTag, options.containerTag))
       }
 
       if (options.latestOnly) {
-        whereClauses.push(eq(memoriesTable.isLatest, true));
+        whereClauses.push(eq(memoriesTable.isLatest, true))
       }
 
       if (options.type) {
-        const { dbType } = mapMemoryTypeToDb(options.type);
-        whereClauses.push(eq(memoriesTable.memoryType, dbType));
+        const { dbType } = mapMemoryTypeToDb(options.type)
+        whereClauses.push(eq(memoriesTable.memoryType, dbType))
       }
 
       if (options.minConfidence !== undefined) {
-        whereClauses.push(sql`${memoriesTable.confidenceScore} >= ${options.minConfidence}`);
+        whereClauses.push(sql`${memoriesTable.confidenceScore} >= ${options.minConfidence}`)
       }
 
-      const similarityExpression = sql`1 - (${memoryEmbeddings.embedding} <=> ${queryVector}::vector)`;
+      const similarityExpression = sql`1 - (${memoryEmbeddings.embedding} <=> ${queryVector}::vector)`
 
       const result = await db.execute(sql`
         SELECT ${memoriesTable}.*, ${similarityExpression} as similarity
@@ -1264,12 +1229,11 @@ export class PostgresMemoryRepository {
           AND ${similarityExpression} >= ${similarityThreshold}
         ORDER BY ${memoryEmbeddings.embedding} <=> ${queryVector}::vector
         LIMIT ${limit}
-      `);
+      `)
 
-      const rows =
-        (result as unknown as { rows?: Array<typeof memoriesTable.$inferSelect> }).rows ?? [];
+      const rows = (result as unknown as { rows?: Array<typeof memoriesTable.$inferSelect> }).rows ?? []
       if (rows.length > 0) {
-        return rows.map(mapDbMemory);
+        return rows.map(mapDbMemory)
       }
 
       const fallbackRows = await db
@@ -1277,32 +1241,32 @@ export class PostgresMemoryRepository {
         .from(memoriesTable)
         .where(and(...whereClauses))
         .orderBy(desc(memoriesTable.createdAt))
-        .limit(limit);
+        .limit(limit)
 
       if (fallbackRows.length === 0) {
-        return [];
+        return []
       }
 
       const scored = await Promise.all(
         fallbackRows.map(async (memory) => {
-          const embedding = await embeddingService.generateEmbedding(memory.content);
-          const similarity = cosineSimilarity(queryEmbedding, embedding);
-          return { memory: mapDbMemory(memory), similarity };
+          const embedding = await embeddingService.generateEmbedding(memory.content)
+          const similarity = cosineSimilarity(queryEmbedding, embedding)
+          return { memory: mapDbMemory(memory), similarity }
         })
-      );
+      )
 
-      const filtered = scored.filter((item) => item.similarity >= similarityThreshold);
+      const filtered = scored.filter((item) => item.similarity >= similarityThreshold)
       filtered.sort((a, b) => {
-        if (b.similarity !== a.similarity) return b.similarity - a.similarity;
-        return b.memory.createdAt.getTime() - a.memory.createdAt.getTime();
-      });
+        if (b.similarity !== a.similarity) return b.similarity - a.similarity
+        return b.memory.createdAt.getTime() - a.memory.createdAt.getTime()
+      })
 
-      return filtered.slice(0, limit).map((item) => item.memory);
+      return filtered.slice(0, limit).map((item) => item.memory)
     } catch (error) {
-      logger.errorWithException('Failed to perform semantic search', error);
+      logger.errorWithException('Failed to perform semantic search', error)
       throw new DatabaseError('Failed to perform semantic search', 'semanticSearch', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1313,27 +1277,24 @@ export class PostgresMemoryRepository {
   async findPotentialRelations(
     memory: Memory,
     options: {
-      containerTag?: string;
-      limit?: number;
-      excludeIds?: string[];
+      containerTag?: string
+      limit?: number
+      excludeIds?: string[]
     } = {}
   ): Promise<Memory[]> {
     try {
-      logger.debug('Finding potential relations', { memoryId: memory.id });
+      logger.debug('Finding potential relations', { memoryId: memory.id })
 
-      const { containerTag, limit = 100, excludeIds = [] } = options;
+      const { containerTag, limit = 100, excludeIds = [] } = options
 
-      const conditions = [
-        eq(memoriesTable.isLatest, true),
-        sql`${memoriesTable.id} != ${memory.id}`,
-      ];
+      const conditions = [eq(memoriesTable.isLatest, true), sql`${memoriesTable.id} != ${memory.id}`]
 
       if (excludeIds.length > 0) {
-        conditions.push(notInArray(memoriesTable.id, excludeIds));
+        conditions.push(notInArray(memoriesTable.id, excludeIds))
       }
 
       if (containerTag) {
-        conditions.push(eq(memoriesTable.containerTag, containerTag));
+        conditions.push(eq(memoriesTable.containerTag, containerTag))
       }
 
       const rows = await db
@@ -1341,14 +1302,14 @@ export class PostgresMemoryRepository {
         .from(memoriesTable)
         .where(and(...conditions))
         .orderBy(desc(memoriesTable.createdAt))
-        .limit(limit);
+        .limit(limit)
 
-      return rows.map(mapDbMemory);
+      return rows.map(mapDbMemory)
     } catch (error) {
-      logger.errorWithException('Failed to find potential relations', error);
+      logger.errorWithException('Failed to find potential relations', error)
       throw new DatabaseError('Failed to find potential relations', 'findPotentialRelations', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1364,15 +1325,15 @@ export class PostgresMemoryRepository {
         type: relationship.type,
         source: relationship.sourceMemoryId,
         target: relationship.targetMemoryId,
-      });
+      })
 
-      const metadata = normalizeMetadata(relationship.metadata);
-      const { dbType, originalType } = mapRelationshipTypeToDb(relationship.type);
+      const metadata = normalizeMetadata(relationship.metadata)
+      const { dbType, originalType } = mapRelationshipTypeToDb(relationship.type)
       if (originalType) {
-        metadata.originalType = originalType;
+        metadata.originalType = originalType
       }
       if (relationship.description) {
-        metadata.description = relationship.description;
+        metadata.description = relationship.description
       }
 
       await db.insert(memoryRelationships).values({
@@ -1384,15 +1345,15 @@ export class PostgresMemoryRepository {
         bidirectional: false,
         metadata,
         createdAt: relationship.createdAt ?? new Date(),
-      });
+      })
 
-      logger.info('Relationship created', { id: relationship.id });
-      return relationship;
+      logger.info('Relationship created', { id: relationship.id })
+      return relationship
     } catch (error) {
-      logger.errorWithException('Failed to create relationship', error);
+      logger.errorWithException('Failed to create relationship', error)
       throw new DatabaseError('Failed to create relationship', 'createRelationship', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1401,20 +1362,20 @@ export class PostgresMemoryRepository {
    */
   async createRelationshipBatch(relationships: Relationship[]): Promise<Relationship[]> {
     try {
-      logger.debug('Creating relationships batch', { count: relationships.length });
+      logger.debug('Creating relationships batch', { count: relationships.length })
 
       if (relationships.length === 0) {
-        return [];
+        return []
       }
 
       const values = relationships.map((relationship) => {
-        const metadata = normalizeMetadata(relationship.metadata);
-        const { dbType, originalType } = mapRelationshipTypeToDb(relationship.type);
+        const metadata = normalizeMetadata(relationship.metadata)
+        const { dbType, originalType } = mapRelationshipTypeToDb(relationship.type)
         if (originalType) {
-          metadata.originalType = originalType;
+          metadata.originalType = originalType
         }
         if (relationship.description) {
-          metadata.description = relationship.description;
+          metadata.description = relationship.description
         }
 
         return {
@@ -1426,17 +1387,17 @@ export class PostgresMemoryRepository {
           bidirectional: false,
           metadata,
           createdAt: relationship.createdAt ?? new Date(),
-        };
-      });
+        }
+      })
 
-      await db.insert(memoryRelationships).values(values);
-      logger.info('Relationships batch created', { count: relationships.length });
-      return relationships;
+      await db.insert(memoryRelationships).values(values)
+      logger.info('Relationships batch created', { count: relationships.length })
+      return relationships
     } catch (error) {
-      logger.errorWithException('Failed to create relationships batch', error);
+      logger.errorWithException('Failed to create relationships batch', error)
       throw new DatabaseError('Failed to create relationships batch', 'createRelationshipBatch', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1446,46 +1407,43 @@ export class PostgresMemoryRepository {
   async findRelationships(
     memoryId: string,
     options: {
-      types?: RelationshipType[];
-      direction?: 'source' | 'target' | 'both';
+      types?: RelationshipType[]
+      direction?: 'source' | 'target' | 'both'
     } = {}
   ): Promise<Relationship[]> {
     try {
-      validate(uuidSchema, memoryId);
-      logger.debug('Finding relationships', { memoryId, options });
+      validate(uuidSchema, memoryId)
+      logger.debug('Finding relationships', { memoryId, options })
 
-      const { types, direction = 'both' } = options;
-      const conditions: SQL<unknown>[] = [];
+      const { types, direction = 'both' } = options
+      const conditions: SQL<unknown>[] = []
       const directionCondition =
         direction === 'source'
           ? eq(memoryRelationships.sourceMemoryId, memoryId)
           : direction === 'target'
             ? eq(memoryRelationships.targetMemoryId, memoryId)
-            : or(
-                eq(memoryRelationships.sourceMemoryId, memoryId),
-                eq(memoryRelationships.targetMemoryId, memoryId)
-              );
+            : or(eq(memoryRelationships.sourceMemoryId, memoryId), eq(memoryRelationships.targetMemoryId, memoryId))
 
       if (directionCondition) {
-        conditions.push(directionCondition);
+        conditions.push(directionCondition)
       }
 
       if (types && types.length > 0) {
-        const dbTypes = types.map((type) => mapRelationshipTypeToDb(type).dbType);
-        conditions.push(inArray(memoryRelationships.relationshipType, dbTypes));
+        const dbTypes = types.map((type) => mapRelationshipTypeToDb(type).dbType)
+        conditions.push(inArray(memoryRelationships.relationshipType, dbTypes))
       }
 
       const rows = await db
         .select()
         .from(memoryRelationships)
-        .where(and(...conditions));
+        .where(and(...conditions))
 
-      return rows.map(mapDbRelationship);
+      return rows.map(mapDbRelationship)
     } catch (error) {
-      logger.errorWithException('Failed to find relationships', error, { memoryId });
+      logger.errorWithException('Failed to find relationships', error, { memoryId })
       throw new DatabaseError('Failed to find relationships', 'findRelationships', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1494,25 +1452,25 @@ export class PostgresMemoryRepository {
    */
   async deleteRelationship(id: string): Promise<boolean> {
     try {
-      validate(uuidSchema, id);
-      logger.debug('Deleting relationship', { id });
+      validate(uuidSchema, id)
+      logger.debug('Deleting relationship', { id })
 
       const deleted = await db
         .delete(memoryRelationships)
         .where(eq(memoryRelationships.id, id))
-        .returning({ id: memoryRelationships.id });
+        .returning({ id: memoryRelationships.id })
 
       if (deleted.length > 0) {
-        logger.info('Relationship deleted', { id });
-        return true;
+        logger.info('Relationship deleted', { id })
+        return true
       }
 
-      return false;
+      return false
     } catch (error) {
-      logger.errorWithException('Failed to delete relationship', error, { relationshipId: id });
+      logger.errorWithException('Failed to delete relationship', error, { relationshipId: id })
       throw new DatabaseError('Failed to delete relationship', 'deleteRelationship', {
         originalError: error,
-      });
+      })
     }
   }
 
@@ -1520,11 +1478,11 @@ export class PostgresMemoryRepository {
    * Mark a memory as superseded
    */
   async markSuperseded(memoryId: string, supersededById: string): Promise<Memory | null> {
-    logger.debug('Marking memory as superseded', { memoryId, supersededById });
+    logger.debug('Marking memory as superseded', { memoryId, supersededById })
     return this.update(memoryId, {
       isLatest: false,
       supersededBy: supersededById,
-    });
+    })
   }
 
   // ============ Utility Methods ============
@@ -1533,51 +1491,49 @@ export class PostgresMemoryRepository {
    * Get all memories (for testing/debugging)
    */
   async getAllMemories(): Promise<Memory[]> {
-    const rows = await db.select().from(memoriesTable);
-    return rows.map(mapDbMemory);
+    const rows = await db.select().from(memoriesTable)
+    return rows.map(mapDbMemory)
   }
 
   /**
    * Get all relationships (for testing/debugging)
    */
   async getAllRelationships(): Promise<Relationship[]> {
-    const rows = await db.select().from(memoryRelationships);
-    return rows.map(mapDbRelationship);
+    const rows = await db.select().from(memoryRelationships)
+    return rows.map(mapDbRelationship)
   }
 
   /**
    * Clear all data (for testing)
    */
   async clearAll(): Promise<void> {
-    logger.debug('Clearing all memory data');
-    await db.delete(memoryRelationships);
-    await db.delete(memoriesTable);
-    logger.info('All memory data cleared');
+    logger.debug('Clearing all memory data')
+    await db.delete(memoryRelationships)
+    await db.delete(memoriesTable)
+    logger.info('All memory data cleared')
   }
 
   /**
    * Get statistics
    */
   async getStats(): Promise<{
-    totalMemories: number;
-    latestMemories: number;
-    totalRelationships: number;
-    byType: Record<string, number>;
-    byContainerTag: Record<string, number>;
+    totalMemories: number
+    latestMemories: number
+    totalRelationships: number
+    byType: Record<string, number>
+    byContainerTag: Record<string, number>
   }> {
-    const totalMemoriesRows = await db.select({ count: sql<number>`count(*)` }).from(memoriesTable);
-    const totalMemories = Number(totalMemoriesRows[0]?.count ?? 0);
+    const totalMemoriesRows = await db.select({ count: sql<number>`count(*)` }).from(memoriesTable)
+    const totalMemories = Number(totalMemoriesRows[0]?.count ?? 0)
 
     const latestMemoriesRows = await db
       .select({ count: sql<number>`count(*)` })
       .from(memoriesTable)
-      .where(eq(memoriesTable.isLatest, true));
-    const latestMemories = Number(latestMemoriesRows[0]?.count ?? 0);
+      .where(eq(memoriesTable.isLatest, true))
+    const latestMemories = Number(latestMemoriesRows[0]?.count ?? 0)
 
-    const totalRelationshipsRows = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(memoryRelationships);
-    const totalRelationships = Number(totalRelationshipsRows[0]?.count ?? 0);
+    const totalRelationshipsRows = await db.select({ count: sql<number>`count(*)` }).from(memoryRelationships)
+    const totalRelationships = Number(totalRelationshipsRows[0]?.count ?? 0)
 
     const typeRows = await db
       .select({
@@ -1585,7 +1541,7 @@ export class PostgresMemoryRepository {
         count: sql<number>`count(*)`,
       })
       .from(memoriesTable)
-      .groupBy(memoriesTable.memoryType);
+      .groupBy(memoriesTable.memoryType)
 
     const containerRows = await db
       .select({
@@ -1593,18 +1549,18 @@ export class PostgresMemoryRepository {
         count: sql<number>`count(*)`,
       })
       .from(memoriesTable)
-      .groupBy(memoriesTable.containerTag);
+      .groupBy(memoriesTable.containerTag)
 
-    const byType: Record<string, number> = {};
-    const byContainerTag: Record<string, number> = {};
+    const byType: Record<string, number> = {}
+    const byContainerTag: Record<string, number> = {}
 
     for (const row of typeRows) {
-      byType[row.type] = Number(row.count);
+      byType[row.type] = Number(row.count)
     }
 
     for (const row of containerRows) {
-      const tag = row.tag ?? 'default';
-      byContainerTag[tag] = Number(row.count);
+      const tag = row.tag ?? 'default'
+      byContainerTag[tag] = Number(row.count)
     }
 
     return {
@@ -1613,7 +1569,7 @@ export class PostgresMemoryRepository {
       totalRelationships,
       byType,
       byContainerTag,
-    };
+    }
   }
 
   // ============ Persistence Methods ============
@@ -1622,32 +1578,32 @@ export class PostgresMemoryRepository {
    * Export all data for backup/persistence
    */
   exportData(): {
-    memories: Memory[];
-    relationships: Relationship[];
-    exportedAt: string;
-    version: number;
+    memories: Memory[]
+    relationships: Relationship[]
+    exportedAt: string
+    version: number
   } {
     return {
       memories: [],
       relationships: [],
       exportedAt: new Date().toISOString(),
       version: 1,
-    };
+    }
   }
 
   /**
    * Import data from backup/persistence
    */
   async importData(data: {
-    memories: Memory[];
-    relationships: Relationship[];
+    memories: Memory[]
+    relationships: Relationship[]
   }): Promise<{ memoriesImported: number; relationshipsImported: number }> {
     logger.debug('Importing data', {
       memoryCount: data.memories.length,
       relationshipCount: data.relationships.length,
-    });
+    })
 
-    await this.clearAll();
+    await this.clearAll()
 
     if (data.memories.length > 0) {
       await this.createBatch(
@@ -1656,7 +1612,7 @@ export class PostgresMemoryRepository {
           createdAt: new Date(memory.createdAt),
           updatedAt: new Date(memory.updatedAt),
         }))
-      );
+      )
     }
 
     if (data.relationships.length > 0) {
@@ -1665,94 +1621,94 @@ export class PostgresMemoryRepository {
           ...rel,
           createdAt: new Date(rel.createdAt),
         }))
-      );
+      )
     }
 
     logger.info('Data imported', {
       memoriesImported: data.memories.length,
       relationshipsImported: data.relationships.length,
-    });
+    })
 
     return {
       memoriesImported: data.memories.length,
       relationshipsImported: data.relationships.length,
-    };
+    }
   }
 
   /**
    * Save data to a file (for persistence)
    */
   async saveToFile(filePath: string): Promise<void> {
-    const { writeFile, mkdir } = await import('node:fs/promises');
-    const { dirname } = await import('node:path');
-    const { existsSync } = await import('node:fs');
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { dirname } = await import('node:path')
+    const { existsSync } = await import('node:fs')
 
-    const dir = dirname(filePath);
+    const dir = dirname(filePath)
     if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true });
+      await mkdir(dir, { recursive: true })
     }
 
-    const memories = await this.getAllMemories();
-    const relationships = await this.getAllRelationships();
+    const memories = await this.getAllMemories()
+    const relationships = await this.getAllRelationships()
     const data = {
       memories,
       relationships,
       exportedAt: new Date().toISOString(),
       version: 1,
-    };
+    }
 
-    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    logger.info('Data saved to file', { filePath, memoryCount: data.memories.length });
+    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+    logger.info('Data saved to file', { filePath, memoryCount: data.memories.length })
   }
 
   /**
    * Load data from a file (for persistence)
    */
   async loadFromFile(filePath: string): Promise<boolean> {
-    const { readFile } = await import('node:fs/promises');
-    const { existsSync } = await import('node:fs');
+    const { readFile } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
 
     if (!existsSync(filePath)) {
-      logger.debug('No persistence file found', { filePath });
-      return false;
+      logger.debug('No persistence file found', { filePath })
+      return false
     }
 
     try {
-      const content = await readFile(filePath, 'utf-8');
+      const content = await readFile(filePath, 'utf-8')
       const data = JSON.parse(content) as {
-        memories: Memory[];
-        relationships: Relationship[];
-        version: number;
-      };
+        memories: Memory[]
+        relationships: Relationship[]
+        version: number
+      }
 
-      await this.importData(data);
-      logger.info('Data loaded from file', { filePath });
-      return true;
+      await this.importData(data)
+      logger.info('Data loaded from file', { filePath })
+      return true
     } catch (error) {
-      logger.errorWithException('Failed to load data from file', error, { filePath });
-      return false;
+      logger.errorWithException('Failed to load data from file', error, { filePath })
+      return false
     }
   }
 }
 
-export type MemoryRepository = InMemoryMemoryRepository | PostgresMemoryRepository;
+export type MemoryRepository = InMemoryMemoryRepository | PostgresMemoryRepository
 
 // ============================================================================
 // Singleton Pattern (Proxy-based Lazy Initialization)
 // ============================================================================
 
-let _inMemoryRepositoryInstance: InMemoryMemoryRepository | null = null;
-let _postgresRepositoryInstance: PostgresMemoryRepository | null = null;
-let _sharedStore: MemoryStore | null = null;
+let _inMemoryRepositoryInstance: InMemoryMemoryRepository | null = null
+let _postgresRepositoryInstance: PostgresMemoryRepository | null = null
+let _sharedStore: MemoryStore | null = null
 
 /**
  * Get the shared memory store (singleton)
  */
 export function getSharedStore(): MemoryStore {
   if (!_sharedStore) {
-    _sharedStore = createMemoryStore();
+    _sharedStore = createMemoryStore()
   }
-  return _sharedStore;
+  return _sharedStore
 }
 
 /**
@@ -1760,44 +1716,44 @@ export function getSharedStore(): MemoryStore {
  */
 export function getInMemoryMemoryRepository(): InMemoryMemoryRepository {
   if (!_inMemoryRepositoryInstance) {
-    _inMemoryRepositoryInstance = new InMemoryMemoryRepository(getSharedStore());
+    _inMemoryRepositoryInstance = new InMemoryMemoryRepository(getSharedStore())
   }
-  return _inMemoryRepositoryInstance;
+  return _inMemoryRepositoryInstance
 }
 
 export function getPostgresMemoryRepository(): PostgresMemoryRepository {
   if (!_postgresRepositoryInstance) {
-    _postgresRepositoryInstance = new PostgresMemoryRepository();
+    _postgresRepositoryInstance = new PostgresMemoryRepository()
   }
-  return _postgresRepositoryInstance;
+  return _postgresRepositoryInstance
 }
 
 export function getMemoryRepository(): MemoryRepository {
   if (process.env.NODE_ENV === 'test') {
-    return getInMemoryMemoryRepository();
+    return getInMemoryMemoryRepository()
   }
-  return getPostgresMemoryRepository();
+  return getPostgresMemoryRepository()
 }
 
 /**
  * Create a new repository instance with isolated store (for testing)
  */
 export function createMemoryRepository(store?: MemoryStore): InMemoryMemoryRepository {
-  return new InMemoryMemoryRepository(store ?? createMemoryStore());
+  return new InMemoryMemoryRepository(store ?? createMemoryStore())
 }
 
 export function createPostgresMemoryRepository(): PostgresMemoryRepository {
-  return new PostgresMemoryRepository();
+  return new PostgresMemoryRepository()
 }
 
 /**
  * Reset the singleton instances (for testing)
  */
 export function resetMemoryRepository(): void {
-  _inMemoryRepositoryInstance = null;
-  _postgresRepositoryInstance = null;
-  _sharedStore = null;
-  _db = null;
+  _inMemoryRepositoryInstance = null
+  _postgresRepositoryInstance = null
+  _sharedStore = null
+  _db = null
 }
 
 /**
@@ -1805,6 +1761,6 @@ export function resetMemoryRepository(): void {
  */
 export const memoryRepository = new Proxy({} as MemoryRepository, {
   get(_, prop) {
-    return getMemoryRepository()[prop as keyof MemoryRepository];
+    return getMemoryRepository()[prop as keyof MemoryRepository]
   },
-});
+})

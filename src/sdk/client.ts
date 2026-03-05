@@ -3,16 +3,9 @@
  * Main entry point for the Supermemory SDK
  */
 
-import { HTTPClient, APIPromise, toFile } from './http.js';
-import { Search, Documents, Memories, Connections, Settings } from './resources/index.js';
-import type {
-  ClientOptions,
-  RequestOptions,
-  AddParams,
-  AddResponse,
-  ProfileParams,
-  ProfileResponse,
-} from './types.js';
+import { HTTPClient, APIPromise, toFile } from './http.js'
+import { Search, Documents, Memories, Connections, Settings } from './resources/index.js'
+import type { ClientOptions, RequestOptions, AddParams, AddResponse, ProfileParams, ProfileResponse } from './types.js'
 
 /**
  * API Client for interfacing with the Supermemory API
@@ -30,15 +23,15 @@ import type {
  * ```
  */
 export class Supermemory {
-  private _client: HTTPClient;
-  private _options: ClientOptions;
+  private _client: HTTPClient
+  private _options: ClientOptions
 
   // Resource instances
-  readonly search: Search;
-  readonly documents: Documents;
-  readonly memories: Memories;
-  readonly connections: Connections;
-  readonly settings: Settings;
+  readonly search: Search
+  readonly documents: Documents
+  readonly memories: Memories
+  readonly connections: Connections
+  readonly settings: Settings
 
   /**
    * Create a new Supermemory client
@@ -46,15 +39,15 @@ export class Supermemory {
    * @param options - Client configuration options
    */
   constructor(options: ClientOptions = {}) {
-    this._options = options;
-    this._client = new HTTPClient(options);
+    this._options = options
+    this._client = new HTTPClient(options)
 
     // Initialize resources
-    this.search = new Search(this._client);
-    this.documents = new Documents(this._client);
-    this.memories = new Memories(this._client);
-    this.connections = new Connections(this._client);
-    this.settings = new Settings(this._client);
+    this.search = new Search(this._client)
+    this.documents = new Documents(this._client)
+    this.memories = new Memories(this._client)
+    this.connections = new Connections(this._client)
+    this.settings = new Settings(this._client)
   }
 
   // ============================================================================
@@ -92,7 +85,7 @@ export class Supermemory {
     return this._client.post<AddResponse>('/v3/add', {
       body,
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -120,7 +113,7 @@ export class Supermemory {
     return this._client.post<ProfileResponse>('/v3/profile', {
       body,
       requestOptions: options,
-    });
+    })
   }
 
   // ============================================================================
@@ -133,11 +126,8 @@ export class Supermemory {
    * @param path - API path
    * @param options - Request options
    */
-  get<T>(
-    path: string,
-    options?: { query?: Record<string, unknown>; requestOptions?: RequestOptions }
-  ): APIPromise<T> {
-    return this._client.get<T>(path, options);
+  get<T>(path: string, options?: { query?: Record<string, unknown>; requestOptions?: RequestOptions }): APIPromise<T> {
+    return this._client.get<T>(path, options)
   }
 
   /**
@@ -149,12 +139,12 @@ export class Supermemory {
   post<T>(
     path: string,
     options?: {
-      body?: unknown;
-      query?: Record<string, unknown>;
-      requestOptions?: RequestOptions;
+      body?: unknown
+      query?: Record<string, unknown>
+      requestOptions?: RequestOptions
     }
   ): APIPromise<T> {
-    return this._client.post<T>(path, options);
+    return this._client.post<T>(path, options)
   }
 
   /**
@@ -166,12 +156,12 @@ export class Supermemory {
   put<T>(
     path: string,
     options?: {
-      body?: unknown;
-      query?: Record<string, unknown>;
-      requestOptions?: RequestOptions;
+      body?: unknown
+      query?: Record<string, unknown>
+      requestOptions?: RequestOptions
     }
   ): APIPromise<T> {
-    return this._client.put<T>(path, options);
+    return this._client.put<T>(path, options)
   }
 
   /**
@@ -183,12 +173,12 @@ export class Supermemory {
   patch<T>(
     path: string,
     options?: {
-      body?: unknown;
-      query?: Record<string, unknown>;
-      requestOptions?: RequestOptions;
+      body?: unknown
+      query?: Record<string, unknown>
+      requestOptions?: RequestOptions
     }
   ): APIPromise<T> {
-    return this._client.patch<T>(path, options);
+    return this._client.patch<T>(path, options)
   }
 
   /**
@@ -200,12 +190,12 @@ export class Supermemory {
   delete<T>(
     path: string,
     options?: {
-      body?: unknown;
-      query?: Record<string, unknown>;
-      requestOptions?: RequestOptions;
+      body?: unknown
+      query?: Record<string, unknown>
+      requestOptions?: RequestOptions
     }
   ): APIPromise<T> {
-    return this._client.delete<T>(path, options);
+    return this._client.delete<T>(path, options)
   }
 
   // ============================================================================
@@ -227,9 +217,9 @@ export class Supermemory {
     return new Supermemory({
       ...this._options,
       ...options,
-    });
+    })
   }
 }
 
 // Re-export for convenience
-export { toFile };
+export { toFile }

@@ -16,28 +16,22 @@
  * 8. Mark processing_queue job as 'completed'
  */
 
-import { and, eq, inArray, notInArray } from 'drizzle-orm';
-import { documents } from '../db/schema/documents.schema.js';
-import { memories } from '../db/schema/memories.schema.js';
-import { memoryEmbeddings } from '../db/schema/embeddings.schema.js';
-import { processingQueue } from '../db/schema/queue.schema.js';
-import { memoryRelationships } from '../db/schema/relationships.schema.js';
-import { getLogger } from '../utils/logger.js';
-import { AppError, ErrorCode, DatabaseError } from '../utils/errors.js';
-import { generateId } from '../utils/id.js';
-import {
-  EmbeddingRelationshipDetector,
-  InMemoryVectorStoreAdapter,
-} from '../services/relationships/detector.js';
-import type { EmbeddingService } from '../services/embedding.service.js';
-import { createHash } from 'node:crypto';
-import {
-  workerDb as db,
-  type WorkerTransaction as DbTransaction,
-} from '../db/worker-connection.js';
-import type { MemoryType } from '../types/index.js';
+import { and, eq, inArray, notInArray } from 'drizzle-orm'
+import { documents } from '../db/schema/documents.schema.js'
+import { memories } from '../db/schema/memories.schema.js'
+import { memoryEmbeddings } from '../db/schema/embeddings.schema.js'
+import { processingQueue } from '../db/schema/queue.schema.js'
+import { memoryRelationships } from '../db/schema/relationships.schema.js'
+import { getLogger } from '../utils/logger.js'
+import { AppError, ErrorCode, DatabaseError } from '../utils/errors.js'
+import { generateId } from '../utils/id.js'
+import { EmbeddingRelationshipDetector, InMemoryVectorStoreAdapter } from '../services/relationships/detector.js'
+import type { EmbeddingService } from '../services/embedding.service.js'
+import { createHash } from 'node:crypto'
+import { workerDb as db, type WorkerTransaction as DbTransaction } from '../db/worker-connection.js'
+import type { MemoryType } from '../types/index.js'
 
-const logger = getLogger('IndexingWorker');
+const logger = getLogger('IndexingWorker')
 
 // ============================================================================
 // Type Utilities
@@ -58,9 +52,9 @@ function mapToVectorStoreType(dbType: string): MemoryType {
     belief: 'fact', // Map belief to fact
     skill: 'skill',
     context: 'context',
-  };
+  }
 
-  return mapping[dbType] ?? 'note';
+  return mapping[dbType] ?? 'note'
 }
 
 // ============================================================================
@@ -69,52 +63,43 @@ function mapToVectorStoreType(dbType: string): MemoryType {
 
 export interface IndexingJobData {
   /** ID of the document being indexed */
-  documentId: string;
+  documentId: string
   /** Container tag for the document */
-  containerTag: string;
+  containerTag: string
   /** Processing queue job ID */
-  queueJobId: string;
+  queueJobId: string
   /** Memories with their content and embeddings */
   memories: Array<{
-    content: string;
-    embedding: number[];
-    memoryType?:
-      | 'fact'
-      | 'preference'
-      | 'episode'
-      | 'belief'
-      | 'skill'
-      | 'context'
-      | 'note'
-      | 'event'
-      | 'relationship';
-    confidenceScore?: number;
-    metadata?: Record<string, unknown>;
-  }>;
+    content: string
+    embedding: number[]
+    memoryType?: 'fact' | 'preference' | 'episode' | 'belief' | 'skill' | 'context' | 'note' | 'event' | 'relationship'
+    confidenceScore?: number
+    metadata?: Record<string, unknown>
+  }>
 }
 
 export interface IndexingJobResult {
   /** Number of memories indexed (after duplicate detection) */
-  memoriesIndexed: number;
+  memoriesIndexed: number
   /** Number of duplicates skipped */
-  duplicatesSkipped: number;
+  duplicatesSkipped: number
   /** Number of relationships detected */
-  relationshipsDetected: number;
+  relationshipsDetected: number
   /** IDs of indexed memories */
-  memoryIds: string[];
+  memoryIds: string[]
   /** Processing time in milliseconds */
-  processingTimeMs: number;
+  processingTimeMs: number
 }
 
 export interface IndexingWorkerConfig {
   /** Embedding service for relationship detection */
-  embeddingService: EmbeddingService;
+  embeddingService: EmbeddingService
   /** Enable relationship detection (default: true) */
-  enableRelationshipDetection?: boolean;
+  enableRelationshipDetection?: boolean
   /** Skip duplicates or merge (default: skip) */
-  duplicateStrategy?: 'skip' | 'merge';
+  duplicateStrategy?: 'skip' | 'merge'
   /** Batch size for relationship detection */
-  relationshipBatchSize?: number;
+  relationshipBatchSize?: number
 }
 
 // ============================================================================
@@ -122,96 +107,92 @@ export interface IndexingWorkerConfig {
 // ============================================================================
 
 export class IndexingWorker {
-  private readonly embeddingService: EmbeddingService;
-  private readonly enableRelationshipDetection: boolean;
-  private readonly duplicateStrategy: 'skip' | 'merge';
-  private readonly relationshipBatchSize: number;
-  private readonly vectorStore: InMemoryVectorStoreAdapter;
-  private readonly relationshipDetector: EmbeddingRelationshipDetector;
+  private readonly embeddingService: EmbeddingService
+  private readonly enableRelationshipDetection: boolean
+  private readonly duplicateStrategy: 'skip' | 'merge'
+  private readonly relationshipBatchSize: number
+  private readonly vectorStore: InMemoryVectorStoreAdapter
+  private readonly relationshipDetector: EmbeddingRelationshipDetector
 
   constructor(config: IndexingWorkerConfig) {
-    this.embeddingService = config.embeddingService;
-    this.enableRelationshipDetection = config.enableRelationshipDetection ?? true;
-    this.duplicateStrategy = config.duplicateStrategy ?? 'skip';
-    this.relationshipBatchSize = config.relationshipBatchSize ?? 50;
+    this.embeddingService = config.embeddingService
+    this.enableRelationshipDetection = config.enableRelationshipDetection ?? true
+    this.duplicateStrategy = config.duplicateStrategy ?? 'skip'
+    this.relationshipBatchSize = config.relationshipBatchSize ?? 50
 
     // Initialize vector store for relationship detection
-    this.vectorStore = new InMemoryVectorStoreAdapter();
-    this.relationshipDetector = new EmbeddingRelationshipDetector(
-      this.embeddingService,
-      this.vectorStore,
-      {
-        maxCandidates: 20,
-        batchSize: this.relationshipBatchSize,
-        enableContradictionDetection: true,
-        enableLLMVerification: false, // Disable for performance in worker
-      }
-    );
+    this.vectorStore = new InMemoryVectorStoreAdapter()
+    this.relationshipDetector = new EmbeddingRelationshipDetector(this.embeddingService, this.vectorStore, {
+      maxCandidates: 20,
+      batchSize: this.relationshipBatchSize,
+      enableContradictionDetection: true,
+      enableLLMVerification: false, // Disable for performance in worker
+    })
 
     logger.info('IndexingWorker initialized', {
       enableRelationshipDetection: this.enableRelationshipDetection,
       duplicateStrategy: this.duplicateStrategy,
       relationshipBatchSize: this.relationshipBatchSize,
-    });
+    })
   }
 
   /**
    * Process an indexing job
    */
   async processJob(jobData: IndexingJobData): Promise<IndexingJobResult> {
-    const startTime = Date.now();
+    const startTime = Date.now()
     const result: IndexingJobResult = {
       memoriesIndexed: 0,
       duplicatesSkipped: 0,
       relationshipsDetected: 0,
       memoryIds: [],
       processingTimeMs: 0,
-    };
+    }
 
     try {
       logger.info('Processing indexing job', {
         documentId: jobData.documentId,
         memoryCount: jobData.memories.length,
         containerTag: jobData.containerTag,
-      });
+      })
 
       // Validate document exists
       const document = await db.query.documents.findFirst({
         where: eq(documents.id, jobData.documentId),
-      });
+      })
 
       if (!document) {
-        throw new DatabaseError(`Document not found: ${jobData.documentId}`, 'findDocument');
+        throw new DatabaseError(`Document not found: ${jobData.documentId}`, 'findDocument')
       }
 
       // Start transaction for atomicity
       await db.transaction(async (tx) => {
         // Step 1: Process each memory (duplicate detection + insertion)
         for (const memoryData of jobData.memories) {
-          const similarityHash = this.generateSimilarityHash(memoryData.content);
+          const similarityHash = this.generateSimilarityHash(memoryData.content)
 
           // Check for duplicates
           const existingMemory = await tx.query.memories.findFirst({
             where: eq(memories.similarityHash, similarityHash),
-          });
+          })
 
           if (existingMemory) {
             logger.debug('Duplicate memory detected', {
               similarityHash,
               existingMemoryId: existingMemory.id,
-            });
-            result.duplicatesSkipped++;
+            })
+            result.duplicatesSkipped++
 
             if (this.duplicateStrategy === 'skip') {
-              continue;
+              continue
             }
             // If merge strategy, we would update the existing memory here
             // For now, we skip to keep it simple
-            continue;
+            continue
           }
 
           // Insert memory
-          const memoryId = generateId();
+          const memoryId = generateId()
           await tx.insert(memories).values({
             id: memoryId,
             documentId: jobData.documentId,
@@ -223,7 +204,7 @@ export class IndexingWorker {
             metadata: memoryData.metadata ?? {},
             isLatest: true,
             version: 1,
-          });
+          })
 
           // Insert embedding
           await tx.insert(memoryEmbeddings).values({
@@ -231,22 +212,18 @@ export class IndexingWorker {
             embedding: memoryData.embedding,
             model: 'text-embedding-3-small',
             normalized: true,
-          });
+          })
 
-          result.memoryIds.push(memoryId);
-          result.memoriesIndexed++;
+          result.memoryIds.push(memoryId)
+          result.memoriesIndexed++
 
-          logger.debug('Memory indexed', { memoryId, similarityHash });
+          logger.debug('Memory indexed', { memoryId, similarityHash })
         }
 
         // Step 2: Detect relationships if enabled
         if (this.enableRelationshipDetection && result.memoriesIndexed > 0) {
-          const relationshipCount = await this.detectAndStoreRelationships(
-            tx,
-            result.memoryIds,
-            jobData.containerTag
-          );
-          result.relationshipsDetected = relationshipCount;
+          const relationshipCount = await this.detectAndStoreRelationships(tx, result.memoryIds, jobData.containerTag)
+          result.relationshipsDetected = relationshipCount
         }
 
         // Step 3: Update document status
@@ -256,7 +233,7 @@ export class IndexingWorker {
             status: 'processed',
             updatedAt: new Date(),
           })
-          .where(eq(documents.id, jobData.documentId));
+          .where(eq(documents.id, jobData.documentId))
 
         // Step 4: Mark processing queue job as completed
         await tx
@@ -265,29 +242,29 @@ export class IndexingWorker {
             status: 'completed',
             completedAt: new Date(),
           })
-          .where(eq(processingQueue.id, jobData.queueJobId));
+          .where(eq(processingQueue.id, jobData.queueJobId))
 
         logger.info('Transaction committed successfully', {
           documentId: jobData.documentId,
           memoriesIndexed: result.memoriesIndexed,
           duplicatesSkipped: result.duplicatesSkipped,
           relationshipsDetected: result.relationshipsDetected,
-        });
-      });
+        })
+      })
 
-      result.processingTimeMs = Date.now() - startTime;
+      result.processingTimeMs = Date.now() - startTime
 
       logger.info('Indexing job completed', {
         documentId: jobData.documentId,
         result,
-      });
+      })
 
-      return result;
+      return result
     } catch (error) {
       logger.errorWithException('Indexing job failed', error, {
         documentId: jobData.documentId,
         queueJobId: jobData.queueJobId,
-      });
+      })
 
       // Update processing queue to failed status
       try {
@@ -299,12 +276,12 @@ export class IndexingWorker {
             errorCode: error instanceof AppError ? error.code : ErrorCode.INTERNAL_ERROR,
             completedAt: new Date(),
           })
-          .where(eq(processingQueue.id, jobData.queueJobId));
+          .where(eq(processingQueue.id, jobData.queueJobId))
       } catch (updateError) {
-        logger.errorWithException('Failed to update queue status to failed', updateError);
+        logger.errorWithException('Failed to update queue status to failed', updateError)
       }
 
-      throw AppError.from(error, ErrorCode.DATABASE_ERROR);
+      throw AppError.from(error, ErrorCode.DATABASE_ERROR)
     }
   }
 
@@ -322,7 +299,7 @@ export class IndexingWorker {
         .select({ memory: memories, embedding: memoryEmbeddings })
         .from(memories)
         .leftJoin(memoryEmbeddings, eq(memoryEmbeddings.memoryId, memories.id))
-        .where(inArray(memories.id, memoryIds));
+        .where(inArray(memories.id, memoryIds))
 
       // Filter memories to those with valid embeddings
       const memoryRows = memoryRowsRaw
@@ -331,18 +308,18 @@ export class IndexingWorker {
           embedding: embedding ? { embedding: embedding.embedding } : null,
         }))
         .filter((m) => {
-          const emb = m.embedding as { embedding: number[] | null } | null;
+          const emb = m.embedding as { embedding: number[] | null } | null
           return (
             emb !== null &&
             emb.embedding !== null &&
             Array.isArray(emb.embedding) &&
             m.containerTag !== null &&
             m.confidenceScore !== null
-          );
-        });
+          )
+        })
 
       if (memoryRows.length === 0) {
-        return 0;
+        return 0
       }
 
       // Load existing memories from the same container for relationship detection
@@ -351,7 +328,7 @@ export class IndexingWorker {
         .from(memories)
         .leftJoin(memoryEmbeddings, eq(memoryEmbeddings.memoryId, memories.id))
         .where(and(eq(memories.containerTag, containerTag), notInArray(memories.id, memoryIds)))
-        .limit(1000); // Limit to prevent memory issues
+        .limit(1000) // Limit to prevent memory issues
 
       // Filter existing memories to those with valid embeddings
       const existingMemoryRows = existingMemoryRowsRaw
@@ -360,20 +337,20 @@ export class IndexingWorker {
           embedding: embedding ? { embedding: embedding.embedding } : null,
         }))
         .filter((m) => {
-          const emb = m.embedding as { embedding: number[] | null } | null;
+          const emb = m.embedding as { embedding: number[] | null } | null
           return (
             emb !== null &&
             emb.embedding !== null &&
             Array.isArray(emb.embedding) &&
             m.containerTag !== null &&
             m.confidenceScore !== null
-          );
-        });
+          )
+        })
 
       // Add existing memories to vector store
       for (const memory of existingMemoryRows) {
         // Type assertion: We've already filtered for non-null embeddings
-        const embedding = (memory.embedding as { embedding: number[] }).embedding;
+        const embedding = (memory.embedding as { embedding: number[] }).embedding
         this.vectorStore.addMemory(
           {
             id: memory.id,
@@ -392,15 +369,15 @@ export class IndexingWorker {
             },
           },
           embedding
-        );
+        )
       }
 
-      let totalRelationships = 0;
+      let totalRelationships = 0
 
       // Detect relationships for each new memory (already filtered to have embeddings)
       for (const memory of memoryRows) {
         // Type assertion: We've already filtered for non-null embeddings
-        const embedding = (memory.embedding as { embedding: number[] }).embedding;
+        const embedding = (memory.embedding as { embedding: number[] }).embedding
 
         const detectionResult = await this.relationshipDetector.detectRelationships(
           {
@@ -421,7 +398,7 @@ export class IndexingWorker {
             },
           },
           { containerTag }
-        );
+        )
 
         // Insert detected relationships
         for (const rel of detectionResult.relationships) {
@@ -436,8 +413,8 @@ export class IndexingWorker {
               detectedAt: new Date().toISOString(),
               llmVerified: rel.llmVerified ?? false,
             },
-          });
-          totalRelationships++;
+          })
+          totalRelationships++
         }
 
         // Add newly indexed memory to vector store for subsequent detections
@@ -459,20 +436,20 @@ export class IndexingWorker {
             },
           },
           embedding
-        );
+        )
       }
 
       logger.info('Relationships detected and stored', {
         newMemoriesCount: memoryRows.length,
         existingMemoriesCount: existingMemoryRows.length,
         relationshipsDetected: totalRelationships,
-      });
+      })
 
-      return totalRelationships;
+      return totalRelationships
     } catch (error) {
-      logger.errorWithException('Relationship detection failed', error);
+      logger.errorWithException('Relationship detection failed', error)
       // Don't fail the job for relationship detection errors
-      return 0;
+      return 0
     }
   }
 
@@ -482,36 +459,36 @@ export class IndexingWorker {
    */
   private generateSimilarityHash(content: string): string {
     // Normalize content: lowercase, remove extra whitespace, trim
-    const normalized = content.toLowerCase().replace(/\s+/g, ' ').trim();
+    const normalized = content.toLowerCase().replace(/\s+/g, ' ').trim()
 
     // Generate SHA256 hash
-    return createHash('sha256').update(normalized).digest('hex');
+    return createHash('sha256').update(normalized).digest('hex')
   }
 
   /**
    * Health check for the worker
    */
   async healthCheck(): Promise<{
-    healthy: boolean;
-    dbConnected: boolean;
-    embeddingServiceReady: boolean;
+    healthy: boolean
+    dbConnected: boolean
+    embeddingServiceReady: boolean
   }> {
     try {
       // Test database connection
-      await db.query.documents.findFirst();
+      await db.query.documents.findFirst()
 
       return {
         healthy: true,
         dbConnected: true,
         embeddingServiceReady: !!this.embeddingService,
-      };
+      }
     } catch (error) {
-      logger.errorWithException('Health check failed', error);
+      logger.errorWithException('Health check failed', error)
       return {
         healthy: false,
         dbConnected: false,
         embeddingServiceReady: false,
-      };
+      }
     }
   }
 }
@@ -524,5 +501,5 @@ export class IndexingWorker {
  * Create an indexing worker instance
  */
 export function createIndexingWorker(config: IndexingWorkerConfig): IndexingWorker {
-  return new IndexingWorker(config);
+  return new IndexingWorker(config)
 }

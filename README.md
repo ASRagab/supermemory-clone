@@ -98,34 +98,70 @@ Base path: `/api/v1`
 
 ## MCP for Coding Agents
 
-Build and run:
+### Quick Setup
+
+Run the one-command setup (builds if needed and registers with Claude Code):
+
+```bash
+npm run mcp:setup
+```
+
+### Installation Options
+
+**Option A — Project auto-discovery (recommended for teams)**
+
+The repo ships a `.mcp.json` that Claude Code auto-discovers when you open the
+project. Just make sure the project is built:
 
 ```bash
 npm run build
-npm run mcp
 ```
 
-Claude Desktop example:
+**Option B — Manual registration**
 
 ```bash
-claude mcp add supermemory -- node /absolute/path/to/supermemory-clone/dist/mcp/index.js
+npm run build
+claude mcp add supermemory -- node "$(pwd)/dist/mcp/index.js"
 ```
 
-Local config example (`mcp-config.json`):
+**Option C — npx (after package is published)**
 
-```json
-{
-  "mcpServers": {
-    "supermemory": {
-      "command": "node",
-      "args": ["dist/mcp/index.js"],
-      "cwd": "${PROJECT_ROOT}"
-    }
-  }
-}
+```bash
+claude mcp add supermemory -- npx supermemory-mcp
 ```
 
-Primary MCP tools:
+### Prerequisites
+
+- Node.js >= 20
+- PostgreSQL with pgvector running (`docker compose up -d postgres`)
+- Project built (`npm run build`)
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `OPENAI_API_KEY` | No | Enables embeddings and LLM features |
+| `REDIS_URL` | No | Enables async queue workers |
+| `LOG_LEVEL` | No | Logging verbosity (default: `info`) |
+
+### Verification
+
+```bash
+npm run doctor        # checks env, DB, Redis, MCP build & registration
+claude mcp list       # confirm supermemory appears
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `dist/mcp/index.js` not found | Run `npm run build` |
+| PostgreSQL connection refused | Start the container: `docker compose up -d postgres` |
+| Port already in use | Check `API_PORT` in `.env` (default 13000) |
+| MCP tools not appearing | Re-register: `npm run mcp:setup` |
+
+### MCP Tools
 
 - `supermemory_add`
 - `supermemory_search`

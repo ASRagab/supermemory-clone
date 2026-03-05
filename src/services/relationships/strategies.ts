@@ -9,10 +9,10 @@
  * as private methods, reducing complexity by ~400 LOC.
  */
 
-import type { RelationshipType } from '../../types/index.js';
-import type { Memory, Relationship } from '../memory.types.js';
-import { generateId } from '../../utils/id.js';
-import type { DetectedRelationship, RelationshipCandidate, DetectionStrategyType } from './types.js';
+import type { RelationshipType } from '../../types/index.js'
+import type { Memory, Relationship } from '../memory.types.js'
+import { generateId } from '../../utils/id.js'
+import type { DetectedRelationship, RelationshipCandidate, DetectionStrategyType } from './types.js'
 
 // ============================================================================
 // Helper Functions
@@ -38,7 +38,7 @@ export function createDetectedRelationship(
     strategy === 'llmVerification' ||
     strategy === 'hybrid'
       ? strategy
-      : 'hybrid';
+      : 'hybrid'
 
   const relationship: Relationship = {
     id: generateId(),
@@ -54,7 +54,7 @@ export function createDetectedRelationship(
       temporalScore: candidate.temporalScore,
       detectionStrategy: strategy,
     },
-  };
+  }
 
   return {
     relationship,
@@ -65,7 +65,7 @@ export function createDetectedRelationship(
     llmVerified,
     llmConfidence,
     detectionStrategy: validStrategy,
-  };
+  }
 }
 
 /**
@@ -77,8 +77,8 @@ export function hasUpdateIndicators(content: string): boolean {
     /\b(?:now|actually|instead)\b/i,
     /\b(?:changed|revised|modified)\b/i,
     /\b(?:no longer|used to be|previously)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -89,8 +89,8 @@ export function hasExtensionIndicators(content: string): boolean {
     /\b(?:also|additionally|furthermore|moreover)\b/i,
     /\b(?:in addition|on top of|besides)\b/i,
     /\b(?:extending|building on|adding to)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -102,8 +102,8 @@ export function hasContradictionIndicators(content: string): boolean {
     /\b(?:contrary|opposite|different)\b/i,
     /\b(?:not true|incorrect|wrong|false)\b/i,
     /\b(?:disagree|dispute|reject)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -114,8 +114,8 @@ export function hasSupersessionIndicators(content: string): boolean {
     /\b(?:replaces|supersedes|overrides)\b/i,
     /\b(?:no longer|obsolete|deprecated)\b/i,
     /\b(?:new version|latest|current)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }
 
 /**
@@ -127,6 +127,6 @@ export function hasCausalIndicators(content: string): boolean {
     /\b(?:because|since|as a result)\b/i,
     /\b(?:based on|derived from|follows from)\b/i,
     /\b(?:leads to|results in|causes)\b/i,
-  ];
-  return patterns.some((p) => p.test(content));
+  ]
+  return patterns.some((p) => p.test(content))
 }

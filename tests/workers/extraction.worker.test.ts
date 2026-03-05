@@ -12,39 +12,39 @@
 
 // CRITICAL: Set DATABASE_URL BEFORE any imports that use the database
 process.env.DATABASE_URL =
-  process.env.TEST_POSTGRES_URL || 'postgresql://supermemory:supermemory_secret@localhost:5432/supermemory';
+  process.env.TEST_POSTGRES_URL || 'postgresql://supermemory:supermemory_secret@localhost:5432/supermemory'
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Job, Queue } from 'bullmq';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { Job, Queue } from 'bullmq'
 import {
   processExtractionJob,
   createExtractionWorker,
   createExtractionQueue,
   type ExtractionJobData,
   type ExtractionJobResult,
-} from '../../src/workers/extraction.worker.js';
-import { getDatabase } from '../../src/db/client.js';
-import { documents } from '../../src/db/schema/documents.schema.js';
-import { processingQueue } from '../../src/db/schema/queue.schema.js';
-import { eq } from 'drizzle-orm';
-import { v4 as uuidv4 } from 'uuid';
+} from '../../src/workers/extraction.worker.js'
+import { getDatabase } from '../../src/db/client.js'
+import { documents } from '../../src/db/schema/documents.schema.js'
+import { processingQueue } from '../../src/db/schema/queue.schema.js'
+import { eq } from 'drizzle-orm'
+import { v4 as uuidv4 } from 'uuid'
 
 // Get database instance for tests
-const db = getDatabase();
+const db = getDatabase()
 
 // Mock Redis connection for tests
 const mockConnection = {
   host: 'localhost',
   port: 6379,
-};
+}
 
 describe('ExtractionWorker', () => {
-  let testDocumentId: string;
-  let testContainerTag: string;
+  let testDocumentId: string
+  let testContainerTag: string
 
   beforeEach(async () => {
-    testDocumentId = uuidv4();
-    testContainerTag = 'test-container';
+    testDocumentId = uuidv4()
+    testContainerTag = 'test-container'
 
     // Insert test document
     await db.insert(documents).values({
@@ -54,7 +54,7 @@ describe('ExtractionWorker', () => {
       status: 'pending',
       containerTag: testContainerTag,
       metadata: {},
-    });
+    })
 
     // Insert processing queue entry
     await db.insert(processingQueue).values({
@@ -64,14 +64,14 @@ describe('ExtractionWorker', () => {
       priority: 0,
       attempts: 0,
       maxAttempts: 3,
-    });
-  });
+    })
+  })
 
   afterEach(async () => {
     // Cleanup test data
-    await db.delete(processingQueue).where(eq(processingQueue.documentId, testDocumentId));
-    await db.delete(documents).where(eq(documents.id, testDocumentId));
-  });
+    await db.delete(processingQueue).where(eq(processingQueue.documentId, testDocumentId))
+    await db.delete(documents).where(eq(documents.id, testDocumentId))
+  })
 
   // TODO: These tests require PostgreSQL database connection that persists
   // between test setup and worker execution. Currently failing due to
@@ -83,17 +83,17 @@ describe('ExtractionWorker', () => {
         documentId: testDocumentId,
         sourceType: 'text',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
-      const result = await processExtractionJob(mockJob);
+      const mockJob = createMockJob(jobData)
+      const result = await processExtractionJob(mockJob)
 
-      expect(result.contentType).toBe('text');
-      expect(result.extractedContent).toBeDefined();
-    });
+      expect(result.contentType).toBe('text')
+      expect(result.extractedContent).toBeDefined()
+    })
 
     it('should detect URL content type', async () => {
-      const urlDocId = uuidv4();
+      const urlDocId = uuidv4()
       await db.insert(documents).values({
         id: urlDocId,
         content: 'https://example.com',
@@ -101,42 +101,42 @@ describe('ExtractionWorker', () => {
         status: 'pending',
         containerTag: testContainerTag,
         metadata: {},
-      });
+      })
 
       await db.insert(processingQueue).values({
         documentId: urlDocId,
         stage: 'extraction',
         status: 'pending',
-      });
+      })
 
       const jobData: ExtractionJobData = {
         documentId: urlDocId,
         sourceUrl: 'https://example.com',
         sourceType: 'url',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
+      const mockJob = createMockJob(jobData)
 
       // Mock fetch to avoid actual HTTP requests in tests
       vi.spyOn(global, 'fetch').mockResolvedValueOnce({
         ok: true,
         text: async () => '<html><head><title>Test Page</title></head><body>Test content</body></html>',
-      } as Response);
+      } as Response)
 
-      const result = await processExtractionJob(mockJob);
+      const result = await processExtractionJob(mockJob)
 
-      expect(result.contentType).toBe('url');
-      expect(result.metadata).toHaveProperty('sourceUrl');
+      expect(result.contentType).toBe('url')
+      expect(result.metadata).toHaveProperty('sourceUrl')
 
       // Cleanup
-      await db.delete(processingQueue).where(eq(processingQueue.documentId, urlDocId));
-      await db.delete(documents).where(eq(documents.id, urlDocId));
-    });
+      await db.delete(processingQueue).where(eq(processingQueue.documentId, urlDocId))
+      await db.delete(documents).where(eq(documents.id, urlDocId))
+    })
 
     it('should detect markdown content type', async () => {
-      const mdDocId = uuidv4();
-      const markdownContent = '# Heading\n\nSome **bold** text with [link](https://example.com)';
+      const mdDocId = uuidv4()
+      const markdownContent = '# Heading\n\nSome **bold** text with [link](https://example.com)'
 
       await db.insert(documents).values({
         id: mdDocId,
@@ -145,34 +145,34 @@ describe('ExtractionWorker', () => {
         status: 'pending',
         containerTag: testContainerTag,
         metadata: {},
-      });
+      })
 
       await db.insert(processingQueue).values({
         documentId: mdDocId,
         stage: 'extraction',
         status: 'pending',
-      });
+      })
 
       const jobData: ExtractionJobData = {
         documentId: mdDocId,
         sourceType: 'file',
         filePath: 'test.md',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
-      const result = await processExtractionJob(mockJob);
+      const mockJob = createMockJob(jobData)
+      const result = await processExtractionJob(mockJob)
 
-      expect(result.contentType).toBe('markdown');
+      expect(result.contentType).toBe('markdown')
 
       // Cleanup
-      await db.delete(processingQueue).where(eq(processingQueue.documentId, mdDocId));
-      await db.delete(documents).where(eq(documents.id, mdDocId));
-    });
+      await db.delete(processingQueue).where(eq(processingQueue.documentId, mdDocId))
+      await db.delete(documents).where(eq(documents.id, mdDocId))
+    })
 
     it('should detect code content type', async () => {
-      const codeDocId = uuidv4();
-      const codeContent = 'function hello() {\n  console.log("Hello");\n}';
+      const codeDocId = uuidv4()
+      const codeContent = 'function hello() {\n  console.log("Hello");\n}'
 
       await db.insert(documents).values({
         id: codeDocId,
@@ -181,54 +181,54 @@ describe('ExtractionWorker', () => {
         status: 'pending',
         containerTag: testContainerTag,
         metadata: {},
-      });
+      })
 
       await db.insert(processingQueue).values({
         documentId: codeDocId,
         stage: 'extraction',
         status: 'pending',
-      });
+      })
 
       const jobData: ExtractionJobData = {
         documentId: codeDocId,
         sourceType: 'file',
         filePath: 'test.js',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
-      const result = await processExtractionJob(mockJob);
+      const mockJob = createMockJob(jobData)
+      const result = await processExtractionJob(mockJob)
 
-      expect(result.contentType).toBe('code');
+      expect(result.contentType).toBe('code')
 
       // Cleanup
-      await db.delete(processingQueue).where(eq(processingQueue.documentId, codeDocId));
-      await db.delete(documents).where(eq(documents.id, codeDocId));
-    });
-  });
+      await db.delete(processingQueue).where(eq(processingQueue.documentId, codeDocId))
+      await db.delete(documents).where(eq(documents.id, codeDocId))
+    })
+  })
 
   // TODO: These tests have database isolation issues in full suite.
   // Tests pass individually but fail with shared state.
   // Pre-existing infrastructure issue, not Phase 2B related.
   describe.skip('Progress Tracking', () => {
     it('should update progress through all stages (0%, 25%, 50%, 75%, 90%, 100%)', async () => {
-      const progressUpdates: number[] = [];
+      const progressUpdates: number[] = []
 
       const jobData: ExtractionJobData = {
         documentId: testDocumentId,
         sourceType: 'text',
         containerTag: testContainerTag,
-      };
+      }
 
       const mockJob = createMockJob(jobData, (progress: number) => {
-        progressUpdates.push(progress);
-      });
+        progressUpdates.push(progress)
+      })
 
-      await processExtractionJob(mockJob);
+      await processExtractionJob(mockJob)
 
-      expect(progressUpdates).toEqual([0, 25, 50, 75, 90, 100]);
-    });
-  });
+      expect(progressUpdates).toEqual([0, 25, 50, 75, 90, 100])
+    })
+  })
 
   // TODO: Database isolation issue - skip for now
   describe.skip('Database Updates', () => {
@@ -237,49 +237,45 @@ describe('ExtractionWorker', () => {
         documentId: testDocumentId,
         sourceType: 'text',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
+      const mockJob = createMockJob(jobData)
 
-      await processExtractionJob(mockJob);
+      await processExtractionJob(mockJob)
 
       const [queueEntry] = await db
         .select()
         .from(processingQueue)
         .where(eq(processingQueue.documentId, testDocumentId))
-        .limit(1);
+        .limit(1)
 
-      expect(queueEntry.status).toBe('completed');
-      expect(queueEntry.completedAt).toBeDefined();
-    });
+      expect(queueEntry.status).toBe('completed')
+      expect(queueEntry.completedAt).toBeDefined()
+    })
 
     it('should update document content and metadata', async () => {
       const jobData: ExtractionJobData = {
         documentId: testDocumentId,
         sourceType: 'text',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
+      const mockJob = createMockJob(jobData)
 
-      await processExtractionJob(mockJob);
+      await processExtractionJob(mockJob)
 
-      const [doc] = await db
-        .select()
-        .from(documents)
-        .where(eq(documents.id, testDocumentId))
-        .limit(1);
+      const [doc] = await db.select().from(documents).where(eq(documents.id, testDocumentId)).limit(1)
 
-      expect(doc.content).toBeDefined();
-      expect(doc.metadata).toBeDefined();
-      expect(doc.updatedAt).toBeDefined();
-    });
-  });
+      expect(doc.content).toBeDefined()
+      expect(doc.metadata).toBeDefined()
+      expect(doc.updatedAt).toBeDefined()
+    })
+  })
 
   // TODO: Database isolation issue - skip for now
   describe.skip('Error Handling', () => {
     it('should handle extraction errors and update status', async () => {
-      const invalidDocId = uuidv4();
+      const invalidDocId = uuidv4()
 
       // Insert document with invalid content that will fail
       await db.insert(documents).values({
@@ -289,7 +285,7 @@ describe('ExtractionWorker', () => {
         status: 'pending',
         containerTag: testContainerTag,
         metadata: {},
-      });
+      })
 
       await db.insert(processingQueue).values({
         documentId: invalidDocId,
@@ -297,41 +293,41 @@ describe('ExtractionWorker', () => {
         status: 'pending',
         attempts: 0,
         maxAttempts: 3,
-      });
+      })
 
       const jobData: ExtractionJobData = {
         documentId: invalidDocId,
         sourceUrl: 'http://this-domain-does-not-exist-12345.invalid',
         sourceType: 'url',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
-      mockJob.attemptsMade = 0;
+      const mockJob = createMockJob(jobData)
+      mockJob.attemptsMade = 0
 
       // Mock fetch to simulate network error
-      vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+      vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Network error'))
 
       // The job should throw an error
-      await expect(processExtractionJob(mockJob)).rejects.toThrow();
+      await expect(processExtractionJob(mockJob)).rejects.toThrow()
 
       const [queueEntry] = await db
         .select()
         .from(processingQueue)
         .where(eq(processingQueue.documentId, invalidDocId))
-        .limit(1);
+        .limit(1)
 
-      expect(queueEntry.error).toBeDefined();
-      expect(queueEntry.status).toBe('retry');
-      expect(queueEntry.attempts).toBe(1);
+      expect(queueEntry.error).toBeDefined()
+      expect(queueEntry.status).toBe('retry')
+      expect(queueEntry.attempts).toBe(1)
 
       // Cleanup
-      await db.delete(processingQueue).where(eq(processingQueue.documentId, invalidDocId));
-      await db.delete(documents).where(eq(documents.id, invalidDocId));
-    });
+      await db.delete(processingQueue).where(eq(processingQueue.documentId, invalidDocId))
+      await db.delete(documents).where(eq(documents.id, invalidDocId))
+    })
 
     it('should mark as failed after max retries', async () => {
-      const invalidDocId = uuidv4();
+      const invalidDocId = uuidv4()
 
       await db.insert(documents).values({
         id: invalidDocId,
@@ -340,7 +336,7 @@ describe('ExtractionWorker', () => {
         status: 'pending',
         containerTag: testContainerTag,
         metadata: {},
-      });
+      })
 
       await db.insert(processingQueue).values({
         documentId: invalidDocId,
@@ -348,57 +344,57 @@ describe('ExtractionWorker', () => {
         status: 'pending',
         attempts: 2,
         maxAttempts: 3,
-      });
+      })
 
       const jobData: ExtractionJobData = {
         documentId: invalidDocId,
         sourceUrl: 'http://this-domain-does-not-exist-12345.invalid',
         sourceType: 'url',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
-      mockJob.attemptsMade = 2; // Third attempt (0-indexed, so attempt 2 is the 3rd try)
+      const mockJob = createMockJob(jobData)
+      mockJob.attemptsMade = 2 // Third attempt (0-indexed, so attempt 2 is the 3rd try)
 
       // Mock fetch to simulate network error
-      vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+      vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Network error'))
 
       // The job should throw an error
-      await expect(processExtractionJob(mockJob)).rejects.toThrow();
+      await expect(processExtractionJob(mockJob)).rejects.toThrow()
 
       const [queueEntry] = await db
         .select()
         .from(processingQueue)
         .where(eq(processingQueue.documentId, invalidDocId))
-        .limit(1);
+        .limit(1)
 
-      expect(queueEntry.status).toBe('failed');
-      expect(queueEntry.attempts).toBe(3);
+      expect(queueEntry.status).toBe('failed')
+      expect(queueEntry.attempts).toBe(3)
 
       // Cleanup
-      await db.delete(processingQueue).where(eq(processingQueue.documentId, invalidDocId));
-      await db.delete(documents).where(eq(documents.id, invalidDocId));
-    });
-  });
+      await db.delete(processingQueue).where(eq(processingQueue.documentId, invalidDocId))
+      await db.delete(documents).where(eq(documents.id, invalidDocId))
+    })
+  })
 
   // TODO: Queue chaining test has database isolation issues in full suite
   describe.skip('Queue Chaining', () => {
     it('should chain to chunking queue on success', async () => {
-      const queueAddSpy = vi.fn();
+      const queueAddSpy = vi.fn()
 
       // Mock Queue.add method
-      vi.spyOn(Queue.prototype, 'add').mockImplementation(queueAddSpy);
-      vi.spyOn(Queue.prototype, 'close').mockResolvedValue();
+      vi.spyOn(Queue.prototype, 'add').mockImplementation(queueAddSpy)
+      vi.spyOn(Queue.prototype, 'close').mockResolvedValue()
 
       const jobData: ExtractionJobData = {
         documentId: testDocumentId,
         sourceType: 'text',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
+      const mockJob = createMockJob(jobData)
 
-      await processExtractionJob(mockJob);
+      await processExtractionJob(mockJob)
 
       expect(queueAddSpy).toHaveBeenCalledWith(
         'chunk',
@@ -407,29 +403,29 @@ describe('ExtractionWorker', () => {
           containerTag: testContainerTag,
         }),
         expect.any(Object)
-      );
-    });
-  });
+      )
+    })
+  })
 
   describe('Worker Creation', () => {
     it('should create extraction worker with correct configuration', () => {
-      const worker = createExtractionWorker(mockConnection);
+      const worker = createExtractionWorker(mockConnection)
 
-      expect(worker).toBeDefined();
-      expect(worker.name).toBe('extraction');
+      expect(worker).toBeDefined()
+      expect(worker.name).toBe('extraction')
 
-      worker.close();
-    });
+      worker.close()
+    })
 
     it('should create extraction queue with correct configuration', () => {
-      const queue = createExtractionQueue(mockConnection);
+      const queue = createExtractionQueue(mockConnection)
 
-      expect(queue).toBeDefined();
-      expect(queue.name).toBe('extraction');
+      expect(queue).toBeDefined()
+      expect(queue.name).toBe('extraction')
 
-      queue.close();
-    });
-  });
+      queue.close()
+    })
+  })
 
   describe('Performance', () => {
     it('should process job in reasonable time', async () => {
@@ -437,26 +433,23 @@ describe('ExtractionWorker', () => {
         documentId: testDocumentId,
         sourceType: 'text',
         containerTag: testContainerTag,
-      };
+      }
 
-      const mockJob = createMockJob(jobData);
-      const startTime = Date.now();
+      const mockJob = createMockJob(jobData)
+      const startTime = Date.now()
 
-      const result = await processExtractionJob(mockJob);
+      const result = await processExtractionJob(mockJob)
 
-      const processingTime = Date.now() - startTime;
+      const processingTime = Date.now() - startTime
 
-      expect(result.processingTimeMs).toBeDefined();
-      expect(processingTime).toBeLessThan(5000); // Should complete within 5 seconds
-    });
-  });
-});
+      expect(result.processingTimeMs).toBeDefined()
+      expect(processingTime).toBeLessThan(5000) // Should complete within 5 seconds
+    })
+  })
+})
 
 // Helper function to create mock job
-function createMockJob(
-  data: ExtractionJobData,
-  onProgressUpdate?: (progress: number) => void
-): Job<ExtractionJobData> {
+function createMockJob(data: ExtractionJobData, onProgressUpdate?: (progress: number) => void): Job<ExtractionJobData> {
   const mockJob = {
     id: uuidv4(),
     data,
@@ -471,10 +464,10 @@ function createMockJob(
     },
     updateProgress: vi.fn(async (progress: number) => {
       if (onProgressUpdate) {
-        onProgressUpdate(progress);
+        onProgressUpdate(progress)
       }
     }),
-  } as unknown as Job<ExtractionJobData>;
+  } as unknown as Job<ExtractionJobData>
 
-  return mockJob;
+  return mockJob
 }

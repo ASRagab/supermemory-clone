@@ -30,14 +30,12 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 
 CREATE TABLE IF NOT EXISTS memory_embeddings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    memory_id UUID PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
     embedding vector(1536) NOT NULL,
-    model VARCHAR(255) NOT NULL,
-    dimensions INTEGER NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT check_dimensions_match CHECK (dimensions = vector_dims(embedding))
+    model VARCHAR(100) NOT NULL DEFAULT 'text-embedding-3-small',
+    model_version VARCHAR(50),
+    normalized BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS memory_relationships (
@@ -82,11 +80,6 @@ CREATE TRIGGER trg_memories_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at();
 
-CREATE TRIGGER trg_memory_embeddings_updated_at
-    BEFORE UPDATE ON memory_embeddings
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at();
-
 CREATE TRIGGER trg_processing_queue_updated_at
     BEFORE UPDATE ON processing_queue
     FOR EACH ROW
@@ -127,15 +120,13 @@ BEGIN
     RAISE NOTICE 'TEST PASSED: update_updated_at() trigger on memories';
 END $$;
 
--- Test 1.2: Verify trigger updates timestamp on memory_embeddings table
+-- Test 1.2: Verify memory_embeddings uses memory_id as PK and supports insert/update
 DO $$
 DECLARE
     test_container_tag VARCHAR(255) := 'test-trigger-2';
     test_memory_id UUID;
-    test_embedding_id UUID;
-    initial_updated_at TIMESTAMPTZ;
-    new_updated_at TIMESTAMPTZ;
     test_vector vector(1536);
+    result_model VARCHAR(100);
 BEGIN
     -- Setup
     INSERT INTO container_tags (tag) VALUES (test_container_tag);
@@ -146,29 +137,23 @@ BEGIN
     -- Create a test vector (all zeros for simplicity)
     test_vector := array_fill(0, ARRAY[1536])::vector(1536);
 
-    INSERT INTO memory_embeddings (memory_id, embedding, model, dimensions)
-    VALUES (test_memory_id, test_vector, 'test-model', 1536)
-    RETURNING id INTO test_embedding_id;
+    -- Insert using memory_id as PK
+    INSERT INTO memory_embeddings (memory_id, embedding, model)
+    VALUES (test_memory_id, test_vector, 'text-embedding-3-small');
 
-    SELECT updated_at INTO initial_updated_at
-    FROM memory_embeddings WHERE id = test_embedding_id;
+    -- Act: Update model field
+    UPDATE memory_embeddings SET model = 'text-embedding-3-large'
+    WHERE memory_id = test_memory_id;
 
-    -- Wait to ensure timestamp difference
-    PERFORM pg_sleep(0.1);
-
-    -- Act
-    UPDATE memory_embeddings SET model = 'updated-model'
-    WHERE id = test_embedding_id;
-
-    SELECT updated_at INTO new_updated_at
-    FROM memory_embeddings WHERE id = test_embedding_id;
+    SELECT model INTO result_model
+    FROM memory_embeddings WHERE memory_id = test_memory_id;
 
     -- Assert
-    IF new_updated_at <= initial_updated_at THEN
-        RAISE EXCEPTION 'TEST FAILED: Trigger did not update updated_at on memory_embeddings';
+    IF result_model != 'text-embedding-3-large' THEN
+        RAISE EXCEPTION 'TEST FAILED: Update on memory_embeddings by memory_id did not work';
     END IF;
 
-    RAISE NOTICE 'TEST PASSED: update_updated_at() trigger on memory_embeddings';
+    RAISE NOTICE 'TEST PASSED: memory_embeddings uses memory_id as PK correctly';
 END $$;
 
 -- ==========================================================================
@@ -336,8 +321,8 @@ BEGIN
     VALUES ('Test memory for search', test_container_tag)
     RETURNING id INTO test_memory_id;
 
-    INSERT INTO memory_embeddings (memory_id, embedding, model, dimensions)
-    VALUES (test_memory_id, embedding_vector, 'test-model', 1536);
+    INSERT INTO memory_embeddings (memory_id, embedding, model)
+    VALUES (test_memory_id, embedding_vector, 'text-embedding-3-small');
 
     -- Act
     SELECT COUNT(*), MAX(similarity_score) INTO result_count, result_similarity
@@ -379,10 +364,10 @@ BEGIN
     VALUES ('Memory in tag2', tag2)
     RETURNING id INTO memory2_id;
 
-    INSERT INTO memory_embeddings (memory_id, embedding, model, dimensions)
+    INSERT INTO memory_embeddings (memory_id, embedding, model)
     VALUES
-        (memory1_id, test_vector, 'test-model', 1536),
-        (memory2_id, test_vector, 'test-model', 1536);
+        (memory1_id, test_vector, 'text-embedding-3-small'),
+        (memory2_id, test_vector, 'text-embedding-3-small');
 
     -- Act: Search with container tag filter
     SELECT COUNT(*) INTO filtered_count

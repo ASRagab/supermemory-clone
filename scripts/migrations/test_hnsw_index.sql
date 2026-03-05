@@ -68,25 +68,19 @@ END $$;
 -- Create a sample vector for testing
 DO $$
 DECLARE
+    explain_output TEXT := '';
+    plan_row RECORD;
     sample_vector vector(1536);
-    explain_output TEXT;
 BEGIN
-    -- Generate a random test vector
     sample_vector := array_fill(0.1, ARRAY[1536])::vector;
 
-    -- Get query plan
-    SELECT string_agg(plan_line, E'\n')
-    INTO explain_output
-    FROM (
-        SELECT *
-        FROM (
-            EXPLAIN (FORMAT TEXT)
-            SELECT id, 1 - (embedding <=> sample_vector) as similarity
-            FROM memory_embeddings
-            ORDER BY embedding <=> sample_vector
-            LIMIT 10
-        ) AS plan(plan_line)
-    ) plans;
+    FOR plan_row IN EXECUTE format(
+        'EXPLAIN (FORMAT TEXT) SELECT memory_id, 1 - (embedding <=> %L::vector) as similarity FROM memory_embeddings ORDER BY embedding <=> %L::vector LIMIT 10',
+        sample_vector::text, sample_vector::text
+    )
+    LOOP
+        explain_output := explain_output || plan_row."QUERY PLAN" || E'\n';
+    END LOOP;
 
     IF explain_output LIKE '%Index Scan using idx_memory_embeddings_hnsw%' THEN
         RAISE NOTICE 'TEST 4 PASSED: Query uses HNSW index scan';
@@ -142,7 +136,7 @@ BEGIN
 
         SELECT COUNT(*) INTO result_count
         FROM (
-            SELECT id
+            SELECT memory_id
             FROM memory_embeddings
             ORDER BY embedding <=> sample_vector
             LIMIT 10
@@ -195,18 +189,18 @@ BEGIN
         );
 
         -- Get exact results (sequential scan, no index)
-        SELECT array_agg(id ORDER BY distance) INTO exact_ids
+        SELECT array_agg(memory_id ORDER BY distance) INTO exact_ids
         FROM (
-            SELECT id, embedding <=> sample_vector AS distance
+            SELECT memory_id, embedding <=> sample_vector AS distance
             FROM memory_embeddings
             ORDER BY distance
             LIMIT 10
         ) exact;
 
         -- Get approximate results (HNSW index)
-        SELECT array_agg(id ORDER BY distance) INTO approx_ids
+        SELECT array_agg(memory_id ORDER BY distance) INTO approx_ids
         FROM (
-            SELECT id, embedding <=> sample_vector AS distance
+            SELECT memory_id, embedding <=> sample_vector AS distance
             FROM memory_embeddings
             ORDER BY distance
             LIMIT 10

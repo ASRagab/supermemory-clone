@@ -8,85 +8,85 @@ import {
   runMigrations as runSqliteMigrations,
   closeDatabase as closeSqliteDatabase,
   type DatabaseInstance as SqliteDatabaseInstance,
-} from './index.js';
+} from './index.js'
 
 import {
   getPostgresDatabase,
   runPostgresMigrations,
   closePostgresDatabase,
   type PostgresDatabaseInstance,
-} from './postgres.js';
+} from './postgres.js'
 
-export type DatabaseInstance = SqliteDatabaseInstance | PostgresDatabaseInstance;
+export type DatabaseInstance = SqliteDatabaseInstance | PostgresDatabaseInstance
 
 export function getDatabaseUrl(): string {
-  return process.env.DATABASE_URL ?? './data/supermemory.db';
+  return process.env.DATABASE_URL ?? './data/supermemory.db'
 }
 
 export function isPostgresUrl(url: string): boolean {
-  return url.startsWith('postgresql://') || url.startsWith('postgres://');
+  return url.startsWith('postgresql://') || url.startsWith('postgres://')
 }
 
 function assertPostgresUrlAllowed(url: string): void {
   if (process.env.NODE_ENV === 'test') {
-    return;
+    return
   }
 
   if (!isPostgresUrl(url)) {
     throw new Error(
       'DATABASE_URL must use postgres:// or postgresql:// outside tests. SQLite is only allowed when NODE_ENV=test.'
-    );
+    )
   }
 }
 
 export function getDatabase(): DatabaseInstance {
-  const url = getDatabaseUrl();
-  const isPostgres = isPostgresUrl(url);
+  const url = getDatabaseUrl()
+  const isPostgres = isPostgresUrl(url)
 
-  assertPostgresUrlAllowed(url);
+  assertPostgresUrlAllowed(url)
 
   if (isPostgres) {
-    return getPostgresDatabase(url) as DatabaseInstance;
+    return getPostgresDatabase(url) as DatabaseInstance
   } else {
-    return getSqliteDatabase(url) as DatabaseInstance;
+    return getSqliteDatabase(url) as DatabaseInstance
   }
 }
 
 export async function runMigrations(): Promise<void> {
-  const url = getDatabaseUrl();
-  const isPostgres = isPostgresUrl(url);
+  const url = getDatabaseUrl()
+  const isPostgres = isPostgresUrl(url)
 
-  assertPostgresUrlAllowed(url);
+  assertPostgresUrlAllowed(url)
 
   if (isPostgres) {
-    await runPostgresMigrations(url);
+    await runPostgresMigrations(url)
   } else {
-    runSqliteMigrations(url);
+    runSqliteMigrations(url)
   }
 }
 
 export async function closeDatabase(): Promise<void> {
-  const url = getDatabaseUrl();
-  const isPostgres = isPostgresUrl(url);
+  const url = getDatabaseUrl()
+  const isPostgres = isPostgresUrl(url)
 
-  assertPostgresUrlAllowed(url);
+  assertPostgresUrlAllowed(url)
 
   if (isPostgres) {
-    await closePostgresDatabase();
+    await closePostgresDatabase()
   } else {
-    closeSqliteDatabase();
+    closeSqliteDatabase()
   }
 }
 
 export function getDatabaseInfo() {
-  const url = getDatabaseUrl();
-  const isPostgres = isPostgresUrl(url);
+  const url = getDatabaseUrl()
+  const isPostgres = isPostgresUrl(url)
 
-  assertPostgresUrlAllowed(url);
+  assertPostgresUrlAllowed(url)
 
   return {
     type: isPostgres ? 'postgresql' : 'sqlite',
     url: isPostgres ? url.replace(/:[^:@]+@/, ':****@') : url, // Mask password
     isProduction: isPostgres,
-  };
+  }
 }

@@ -13,8 +13,8 @@
  *   claude mcp add supermemory -- node /path/to/supermemory-clone/dist/mcp/index.js
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -23,7 +23,7 @@ import {
   ListResourceTemplatesRequestSchema,
   ErrorCode,
   McpError,
-} from '@modelcontextprotocol/sdk/types.js';
+} from '@modelcontextprotocol/sdk/types.js'
 
 import {
   TOOL_DEFINITIONS,
@@ -41,7 +41,7 @@ import {
   type DeleteResult,
   type RememberResult,
   type RecallResult,
-} from './tools.js';
+} from './tools.js'
 
 import {
   RESOURCE_TEMPLATES,
@@ -52,190 +52,183 @@ import {
   type SearchResource,
   type FactsResource,
   type StatsResource,
-} from './resources.js';
+} from './resources.js'
 
-import { getMCPRateLimiter, createRateLimitErrorResponse } from './rateLimit.js';
+import { getMCPRateLimiter, createRateLimitErrorResponse } from './rateLimit.js'
 
-import { MemoryService, createMemoryService } from '../services/memory.service.js';
-import { SearchService, createSearchService } from '../services/search.service.js';
-import { ProfileService } from '../services/profile.service.js';
-import { EmbeddingService, cosineSimilarity } from '../services/embedding.service.js';
-import { generateId } from '../utils/id.js';
-import { ValidationError } from '../utils/errors.js';
-import { getLogger } from '../utils/logger.js';
-import { getDatabaseUrl } from '../db/client.js';
-import { getPostgresDatabase, type PostgresDatabaseInstance } from '../db/postgres.js';
-import { documents } from '../db/schema/documents.schema.js';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import { initializeAndValidate } from '../startup.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import { MemoryService, createMemoryService } from '../services/memory.service.js'
+import { SearchService, createSearchService } from '../services/search.service.js'
+import { ProfileService } from '../services/profile.service.js'
+import { EmbeddingService, cosineSimilarity } from '../services/embedding.service.js'
+import { generateId } from '../utils/id.js'
+import { ValidationError } from '../utils/errors.js'
+import { getLogger } from '../utils/logger.js'
+import { getDatabaseUrl } from '../db/client.js'
+import { getPostgresDatabase, type PostgresDatabaseInstance } from '../db/postgres.js'
+import { documents } from '../db/schema/documents.schema.js'
+import { archiveFileWithSuffix, pathExists, readJsonFile } from './legacyState.js'
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { initializeAndValidate } from '../startup.js'
+import * as path from 'path'
 
-const logger = getLogger('mcp-server');
+const logger = getLogger('mcp-server')
 
 // ============================================================================
 // Server State & Legacy Migration
 // ============================================================================
 
 interface LegacyDocumentRecord {
-  id: string;
-  content: string;
-  title?: string;
-  contentType?: string;
-  containerTag?: string;
-  sourceUrl?: string;
-  metadata?: Record<string, unknown>;
-  createdAt?: string;
-  updatedAt?: string;
-  embedding?: number[];
+  id: string
+  content: string
+  title?: string
+  contentType?: string
+  containerTag?: string
+  sourceUrl?: string
+  metadata?: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+  embedding?: number[]
 }
 
 interface LegacyPersistedState {
-  documents: LegacyDocumentRecord[];
-  containerTags: string[];
-  version: number;
-  lastSaved: string;
+  documents: LegacyDocumentRecord[]
+  containerTags: string[]
+  version: number
+  lastSaved: string
 }
 
 interface ServerState {
-  db: PostgresDatabaseInstance;
-  memoryService: MemoryService;
-  searchService: SearchService;
-  profileService: ProfileService;
-  embeddingService: EmbeddingService;
+  db: PostgresDatabaseInstance
+  memoryService: MemoryService
+  searchService: SearchService
+  profileService: ProfileService
+  embeddingService: EmbeddingService
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
+  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
 function getLegacyPersistencePath(): string {
   const dataPath =
-    process.env.SUPERMEMORY_DATA_PATH ||
-    path.join(process.env.HOME || process.env.USERPROFILE || '.', '.supermemory');
+    process.env.SUPERMEMORY_DATA_PATH || path.join(process.env.HOME || process.env.USERPROFILE || '.', '.supermemory')
 
-  return path.join(dataPath, 'mcp-state.json');
+  return path.join(dataPath, 'mcp-state.json')
 }
 
 function mapLegacyContentTypeToDb(contentType?: string): string {
   switch (contentType) {
     case 'pdf':
-      return 'application/pdf';
+      return 'application/pdf'
     case 'image':
-      return 'image/png';
+      return 'image/png'
     case 'url':
-      return 'text/html';
+      return 'text/html'
     case 'tweet':
     case 'document':
     case 'note':
     default:
-      return 'text/plain';
+      return 'text/plain'
   }
 }
 
 function mapMcpContentTypeToDb(contentType?: string): string[] {
   switch (contentType) {
     case 'pdf':
-      return ['application/pdf'];
+      return ['application/pdf']
     case 'image':
-      return ['image/png', 'image/jpeg'];
+      return ['image/png', 'image/jpeg']
     case 'url':
-      return ['text/html'];
+      return ['text/html']
     case 'tweet':
     case 'document':
     case 'note':
     default:
-      return ['text/plain'];
+      return ['text/plain']
   }
 }
 
-function mapDbContentTypeToMcp(
-  contentType?: string
-): 'note' | 'url' | 'pdf' | 'image' | 'tweet' | 'document' {
+function mapDbContentTypeToMcp(contentType?: string): 'note' | 'url' | 'pdf' | 'image' | 'tweet' | 'document' {
   switch (contentType) {
     case 'application/pdf':
-      return 'pdf';
+      return 'pdf'
     case 'image/png':
     case 'image/jpeg':
-      return 'image';
+      return 'image'
     case 'text/html':
-      return 'url';
+      return 'url'
     default:
-      return 'note';
+      return 'note'
   }
 }
 
 function extractTitle(metadata: unknown): string | undefined {
-  if (!isRecord(metadata)) return undefined;
-  const title = metadata.title;
-  return typeof title === 'string' ? title : undefined;
+  if (!isRecord(metadata)) return undefined
+  const title = metadata.title
+  return typeof title === 'string' ? title : undefined
 }
 
 function extractSourceUrl(metadata: unknown): string | undefined {
-  if (!isRecord(metadata)) return undefined;
-  const sourceUrl = metadata.sourceUrl;
-  return typeof sourceUrl === 'string' ? sourceUrl : undefined;
+  if (!isRecord(metadata)) return undefined
+  const sourceUrl = metadata.sourceUrl
+  return typeof sourceUrl === 'string' ? sourceUrl : undefined
 }
 
 function parseLegacyDate(value: string | undefined): Date | undefined {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date;
+  if (!value) return undefined
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date
 }
 
-function buildDocumentMetadata(
-  base: unknown,
-  extras: Record<string, unknown>
-): Record<string, unknown> {
+function buildDocumentMetadata(base: unknown, extras: Record<string, unknown>): Record<string, unknown> {
   if (isRecord(base)) {
-    return { ...base, ...extras };
+    return { ...base, ...extras }
   }
 
-  return { ...extras };
+  return { ...extras }
 }
 
 async function migrateLegacyMcpState(state: ServerState): Promise<void> {
-  const legacyPath = getLegacyPersistencePath();
+  const legacyPath = getLegacyPersistencePath()
 
-  if (!fs.existsSync(legacyPath)) {
-    return;
+  if (!(await pathExists(legacyPath))) {
+    return
   }
 
-  let legacyState: LegacyPersistedState | null = null;
+  let legacyState: LegacyPersistedState | null = null
 
   try {
-    const raw = fs.readFileSync(legacyPath, 'utf-8');
-    legacyState = JSON.parse(raw) as LegacyPersistedState;
+    legacyState = await readJsonFile<LegacyPersistedState>(legacyPath)
   } catch (error) {
     logger.error(
       'Failed to read legacy MCP state for migration',
       { legacyPath },
       error instanceof Error ? error : undefined
-    );
-    return;
+    )
+    return
   }
 
   if (!legacyState || !Array.isArray(legacyState.documents)) {
-    logger.warn('Legacy MCP state missing documents, skipping migration', { legacyPath });
-    return;
+    logger.warn('Legacy MCP state missing documents, skipping migration', { legacyPath })
+    return
   }
 
-  let hadFailures = false;
+  let hadFailures = false
 
   for (const doc of legacyState.documents) {
     if (!doc.content) {
-      continue;
+      continue
     }
 
-    const documentId = doc.id || generateId();
-    const containerTag = doc.containerTag ?? 'default';
+    const documentId = doc.id || generateId()
+    const containerTag = doc.containerTag ?? 'default'
     const metadata = buildDocumentMetadata(doc.metadata, {
       ...(doc.title ? { title: doc.title } : {}),
       ...(doc.sourceUrl ? { sourceUrl: doc.sourceUrl } : {}),
       ...(doc.contentType ? { legacyContentType: doc.contentType } : {}),
-    });
-    const createdAt = parseLegacyDate(doc.createdAt) ?? new Date();
-    const updatedAt = parseLegacyDate(doc.updatedAt) ?? createdAt;
+    })
+    const createdAt = parseLegacyDate(doc.createdAt) ?? new Date()
+    const updatedAt = parseLegacyDate(doc.updatedAt) ?? createdAt
 
     try {
       const inserted = await state.db
@@ -251,49 +244,42 @@ async function migrateLegacyMcpState(state: ServerState): Promise<void> {
           updatedAt,
         })
         .onConflictDoNothing({ target: documents.id })
-        .returning({ id: documents.id });
+        .returning({ id: documents.id })
 
       if (inserted.length === 0) {
-        continue;
+        continue
       }
 
       const processed = await state.memoryService.processAndStoreMemories(doc.content, {
         containerTag,
         sourceId: documentId,
-      });
+      })
 
       for (const memory of processed.memories) {
-        await state.searchService.indexMemory(memory);
+        await state.searchService.indexMemory(memory)
       }
     } catch (error) {
-      hadFailures = true;
-      logger.error(
-        'Failed to migrate legacy MCP document',
-        { documentId },
-        error instanceof Error ? error : undefined
-      );
+      hadFailures = true
+      logger.error('Failed to migrate legacy MCP document', { documentId }, error instanceof Error ? error : undefined)
     }
   }
 
   if (hadFailures) {
     logger.warn('Legacy MCP migration encountered failures, leaving file for retry', {
       legacyPath,
-    });
-    return;
+    })
+    return
   }
 
   try {
-    const migratedPath = fs.existsSync(`${legacyPath}.migrated`)
-      ? `${legacyPath}.migrated.${Date.now()}`
-      : `${legacyPath}.migrated`;
-    fs.renameSync(legacyPath, migratedPath);
-    logger.info('Legacy MCP state migrated and archived', { legacyPath, migratedPath });
+    const migratedPath = await archiveFileWithSuffix(legacyPath)
+    logger.info('Legacy MCP state migrated and archived', { legacyPath, migratedPath })
   } catch (error) {
     logger.error(
       'Failed to archive legacy MCP state after migration',
       { legacyPath },
       error instanceof Error ? error : undefined
-    );
+    )
   }
 }
 
@@ -304,7 +290,7 @@ function createServerState(): ServerState {
     searchService: createSearchService(),
     profileService: new ProfileService(),
     embeddingService: new EmbeddingService(),
-  };
+  }
 }
 
 // ============================================================================
@@ -312,14 +298,14 @@ function createServerState(): ServerState {
 // ============================================================================
 
 async function handleAddContent(state: ServerState, args: unknown): Promise<AddContentResult> {
-  const input = AddContentInputSchema.parse(args);
+  const input = AddContentInputSchema.parse(args)
 
-  const documentId = generateId();
-  const containerTag = input.containerTag ?? 'default';
+  const documentId = generateId()
+  const containerTag = input.containerTag ?? 'default'
   const metadata = buildDocumentMetadata(input.metadata, {
     ...(input.title ? { title: input.title } : {}),
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
-  });
+  })
 
   await state.db.insert(documents).values({
     id: documentId,
@@ -330,70 +316,67 @@ async function handleAddContent(state: ServerState, args: unknown): Promise<AddC
     metadata,
     createdAt: new Date(),
     updatedAt: new Date(),
-  });
+  })
 
-  let memoriesExtracted = 0;
-  const errors: string[] = [];
-  let processedMemories: Awaited<ReturnType<MemoryService['processAndStoreMemories']>>['memories'] =
-    [];
+  let memoriesExtracted = 0
+  const errors: string[] = []
+  let processedMemories: Awaited<ReturnType<MemoryService['processAndStoreMemories']>>['memories'] = []
 
   // Extract memories with error handling
   try {
     const processed = await state.memoryService.processAndStoreMemories(input.content, {
       containerTag,
       sourceId: documentId,
-    });
-    processedMemories = processed.memories;
+    })
+    processedMemories = processed.memories
   } catch (extractionError) {
-    const message =
-      extractionError instanceof Error ? extractionError.message : 'Unknown extraction error';
-    errors.push(`Memory extraction failed: ${message}`);
+    const message = extractionError instanceof Error ? extractionError.message : 'Unknown extraction error'
+    errors.push(`Memory extraction failed: ${message}`)
   }
 
   // Index memories for search with individual error handling
   for (const memory of processedMemories) {
     try {
-      await state.searchService.indexMemory(memory);
-      memoriesExtracted++;
+      await state.searchService.indexMemory(memory)
+      memoriesExtracted++
     } catch (indexError) {
-      const message = indexError instanceof Error ? indexError.message : 'Unknown indexing error';
-      errors.push(`Failed to index memory ${memory.id}: ${message}`);
+      const message = indexError instanceof Error ? indexError.message : 'Unknown indexing error'
+      errors.push(`Failed to index memory ${memory.id}: ${message}`)
     }
   }
 
   // Extract profile facts if containerTag provided
   if (input.containerTag) {
     try {
-      await state.profileService.ingestContent(input.containerTag, input.content, documentId);
+      await state.profileService.ingestContent(input.containerTag, input.content, documentId)
     } catch (profileError) {
-      const message =
-        profileError instanceof Error ? profileError.message : 'Unknown profile error';
-      errors.push(`Profile ingestion failed: ${message}`);
+      const message = profileError instanceof Error ? profileError.message : 'Unknown profile error'
+      errors.push(`Profile ingestion failed: ${message}`)
     }
   }
 
-  const hasErrors = errors.length > 0;
+  const hasErrors = errors.length > 0
   const statusMessage = hasErrors
     ? `Added content with ${memoriesExtracted} memories (${errors.length} errors)`
-    : `Added content with ${memoriesExtracted} extracted memories`;
+    : `Added content with ${memoriesExtracted} extracted memories`
 
   return {
     success: true,
     documentId,
     memoriesExtracted,
     message: statusMessage,
-  };
+  }
 }
 
 async function handleSearch(state: ServerState, args: unknown): Promise<SearchResult> {
-  const input = SearchInputSchema.parse(args);
+  const input = SearchInputSchema.parse(args)
 
   const response = await state.searchService.hybridSearch(input.query, input.containerTag, {
     limit: input.limit,
     threshold: input.threshold,
     searchMode: input.mode,
     rerank: input.rerank,
-  });
+  })
 
   return {
     results: response.results.map((r) => ({
@@ -407,15 +390,15 @@ async function handleSearch(state: ServerState, args: unknown): Promise<SearchRe
     totalCount: response.totalCount,
     query: response.query,
     searchTimeMs: response.searchTimeMs,
-  };
+  }
 }
 
 async function handleProfile(state: ServerState, args: unknown): Promise<ProfileResult> {
-  const input = ProfileInputSchema.parse(args);
+  const input = ProfileInputSchema.parse(args)
 
   switch (input.action) {
     case 'get': {
-      const profile = await state.profileService.getProfile(input.containerTag);
+      const profile = await state.profileService.getProfile(input.containerTag)
       return {
         containerTag: profile.containerTag,
         staticFacts: profile.staticFacts.map((f) => ({
@@ -431,17 +414,17 @@ async function handleProfile(state: ServerState, args: unknown): Promise<Profile
           expiresAt: f.expiresAt?.toISOString(),
         })),
         lastUpdated: profile.updatedAt.toISOString(),
-      };
+      }
     }
 
     case 'ingest': {
       if (!input.content) {
         throw new ValidationError('Content required for ingest action', {
           content: ['Content field is required for ingest action'],
-        });
+        })
       }
-      await state.profileService.ingestContent(input.containerTag, input.content);
-      const profile = await state.profileService.getProfile(input.containerTag);
+      await state.profileService.ingestContent(input.containerTag, input.content)
+      const profile = await state.profileService.getProfile(input.containerTag)
       return {
         containerTag: profile.containerTag,
         staticFacts: profile.staticFacts.map((f) => ({
@@ -457,14 +440,14 @@ async function handleProfile(state: ServerState, args: unknown): Promise<Profile
           expiresAt: f.expiresAt?.toISOString(),
         })),
         lastUpdated: profile.updatedAt.toISOString(),
-      };
+      }
     }
 
     case 'update': {
       if (!input.facts || input.facts.length === 0) {
         throw new ValidationError('Facts required for update action', {
           facts: ['At least one fact is required for update action'],
-        });
+        })
       }
       // Valid fact categories
       const validCategories = [
@@ -477,15 +460,13 @@ async function handleProfile(state: ServerState, args: unknown): Promise<Profile
         'goal',
         'context',
         'other',
-      ] as const;
-      type FactCategory = (typeof validCategories)[number];
+      ] as const
+      type FactCategory = (typeof validCategories)[number]
 
       // Convert input facts to ProfileFact format with validation
       const facts = input.facts.map((f) => {
         const category: FactCategory | undefined =
-          f.category && validCategories.includes(f.category as FactCategory)
-            ? (f.category as FactCategory)
-            : undefined;
+          f.category && validCategories.includes(f.category as FactCategory) ? (f.category as FactCategory) : undefined
 
         return {
           id: generateId(),
@@ -496,9 +477,9 @@ async function handleProfile(state: ServerState, args: unknown): Promise<Profile
           extractedAt: new Date(),
           lastAccessedAt: new Date(),
           reinforcementCount: 0,
-        };
-      });
-      const profile = await state.profileService.updateProfile(input.containerTag, facts);
+        }
+      })
+      const profile = await state.profileService.updateProfile(input.containerTag, facts)
       return {
         containerTag: profile.containerTag,
         staticFacts: profile.staticFacts.map((f) => ({
@@ -514,46 +495,46 @@ async function handleProfile(state: ServerState, args: unknown): Promise<Profile
           expiresAt: f.expiresAt?.toISOString(),
         })),
         lastUpdated: profile.updatedAt.toISOString(),
-      };
+      }
     }
 
     default:
       throw new ValidationError(`Unknown action: ${input.action}`, {
         action: [`Invalid action '${input.action}'. Valid actions: get, ingest, update`],
-      });
+      })
   }
 }
 
 async function handleListDocuments(state: ServerState, args: unknown): Promise<ListResult> {
-  const input = ListDocumentsInputSchema.parse(args);
+  const input = ListDocumentsInputSchema.parse(args)
 
-  const filters = [] as Array<ReturnType<typeof and>>;
+  const filters = [] as Array<ReturnType<typeof and>>
 
   if (input.containerTag) {
-    filters.push(eq(documents.containerTag, input.containerTag));
+    filters.push(eq(documents.containerTag, input.containerTag))
   }
 
   if (input.contentType) {
-    filters.push(inArray(documents.contentType, mapMcpContentTypeToDb(input.contentType)));
+    filters.push(inArray(documents.contentType, mapMcpContentTypeToDb(input.contentType)))
   }
 
-  const whereClause = filters.length > 0 ? and(...filters) : undefined;
+  const whereClause = filters.length > 0 ? and(...filters) : undefined
   const [countRow] = await state.db
     .select({ count: sql<number>`count(*)` })
     .from(documents)
-    .where(whereClause);
-  const total = Number(countRow?.count ?? 0);
+    .where(whereClause)
+  const total = Number(countRow?.count ?? 0)
 
   const orderExpression =
     input.sortBy === 'title'
       ? sql`${documents.metadata} ->> 'title'`
       : input.sortBy === 'updatedAt'
         ? documents.updatedAt
-        : documents.createdAt;
-  const orderBy = input.sortOrder === 'asc' ? asc(orderExpression) : desc(orderExpression);
+        : documents.createdAt
+  const orderBy = input.sortOrder === 'asc' ? asc(orderExpression) : desc(orderExpression)
 
-  const limit = input.limit ?? 20;
-  const offset = input.offset ?? 0;
+  const limit = input.limit ?? 20
+  const offset = input.offset ?? 0
 
   const rows = await state.db
     .select({
@@ -569,13 +550,13 @@ async function handleListDocuments(state: ServerState, args: unknown): Promise<L
     .where(whereClause)
     .orderBy(orderBy)
     .limit(limit)
-    .offset(offset);
+    .offset(offset)
 
   return {
     documents: rows.map((doc) => {
-      const metadata = isRecord(doc.metadata) ? doc.metadata : {};
-      const createdAt = doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt);
-      const updatedAt = doc.updatedAt instanceof Date ? doc.updatedAt : new Date(doc.updatedAt);
+      const metadata = isRecord(doc.metadata) ? doc.metadata : {}
+      const createdAt = doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt)
+      const updatedAt = doc.updatedAt instanceof Date ? doc.updatedAt : new Date(doc.updatedAt)
 
       return {
         id: doc.id,
@@ -585,24 +566,24 @@ async function handleListDocuments(state: ServerState, args: unknown): Promise<L
         containerTag: doc.containerTag,
         createdAt: createdAt.toISOString(),
         updatedAt: updatedAt.toISOString(),
-      };
+      }
     }),
     total,
     limit,
     offset,
     hasMore: offset + limit < total,
-  };
+  }
 }
 
 async function handleDelete(state: ServerState, args: unknown): Promise<DeleteResult> {
-  const input = DeleteContentInputSchema.parse(args);
+  const input = DeleteContentInputSchema.parse(args)
 
   if (!input.confirm) {
     return {
       success: false,
       deletedCount: 0,
       message: 'Deletion not confirmed. Set confirm: true to proceed.',
-    };
+    }
   }
 
   if (!input.id && !input.containerTag) {
@@ -610,39 +591,35 @@ async function handleDelete(state: ServerState, args: unknown): Promise<DeleteRe
       success: false,
       deletedCount: 0,
       message: 'Either id or containerTag must be provided',
-    };
+    }
   }
 
-  let deletedCount = 0;
+  let deletedCount = 0
 
   if (input.id) {
-    const deleted = await state.db
-      .delete(documents)
-      .where(eq(documents.id, input.id))
-      .returning({ id: documents.id });
-    deletedCount = deleted.length;
+    const deleted = await state.db.delete(documents).where(eq(documents.id, input.id)).returning({ id: documents.id })
+    deletedCount = deleted.length
   } else if (input.containerTag) {
     const deleted = await state.db
       .delete(documents)
       .where(eq(documents.containerTag, input.containerTag))
-      .returning({ id: documents.id });
-    deletedCount = deleted.length;
+      .returning({ id: documents.id })
+    deletedCount = deleted.length
   }
 
   return {
     success: deletedCount > 0,
     deletedCount,
-    message:
-      deletedCount > 0 ? `Deleted ${deletedCount} document(s)` : 'No documents found to delete',
-  };
+    message: deletedCount > 0 ? `Deleted ${deletedCount} document(s)` : 'No documents found to delete',
+  }
 }
 
 async function handleRemember(state: ServerState, args: unknown): Promise<RememberResult> {
-  const input = RememberInputSchema.parse(args);
-  const containerTag = input.containerTag ?? 'default';
+  const input = RememberInputSchema.parse(args)
+  const containerTag = input.containerTag ?? 'default'
 
-  const factId = generateId();
-  const now = new Date();
+  const factId = generateId()
+  const now = new Date()
 
   const fact = {
     id: factId,
@@ -657,63 +634,61 @@ async function handleRemember(state: ServerState, args: unknown): Promise<Rememb
       input.type === 'dynamic' && input.expirationHours
         ? new Date(now.getTime() + input.expirationHours * 60 * 60 * 1000)
         : undefined,
-  };
+  }
 
-  await state.profileService.updateProfile(containerTag, [
-    fact as import('../services/profile.types.js').ProfileFact,
-  ]);
+  await state.profileService.updateProfile(containerTag, [fact as import('../services/profile.types.js').ProfileFact])
 
   return {
     success: true,
     factId,
     message: `Remembered: "${input.fact.substring(0, 50)}${input.fact.length > 50 ? '...' : ''}"`,
-  };
+  }
 }
 
 async function handleRecall(state: ServerState, args: unknown): Promise<RecallResult> {
-  const input = RecallInputSchema.parse(args);
-  const containerTag = input.containerTag ?? 'default';
+  const input = RecallInputSchema.parse(args)
+  const containerTag = input.containerTag ?? 'default'
 
-  const profile = await state.profileService.getProfile(containerTag);
-  const queryLower = input.query.toLowerCase();
+  const profile = await state.profileService.getProfile(containerTag)
+  const queryLower = input.query.toLowerCase()
 
   // Hybrid search: combine semantic similarity with keyword matching
   interface ScoredFact {
-    id: string;
-    content: string;
-    type: 'static' | 'dynamic';
-    category?: string;
-    confidence: number;
-    createdAt: string;
-    similarity: number;
+    id: string
+    content: string
+    type: 'static' | 'dynamic'
+    category?: string
+    confidence: number
+    createdAt: string
+    similarity: number
   }
 
-  const scoredFacts: ScoredFact[] = [];
+  const scoredFacts: ScoredFact[] = []
 
   // Generate query embedding for semantic search
-  let queryEmbedding: number[] | undefined;
+  let queryEmbedding: number[] | undefined
   try {
-    queryEmbedding = await state.embeddingService.generateEmbedding(input.query);
+    queryEmbedding = await state.embeddingService.generateEmbedding(input.query)
   } catch (error) {
     // Fall back to keyword-only matching if embedding fails
     logger.warn(
       'Failed to generate query embedding for recall, falling back to keyword search',
       { query: input.query },
       error instanceof Error ? error : undefined
-    );
+    )
   }
 
   // Helper to calculate similarity score
   const calculateScore = async (factContent: string): Promise<number> => {
     // Keyword score: 0.5 for substring match
-    const keywordScore = factContent.toLowerCase().includes(queryLower) ? 0.5 : 0;
+    const keywordScore = factContent.toLowerCase().includes(queryLower) ? 0.5 : 0
 
     // Semantic score using embeddings
-    let semanticScore = 0;
+    let semanticScore = 0
     if (queryEmbedding) {
       try {
-        const factEmbedding = await state.embeddingService.generateEmbedding(factContent);
-        semanticScore = cosineSimilarity(queryEmbedding, factEmbedding);
+        const factEmbedding = await state.embeddingService.generateEmbedding(factContent)
+        semanticScore = cosineSimilarity(queryEmbedding, factEmbedding)
       } catch {
         // Ignore embedding errors for individual facts
       }
@@ -721,15 +696,15 @@ async function handleRecall(state: ServerState, args: unknown): Promise<RecallRe
 
     // Combine scores: weight semantic higher if available
     if (queryEmbedding) {
-      return semanticScore * 0.7 + keywordScore * 0.3;
+      return semanticScore * 0.7 + keywordScore * 0.3
     }
-    return keywordScore;
-  };
+    return keywordScore
+  }
 
   // Process static facts
   if (input.includeStatic !== false) {
     for (const fact of profile.staticFacts) {
-      const similarity = await calculateScore(fact.content);
+      const similarity = await calculateScore(fact.content)
       // Include if similarity > 0.2 (semantic) or has keyword match
       if (similarity > 0.2 || fact.content.toLowerCase().includes(queryLower)) {
         scoredFacts.push({
@@ -740,7 +715,7 @@ async function handleRecall(state: ServerState, args: unknown): Promise<RecallRe
           confidence: fact.confidence,
           createdAt: fact.extractedAt.toISOString(),
           similarity,
-        });
+        })
       }
     }
   }
@@ -748,7 +723,7 @@ async function handleRecall(state: ServerState, args: unknown): Promise<RecallRe
   // Process dynamic facts
   if (input.includeDynamic !== false) {
     for (const fact of profile.dynamicFacts) {
-      const similarity = await calculateScore(fact.content);
+      const similarity = await calculateScore(fact.content)
       if (similarity > 0.2 || fact.content.toLowerCase().includes(queryLower)) {
         scoredFacts.push({
           id: fact.id,
@@ -758,26 +733,26 @@ async function handleRecall(state: ServerState, args: unknown): Promise<RecallRe
           confidence: fact.confidence,
           createdAt: fact.extractedAt.toISOString(),
           similarity,
-        });
+        })
       }
     }
   }
 
   // Sort by similarity score (higher is better), then by confidence
   scoredFacts.sort((a, b) => {
-    const simDiff = b.similarity - a.similarity;
-    if (Math.abs(simDiff) > 0.01) return simDiff;
-    return b.confidence - a.confidence;
-  });
+    const simDiff = b.similarity - a.similarity
+    if (Math.abs(simDiff) > 0.01) return simDiff
+    return b.confidence - a.confidence
+  })
 
-  const limited = scoredFacts.slice(0, input.limit ?? 10);
+  const limited = scoredFacts.slice(0, input.limit ?? 10)
 
   // Return results without the internal similarity score
   return {
     facts: limited.map(({ similarity: _similarity, ...rest }) => rest),
     query: input.query,
     totalFound: scoredFacts.length,
-  };
+  }
 }
 
 // ============================================================================
@@ -785,15 +760,15 @@ async function handleRecall(state: ServerState, args: unknown): Promise<RecallRe
 // ============================================================================
 
 async function handleReadResource(state: ServerState, uri: string): Promise<string> {
-  const parsed = parseResourceUri(uri);
+  const parsed = parseResourceUri(uri)
 
   switch (parsed.type) {
     case 'profile': {
-      const containerTag = parsed.params.containerTag;
+      const containerTag = parsed.params.containerTag
       if (!containerTag) {
-        throw new McpError(ErrorCode.InvalidParams, 'Container tag required');
+        throw new McpError(ErrorCode.InvalidParams, 'Container tag required')
       }
-      const profile = await state.profileService.getProfile(containerTag);
+      const profile = await state.profileService.getProfile(containerTag)
       const resource: ProfileResource = {
         uri,
         containerTag: profile.containerTag,
@@ -814,14 +789,14 @@ async function handleReadResource(state: ServerState, uri: string): Promise<stri
         createdAt: profile.createdAt.toISOString(),
         updatedAt: profile.updatedAt.toISOString(),
         version: profile.version,
-      };
-      return JSON.stringify(resource, null, 2);
+      }
+      return JSON.stringify(resource, null, 2)
     }
 
     case 'document': {
-      const id = parsed.params.id;
+      const id = parsed.params.id
       if (!id) {
-        throw new McpError(ErrorCode.InvalidParams, 'Document ID required');
+        throw new McpError(ErrorCode.InvalidParams, 'Document ID required')
       }
       const [doc] = await state.db
         .select({
@@ -835,14 +810,14 @@ async function handleReadResource(state: ServerState, uri: string): Promise<stri
         })
         .from(documents)
         .where(eq(documents.id, id))
-        .limit(1);
+        .limit(1)
 
       if (!doc) {
-        throw new McpError(ErrorCode.InvalidRequest, `Document not found: ${id}`);
+        throw new McpError(ErrorCode.InvalidRequest, `Document not found: ${id}`)
       }
-      const metadata = isRecord(doc.metadata) ? doc.metadata : {};
-      const createdAt = doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt);
-      const updatedAt = doc.updatedAt instanceof Date ? doc.updatedAt : new Date(doc.updatedAt);
+      const metadata = isRecord(doc.metadata) ? doc.metadata : {}
+      const createdAt = doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt)
+      const updatedAt = doc.updatedAt instanceof Date ? doc.updatedAt : new Date(doc.updatedAt)
       const resource: DocumentResource = {
         uri,
         id: doc.id,
@@ -854,24 +829,24 @@ async function handleReadResource(state: ServerState, uri: string): Promise<stri
         metadata,
         createdAt: createdAt.toISOString(),
         updatedAt: updatedAt.toISOString(),
-      };
-      return JSON.stringify(resource, null, 2);
+      }
+      return JSON.stringify(resource, null, 2)
     }
 
     case 'search': {
-      const query = parsed.params.q ?? parsed.params.query ?? '';
-      const containerTag = parsed.params.container ?? parsed.params.containerTag;
-      const limit = parseInt(parsed.params.limit ?? '10', 10);
-      const mode = (parsed.params.mode ?? 'hybrid') as 'vector' | 'memory' | 'hybrid';
+      const query = parsed.params.q ?? parsed.params.query ?? ''
+      const containerTag = parsed.params.container ?? parsed.params.containerTag
+      const limit = parseInt(parsed.params.limit ?? '10', 10)
+      const mode = (parsed.params.mode ?? 'hybrid') as 'vector' | 'memory' | 'hybrid'
 
       if (!query) {
-        throw new McpError(ErrorCode.InvalidParams, 'Query parameter (q) required');
+        throw new McpError(ErrorCode.InvalidParams, 'Query parameter (q) required')
       }
 
       const response = await state.searchService.hybridSearch(query, containerTag, {
         limit,
         searchMode: mode,
-      });
+      })
 
       const resource: SearchResource = {
         uri,
@@ -885,20 +860,20 @@ async function handleReadResource(state: ServerState, uri: string): Promise<stri
         })),
         totalCount: response.totalCount,
         searchTimeMs: response.searchTimeMs,
-      };
-      return JSON.stringify(resource, null, 2);
+      }
+      return JSON.stringify(resource, null, 2)
     }
 
     case 'facts': {
-      const containerTag = parsed.params.containerTag;
+      const containerTag = parsed.params.containerTag
       if (!containerTag) {
-        throw new McpError(ErrorCode.InvalidParams, 'Container tag required');
+        throw new McpError(ErrorCode.InvalidParams, 'Container tag required')
       }
-      const profile = await state.profileService.getProfile(containerTag);
+      const profile = await state.profileService.getProfile(containerTag)
       const allFacts = [
         ...profile.staticFacts.map((f) => ({ ...f, type: 'static' as const })),
         ...profile.dynamicFacts.map((f) => ({ ...f, type: 'dynamic' as const })),
-      ];
+      ]
       const resource: FactsResource = {
         uri,
         containerTag,
@@ -912,26 +887,26 @@ async function handleReadResource(state: ServerState, uri: string): Promise<stri
           expiresAt: 'expiresAt' in f ? f.expiresAt?.toISOString() : undefined,
         })),
         totalCount: allFacts.length,
-      };
-      return JSON.stringify(resource, null, 2);
+      }
+      return JSON.stringify(resource, null, 2)
     }
 
     case 'stats': {
-      const stats = await state.searchService.getStats();
-      const [countRow] = await state.db.select({ count: sql<number>`count(*)` }).from(documents);
-      const totalDocuments = Number(countRow?.count ?? 0);
+      const stats = await state.searchService.getStats()
+      const [countRow] = await state.db.select({ count: sql<number>`count(*)` }).from(documents)
+      const totalDocuments = Number(countRow?.count ?? 0)
       const tagRows = await state.db
         .select({ containerTag: documents.containerTag })
         .from(documents)
-        .groupBy(documents.containerTag);
-      const containerTags = tagRows.map((row) => row.containerTag);
+        .groupBy(documents.containerTag)
+      const containerTags = tagRows.map((row) => row.containerTag)
 
       // Aggregate facts across all container tags
-      let totalFacts = 0;
+      let totalFacts = 0
       for (const tag of containerTags) {
         try {
-          const profile = await state.profileService.getProfile(tag);
-          totalFacts += profile.staticFacts.length + profile.dynamicFacts.length;
+          const profile = await state.profileService.getProfile(tag)
+          totalFacts += profile.staticFacts.length + profile.dynamicFacts.length
         } catch {
           // Profile may not exist for this tag yet
         }
@@ -945,12 +920,12 @@ async function handleReadResource(state: ServerState, uri: string): Promise<stri
         containerTags,
         indexedVectors: stats.vectorCount,
         lastUpdated: new Date().toISOString(),
-      };
-      return JSON.stringify(resource, null, 2);
+      }
+      return JSON.stringify(resource, null, 2)
     }
 
     default:
-      throw new McpError(ErrorCode.InvalidRequest, `Unknown resource type: ${uri}`);
+      throw new McpError(ErrorCode.InvalidRequest, `Unknown resource type: ${uri}`)
   }
 }
 
@@ -964,12 +939,12 @@ async function handleReadResource(state: ServerState, uri: string): Promise<stri
  */
 function extractContainerTag(args: unknown): string {
   if (args && typeof args === 'object' && args !== null) {
-    const argsObj = args as Record<string, unknown>;
+    const argsObj = args as Record<string, unknown>
     if (typeof argsObj.containerTag === 'string' && argsObj.containerTag) {
-      return argsObj.containerTag;
+      return argsObj.containerTag
     }
   }
-  return 'default';
+  return 'default'
 }
 
 // ============================================================================
@@ -977,10 +952,10 @@ function extractContainerTag(args: unknown): string {
 // ============================================================================
 
 async function main() {
-  await initializeAndValidate();
+  await initializeAndValidate()
 
-  const state = createServerState();
-  await migrateLegacyMcpState(state);
+  const state = createServerState()
+  await migrateLegacyMcpState(state)
 
   const server = new Server(
     {
@@ -993,25 +968,25 @@ async function main() {
         resources: {},
       },
     }
-  );
+  )
 
   // Register tool handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: TOOL_DEFINITIONS,
-    };
-  });
+    }
+  })
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+    const { name, arguments: args } = request.params
 
     // Extract containerTag from arguments for rate limiting
     // Different tools use containerTag in different argument positions
-    const containerTag = extractContainerTag(args);
+    const containerTag = extractContainerTag(args)
 
     // Check rate limit before processing
-    const rateLimiter = getMCPRateLimiter();
-    const rateLimitResult = await rateLimiter.checkLimit(containerTag, name);
+    const rateLimiter = getMCPRateLimiter()
+    const rateLimitResult = await rateLimiter.checkLimit(containerTag, name)
 
     if (!rateLimitResult.allowed) {
       logger.warn('Rate limit exceeded', {
@@ -1019,37 +994,37 @@ async function main() {
         containerTag,
         limitType: rateLimitResult.limitType,
         resetIn: rateLimitResult.resetIn,
-      });
-      return createRateLimitErrorResponse(rateLimitResult, name);
+      })
+      return createRateLimitErrorResponse(rateLimitResult, name)
     }
 
     try {
-      let result: unknown;
+      let result: unknown
 
       switch (name) {
         case 'supermemory_add':
-          result = await handleAddContent(state, args);
-          break;
+          result = await handleAddContent(state, args)
+          break
         case 'supermemory_search':
-          result = await handleSearch(state, args);
-          break;
+          result = await handleSearch(state, args)
+          break
         case 'supermemory_profile':
-          result = await handleProfile(state, args);
-          break;
+          result = await handleProfile(state, args)
+          break
         case 'supermemory_list':
-          result = await handleListDocuments(state, args);
-          break;
+          result = await handleListDocuments(state, args)
+          break
         case 'supermemory_delete':
-          result = await handleDelete(state, args);
-          break;
+          result = await handleDelete(state, args)
+          break
         case 'supermemory_remember':
-          result = await handleRemember(state, args);
-          break;
+          result = await handleRemember(state, args)
+          break
         case 'supermemory_recall':
-          result = await handleRecall(state, args);
-          break;
+          result = await handleRecall(state, args)
+          break
         default:
-          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`)
       }
 
       return {
@@ -1059,15 +1034,15 @@ async function main() {
             text: JSON.stringify(result, null, 2),
           },
         ],
-      };
+      }
     } catch (error) {
       if (error instanceof McpError) {
-        throw error;
+        throw error
       }
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new McpError(ErrorCode.InternalError, message);
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      throw new McpError(ErrorCode.InternalError, message)
     }
-  });
+  })
 
   // Register resource handlers
   server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
@@ -1078,16 +1053,14 @@ async function main() {
         description: t.description,
         mimeType: t.mimeType,
       })),
-    };
-  });
+    }
+  })
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
-    const rows = await state.db
-      .select({ id: documents.id, containerTag: documents.containerTag })
-      .from(documents);
-    const documentIds = rows.map((row) => row.id);
-    const containerTags = Array.from(new Set(rows.map((row) => row.containerTag)));
-    const resources = generateResourceList(containerTags, documentIds);
+    const rows = await state.db.select({ id: documents.id, containerTag: documents.containerTag }).from(documents)
+    const documentIds = rows.map((row) => row.id)
+    const containerTags = Array.from(new Set(rows.map((row) => row.containerTag)))
+    const resources = generateResourceList(containerTags, documentIds)
 
     return {
       resources: resources.map((r) => ({
@@ -1096,14 +1069,14 @@ async function main() {
         description: r.description,
         mimeType: r.mimeType,
       })),
-    };
-  });
+    }
+  })
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const { uri } = request.params;
+    const { uri } = request.params
 
     try {
-      const content = await handleReadResource(state, uri);
+      const content = await handleReadResource(state, uri)
       return {
         contents: [
           {
@@ -1112,43 +1085,43 @@ async function main() {
             text: content,
           },
         ],
-      };
+      }
     } catch (error) {
       if (error instanceof McpError) {
-        throw error;
+        throw error
       }
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new McpError(ErrorCode.InternalError, message);
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      throw new McpError(ErrorCode.InternalError, message)
     }
-  });
+  })
 
   // Error handling
   server.onerror = (error) => {
-    logger.error('MCP server error', {}, error instanceof Error ? error : undefined);
-  };
+    logger.error('MCP server error', {}, error instanceof Error ? error : undefined)
+  }
 
   // Graceful shutdown
   process.on('SIGINT', async () => {
-    logger.info('Shutting down (SIGINT)');
-    await server.close();
-    process.exit(0);
-  });
+    logger.info('Shutting down (SIGINT)')
+    await server.close()
+    process.exit(0)
+  })
 
   process.on('SIGTERM', async () => {
-    logger.info('Shutting down (SIGTERM)');
-    await server.close();
-    process.exit(0);
-  });
+    logger.info('Shutting down (SIGTERM)')
+    await server.close()
+    process.exit(0)
+  })
 
   // Start server
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
 
-  logger.info('Supermemory MCP server started on stdio');
+  logger.info('Supermemory MCP server started on stdio')
 }
 
 // Run main
 main().catch((error) => {
-  logger.error('Fatal error', {}, error instanceof Error ? error : undefined);
-  process.exit(1);
-});
+  logger.error('Fatal error', {}, error instanceof Error ? error : undefined)
+  process.exit(1)
+})

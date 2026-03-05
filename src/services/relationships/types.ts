@@ -5,8 +5,8 @@
  * Supports vector similarity, temporal analysis, entity overlap, and LLM verification.
  */
 
-import type { RelationshipType } from '../../types/index.js';
-import type { Memory, Relationship } from '../memory.types.js';
+import type { RelationshipType } from '../../types/index.js'
+import type { Memory, Relationship } from '../memory.types.js'
 
 // ============================================================================
 // Configuration Types
@@ -17,17 +17,17 @@ import type { Memory, Relationship } from '../memory.types.js';
  */
 export interface RelationshipThresholds {
   /** Threshold for 'updates' relationship (high similarity, same topic) */
-  updates: number;
+  updates: number
   /** Threshold for 'extends' relationship (moderate similarity) */
-  extends: number;
+  extends: number
   /** Threshold for 'contradicts' relationship (high similarity but opposing) */
-  contradicts: number;
+  contradicts: number
   /** Threshold for 'supersedes' relationship (very high similarity) */
-  supersedes: number;
+  supersedes: number
   /** Threshold for 'related' relationship (lower similarity) */
-  related: number;
+  related: number
   /** Threshold for 'derives' relationship (moderate, causal) */
-  derives: number;
+  derives: number
 }
 
 /**
@@ -40,41 +40,41 @@ export const DEFAULT_RELATIONSHIP_THRESHOLDS: RelationshipThresholds = {
   supersedes: 0.9,
   related: 0.6,
   derives: 0.65,
-};
+}
 
 /**
  * Configuration for the relationship detector
  */
 export interface RelationshipConfig {
   /** Similarity thresholds per relationship type */
-  thresholds: RelationshipThresholds;
+  thresholds: RelationshipThresholds
 
   /** Maximum candidates to retrieve for comparison */
-  maxCandidates: number;
+  maxCandidates: number
 
   /** Whether to use LLM for verification of high-confidence relationships */
-  enableLLMVerification: boolean;
+  enableLLMVerification: boolean
 
   /** Minimum confidence to trigger LLM verification */
-  llmVerificationThreshold: number;
+  llmVerificationThreshold: number
 
   /** Temporal weight for recency bias (0-1) */
-  temporalWeight: number;
+  temporalWeight: number
 
   /** Entity overlap weight for scoring (0-1) */
-  entityOverlapWeight: number;
+  entityOverlapWeight: number
 
   /** Whether to enable contradiction detection */
-  enableContradictionDetection: boolean;
+  enableContradictionDetection: boolean
 
   /** Batch size for processing relationships */
-  batchSize: number;
+  batchSize: number
 
   /** Cache TTL for relationship scores (ms) */
-  cacheTTL: number;
+  cacheTTL: number
 
   /** Whether to detect causal/derivation relationships */
-  enableCausalDetection: boolean;
+  enableCausalDetection: boolean
 }
 
 /**
@@ -91,7 +91,7 @@ export const DEFAULT_RELATIONSHIP_CONFIG: RelationshipConfig = {
   batchSize: 10,
   cacheTTL: 5 * 60 * 1000, // 5 minutes
   enableCausalDetection: true,
-};
+}
 
 // ============================================================================
 // Detection Result Types
@@ -102,15 +102,15 @@ export const DEFAULT_RELATIONSHIP_CONFIG: RelationshipConfig = {
  */
 export interface RelationshipCandidate {
   /** The candidate memory */
-  memory: Memory;
+  memory: Memory
   /** Vector similarity score (0-1) */
-  vectorSimilarity: number;
+  vectorSimilarity: number
   /** Entity overlap score (0-1) */
-  entityOverlap: number;
+  entityOverlap: number
   /** Temporal proximity score (0-1, higher = more recent) */
-  temporalScore: number;
+  temporalScore: number
   /** Combined score */
-  combinedScore: number;
+  combinedScore: number
 }
 
 /**
@@ -118,21 +118,21 @@ export interface RelationshipCandidate {
  */
 export interface DetectedRelationship {
   /** The relationship object */
-  relationship: Relationship;
+  relationship: Relationship
   /** Combined score for the relationship (0-1) */
-  score: number;
+  score: number
   /** Vector similarity that triggered the detection */
-  vectorSimilarity: number;
+  vectorSimilarity: number
   /** Entity overlap score */
-  entityOverlap: number;
+  entityOverlap: number
   /** Temporal proximity score */
-  temporalScore: number;
+  temporalScore: number
   /** Whether LLM verification was applied */
-  llmVerified: boolean;
+  llmVerified: boolean
   /** LLM verification confidence (if applied) */
-  llmConfidence?: number;
+  llmConfidence?: number
   /** Strategy that detected this relationship */
-  detectionStrategy: DetectionStrategyType;
+  detectionStrategy: DetectionStrategyType
 }
 
 /**
@@ -140,15 +140,15 @@ export interface DetectedRelationship {
  */
 export interface RelationshipDetectionResult {
   /** The source memory analyzed */
-  sourceMemory: Memory;
+  sourceMemory: Memory
   /** All detected relationships */
-  relationships: DetectedRelationship[];
+  relationships: DetectedRelationship[]
   /** Memory IDs that should be marked as superseded */
-  supersededMemoryIds: string[];
+  supersededMemoryIds: string[]
   /** Detected contradictions (if enabled) */
-  contradictions: Contradiction[];
+  contradictions: Contradiction[]
   /** Processing statistics */
-  stats: RelationshipDetectionStats;
+  stats: RelationshipDetectionStats
 }
 
 /**
@@ -156,17 +156,17 @@ export interface RelationshipDetectionResult {
  */
 export interface RelationshipDetectionStats {
   /** Total candidates evaluated */
-  candidatesEvaluated: number;
+  candidatesEvaluated: number
   /** Total relationships detected */
-  relationshipsDetected: number;
+  relationshipsDetected: number
   /** Breakdown by relationship type */
-  byType: Record<RelationshipType, number>;
+  byType: Record<RelationshipType, number>
   /** Number of LLM verifications performed */
-  llmVerifications: number;
+  llmVerifications: number
   /** Processing time in milliseconds */
-  processingTimeMs: number;
+  processingTimeMs: number
   /** Whether results were cached */
-  fromCache: boolean;
+  fromCache: boolean
 }
 
 // ============================================================================
@@ -178,31 +178,31 @@ export interface RelationshipDetectionStats {
  */
 export interface Contradiction {
   /** Unique identifier */
-  id: string;
+  id: string
   /** First memory ID */
-  memoryId1: string;
+  memoryId1: string
   /** Second memory ID */
-  memoryId2: string;
+  memoryId2: string
   /** Content of first memory */
-  content1: string;
+  content1: string
   /** Content of second memory */
-  content2: string;
+  content2: string
   /** Similarity score between the memories */
-  similarity: number;
+  similarity: number
   /** Confidence that these are contradictory (0-1) */
-  confidence: number;
+  confidence: number
   /** Type of contradiction */
-  type: ContradictionType;
+  type: ContradictionType
   /** Human-readable description of the contradiction */
-  description: string;
+  description: string
   /** Suggested resolution */
-  suggestedResolution?: ContradictionResolution;
+  suggestedResolution?: ContradictionResolution
   /** When the contradiction was detected */
-  detectedAt: Date;
+  detectedAt: Date
   /** Whether the contradiction has been resolved */
-  resolved: boolean;
+  resolved: boolean
   /** Resolution notes if resolved */
-  resolutionNotes?: string;
+  resolutionNotes?: string
 }
 
 /**
@@ -213,18 +213,18 @@ export type ContradictionType =
   | 'temporal' // Time-based contradiction (old vs new info)
   | 'preference' // Conflicting preferences
   | 'partial' // Partial overlap with conflicting details
-  | 'semantic'; // Semantically opposite meanings
+  | 'semantic' // Semantically opposite meanings
 
 /**
  * Suggested resolution for a contradiction
  */
 export interface ContradictionResolution {
   /** Recommended action */
-  action: 'keep_newer' | 'keep_older' | 'merge' | 'keep_both' | 'manual_review';
+  action: 'keep_newer' | 'keep_older' | 'merge' | 'keep_both' | 'manual_review'
   /** Reason for the recommendation */
-  reason: string;
+  reason: string
   /** Confidence in the recommendation (0-1) */
-  confidence: number;
+  confidence: number
 }
 
 // ============================================================================
@@ -240,7 +240,7 @@ export type DetectionStrategyType =
   | 'temporal' // Time-based relationship inference
   | 'entityOverlap' // Shared entity detection
   | 'llmVerification' // LLM-based classification
-  | 'hybrid'; // Combined approaches
+  | 'hybrid' // Combined approaches
 
 // ============================================================================
 // Vector Store Interface
@@ -251,11 +251,11 @@ export type DetectionStrategyType =
  */
 export interface VectorSearchResult {
   /** Memory ID */
-  memoryId: string;
+  memoryId: string
   /** Memory object */
-  memory: Memory;
+  memory: Memory
   /** Similarity score */
-  similarity: number;
+  similarity: number
 }
 
 /**
@@ -274,10 +274,10 @@ export interface VectorStore {
     limit: number,
     threshold: number,
     filters?: {
-      containerTag?: string;
-      excludeIds?: string[];
+      containerTag?: string
+      excludeIds?: string[]
     }
-  ): Promise<VectorSearchResult[]>;
+  ): Promise<VectorSearchResult[]>
 }
 
 // ============================================================================
@@ -289,13 +289,13 @@ export interface VectorStore {
  */
 export interface LLMVerificationRequest {
   /** The new memory content */
-  newContent: string;
+  newContent: string
   /** The existing memory content */
-  existingContent: string;
+  existingContent: string
   /** Detected relationship type */
-  proposedType: RelationshipType;
+  proposedType: RelationshipType
   /** Current confidence score */
-  currentConfidence: number;
+  currentConfidence: number
 }
 
 /**
@@ -303,18 +303,18 @@ export interface LLMVerificationRequest {
  */
 export interface LLMVerificationResponse {
   /** Verified relationship type (may differ from proposed) */
-  relationshipType: RelationshipType | null;
+  relationshipType: RelationshipType | null
   /** Confidence in the verification (0-1) */
-  confidence: number;
+  confidence: number
   /** Explanation of the decision */
-  explanation: string;
+  explanation: string
   /** Whether a contradiction was detected */
-  isContradiction: boolean;
+  isContradiction: boolean
   /** Contradiction details if detected */
   contradictionDetails?: {
-    type: ContradictionType;
-    description: string;
-  };
+    type: ContradictionType
+    description: string
+  }
 }
 
 /**
@@ -324,7 +324,7 @@ export interface LLMProvider {
   /**
    * Verify a proposed relationship using LLM
    */
-  verifyRelationship(request: LLMVerificationRequest): Promise<LLMVerificationResponse>;
+  verifyRelationship(request: LLMVerificationRequest): Promise<LLMVerificationResponse>
 
   /**
    * Check if two memories contradict each other
@@ -333,11 +333,11 @@ export interface LLMProvider {
     content1: string,
     content2: string
   ): Promise<{
-    isContradiction: boolean;
-    type?: ContradictionType;
-    confidence: number;
-    description: string;
-  }>;
+    isContradiction: boolean
+    type?: ContradictionType
+    confidence: number
+    description: string
+  }>
 }
 
 // ============================================================================
@@ -349,15 +349,15 @@ export interface LLMProvider {
  */
 export interface CachedRelationshipScore {
   /** Source memory ID */
-  sourceId: string;
+  sourceId: string
   /** Target memory ID */
-  targetId: string;
+  targetId: string
   /** Cached score */
-  score: number;
+  score: number
   /** Detected relationship type */
-  type: RelationshipType | null;
+  type: RelationshipType | null
   /** When the cache entry was created */
-  cachedAt: number;
+  cachedAt: number
 }
 
 /**
@@ -365,6 +365,6 @@ export interface CachedRelationshipScore {
  */
 export function generateCacheKey(sourceId: string, targetId: string): string {
   // Ensure consistent ordering for bidirectional relationships
-  const [first, second] = [sourceId, targetId].sort();
-  return `${first}:${second}`;
+  const [first, second] = [sourceId, targetId].sort()
+  return `${first}:${second}`
 }

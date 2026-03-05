@@ -1,16 +1,6 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  text,
-  integer,
-  jsonb,
-  timestamp,
-  index,
-  check,
-} from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { documents } from './documents.schema.js';
+import { pgTable, uuid, varchar, text, integer, jsonb, timestamp, index, check } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { documents } from './documents.schema.js'
 
 export const processingQueue = pgTable(
   'processing_queue',
@@ -63,7 +53,7 @@ export const processingQueue = pgTable(
     ),
     check('processing_queue_attempts_check', sql`${table.attempts} <= ${table.maxAttempts}`),
   ]
-);
+)
 
-export type ProcessingQueue = typeof processingQueue.$inferSelect;
-export type NewProcessingQueue = typeof processingQueue.$inferInsert;
+export type ProcessingQueue = typeof processingQueue.$inferSelect
+export type NewProcessingQueue = typeof processingQueue.$inferInsert

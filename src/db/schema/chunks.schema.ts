@@ -1,14 +1,6 @@
-import {
-  pgTable,
-  uuid,
-  text,
-  integer,
-  jsonb,
-  timestamp,
-  index,
-} from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { memories } from './memories.schema.js';
+import { pgTable, uuid, text, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { memories } from './memories.schema.js'
 
 export const chunks = pgTable(
   'chunks',
@@ -33,7 +25,7 @@ export const chunks = pgTable(
     index('idx_chunks_token_count').on(table.tokenCount),
     index('idx_chunks_metadata').using('gin', sql`${table.metadata} jsonb_path_ops`),
   ]
-);
+)
 
-export type Chunk = typeof chunks.$inferSelect;
-export type NewChunk = typeof chunks.$inferInsert;
+export type Chunk = typeof chunks.$inferSelect
+export type NewChunk = typeof chunks.$inferInsert

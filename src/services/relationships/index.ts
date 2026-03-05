@@ -56,13 +56,9 @@ export type {
 
   // Cache
   CachedRelationshipScore,
-} from './types.js';
+} from './types.js'
 
-export {
-  DEFAULT_RELATIONSHIP_CONFIG,
-  DEFAULT_RELATIONSHIP_THRESHOLDS,
-  generateCacheKey,
-} from './types.js';
+export { DEFAULT_RELATIONSHIP_CONFIG, DEFAULT_RELATIONSHIP_THRESHOLDS, generateCacheKey } from './types.js'
 
 // ============================================================================
 // Helper Functions
@@ -75,7 +71,7 @@ export {
   hasContradictionIndicators,
   hasSupersessionIndicators,
   hasCausalIndicators,
-} from './strategies.js';
+} from './strategies.js'
 
 // ============================================================================
 // Detector
@@ -85,36 +81,31 @@ export {
   EmbeddingRelationshipDetector,
   InMemoryVectorStoreAdapter,
   createEmbeddingRelationshipDetector,
-} from './detector.js';
+} from './detector.js'
 
 // ============================================================================
 // Factory Functions
 // ============================================================================
 
-import type { EmbeddingService } from '../embedding.service.js';
-import type { Memory } from '../memory.types.js';
-import { EmbeddingRelationshipDetector, InMemoryVectorStoreAdapter } from './detector.js';
-import type {
-  RelationshipConfig,
-  VectorStore,
-  LLMProvider,
-  RelationshipDetectionResult,
-} from './types.js';
+import type { EmbeddingService } from '../embedding.service.js'
+import type { Memory } from '../memory.types.js'
+import { EmbeddingRelationshipDetector, InMemoryVectorStoreAdapter } from './detector.js'
+import type { RelationshipConfig, VectorStore, LLMProvider, RelationshipDetectionResult } from './types.js'
 
 /**
  * Singleton instance (lazy initialization)
  */
-let _detectorInstance: EmbeddingRelationshipDetector | null = null;
-let _vectorStoreInstance: InMemoryVectorStoreAdapter | null = null;
+let _detectorInstance: EmbeddingRelationshipDetector | null = null
+let _vectorStoreInstance: InMemoryVectorStoreAdapter | null = null
 
 /**
  * Get or create the shared vector store instance
  */
 export function getSharedVectorStore(): InMemoryVectorStoreAdapter {
   if (!_vectorStoreInstance) {
-    _vectorStoreInstance = new InMemoryVectorStoreAdapter();
+    _vectorStoreInstance = new InMemoryVectorStoreAdapter()
   }
-  return _vectorStoreInstance;
+  return _vectorStoreInstance
 }
 
 /**
@@ -129,25 +120,19 @@ export function getRelationshipDetector(
 ): EmbeddingRelationshipDetector {
   if (!_detectorInstance) {
     if (!embeddingService) {
-      throw new Error(
-        'EmbeddingService is required for first initialization of RelationshipDetector'
-      );
+      throw new Error('EmbeddingService is required for first initialization of RelationshipDetector')
     }
-    _detectorInstance = new EmbeddingRelationshipDetector(
-      embeddingService,
-      getSharedVectorStore(),
-      config
-    );
+    _detectorInstance = new EmbeddingRelationshipDetector(embeddingService, getSharedVectorStore(), config)
   }
-  return _detectorInstance;
+  return _detectorInstance
 }
 
 /**
  * Reset singleton instances (for testing)
  */
 export function resetRelationshipDetector(): void {
-  _detectorInstance = null;
-  _vectorStoreInstance = null;
+  _detectorInstance = null
+  _vectorStoreInstance = null
 }
 
 /**
@@ -157,18 +142,13 @@ export function resetRelationshipDetector(): void {
 export function createRelationshipDetector(
   embeddingService: EmbeddingService,
   options?: {
-    vectorStore?: VectorStore;
-    config?: Partial<RelationshipConfig>;
-    llmProvider?: LLMProvider;
+    vectorStore?: VectorStore
+    config?: Partial<RelationshipConfig>
+    llmProvider?: LLMProvider
   }
 ): EmbeddingRelationshipDetector {
-  const vectorStore = options?.vectorStore ?? new InMemoryVectorStoreAdapter();
-  return new EmbeddingRelationshipDetector(
-    embeddingService,
-    vectorStore,
-    options?.config,
-    options?.llmProvider
-  );
+  const vectorStore = options?.vectorStore ?? new InMemoryVectorStoreAdapter()
+  return new EmbeddingRelationshipDetector(embeddingService, vectorStore, options?.config, options?.llmProvider)
 }
 
 // ============================================================================
@@ -188,8 +168,8 @@ export async function detectRelationshipsQuick(
   embeddingService?: EmbeddingService,
   containerTag?: string
 ): Promise<RelationshipDetectionResult> {
-  const detector = getRelationshipDetector(embeddingService);
-  return detector.detectRelationships(memory, { containerTag });
+  const detector = getRelationshipDetector(embeddingService)
+  return detector.detectRelationships(memory, { containerTag })
 }
 
 /**
@@ -205,8 +185,8 @@ export async function batchDetectRelationshipsQuick(
   embeddingService?: EmbeddingService,
   containerTag?: string
 ): Promise<RelationshipDetectionResult[]> {
-  const detector = getRelationshipDetector(embeddingService);
-  return detector.batchDetectRelationships(memories, { containerTag });
+  const detector = getRelationshipDetector(embeddingService)
+  return detector.batchDetectRelationships(memories, { containerTag })
 }
 
 /**
@@ -220,8 +200,8 @@ export async function detectContradictionsQuick(
   memories: Memory[],
   embeddingService?: EmbeddingService
 ): Promise<import('./types.js').Contradiction[]> {
-  const detector = getRelationshipDetector(embeddingService);
-  return detector.detectContradictionsInGroup(memories);
+  const detector = getRelationshipDetector(embeddingService)
+  return detector.detectContradictionsInGroup(memories)
 }
 
 // ============================================================================
@@ -241,19 +221,17 @@ export async function indexMemoryForRelationships(
   embedding?: number[],
   embeddingService?: EmbeddingService
 ): Promise<void> {
-  const store = getSharedVectorStore();
+  const store = getSharedVectorStore()
 
   if (embedding) {
-    store.addMemory(memory, embedding);
+    store.addMemory(memory, embedding)
   } else if (embeddingService) {
-    const generatedEmbedding = await embeddingService.generateEmbedding(memory.content);
-    store.addMemory(memory, generatedEmbedding);
+    const generatedEmbedding = await embeddingService.generateEmbedding(memory.content)
+    store.addMemory(memory, generatedEmbedding)
   } else if (memory.embedding && memory.embedding.length > 0) {
-    store.addMemory(memory, memory.embedding);
+    store.addMemory(memory, memory.embedding)
   } else {
-    throw new Error(
-      'Either embedding or embeddingService must be provided if memory has no embedding'
-    );
+    throw new Error('Either embedding or embeddingService must be provided if memory has no embedding')
   }
 }
 
@@ -263,16 +241,16 @@ export async function indexMemoryForRelationships(
  * @param memoryId - ID of memory to remove
  */
 export function removeMemoryFromRelationshipIndex(memoryId: string): boolean {
-  const store = getSharedVectorStore();
-  return store.removeMemory(memoryId);
+  const store = getSharedVectorStore()
+  return store.removeMemory(memoryId)
 }
 
 /**
  * Clear all memories from the shared vector store.
  */
 export function clearRelationshipIndex(): void {
-  const store = getSharedVectorStore();
-  store.clear();
+  const store = getSharedVectorStore()
+  store.clear()
 }
 
 // ============================================================================
@@ -287,4 +265,4 @@ export {
   enhancedMemoryService,
   type EnhancedMemoryServiceConfig,
   DEFAULT_ENHANCED_CONFIG,
-} from './memory-integration.js';
+} from './memory-integration.js'

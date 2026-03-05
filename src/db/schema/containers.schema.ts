@@ -9,8 +9,8 @@ import {
   index,
   check,
   type AnyPgColumn,
-} from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+} from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 export const containerTags = pgTable(
   'container_tags',
@@ -40,7 +40,7 @@ export const containerTags = pgTable(
     check('container_tags_no_self_parent', sql`${table.tag} != ${table.parentTag}`),
     check('container_tags_tag_format', sql`${table.tag} ~ '^[a-zA-Z0-9_-]+$'`),
   ]
-);
+)
 
-export type ContainerTag = typeof containerTags.$inferSelect;
-export type NewContainerTag = typeof containerTags.$inferInsert;
+export type ContainerTag = typeof containerTags.$inferSelect
+export type NewContainerTag = typeof containerTags.$inferInsert

@@ -3,8 +3,8 @@
  * Manages external provider connections (GitHub, Gmail, Google Drive, etc.)
  */
 
-import { APIResource } from './base.js';
-import { APIPromise } from '../http.js';
+import { APIResource } from './base.js'
+import { APIPromise } from '../http.js'
 import type {
   RequestOptions,
   ConnectionProvider,
@@ -26,7 +26,7 @@ import type {
   ConnectionListDocumentsResponse,
   ConnectionResourcesParams,
   ConnectionResourcesResponse,
-} from '../types.js';
+} from '../types.js'
 
 export class Connections extends APIResource {
   /**
@@ -45,7 +45,7 @@ export class Connections extends APIResource {
     return this._post<ConnectionCreateResponse>(`/v3/connections/${encodeURIComponent(provider)}`, {
       body: body || {},
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -55,14 +55,11 @@ export class Connections extends APIResource {
    * @param options - Request options
    * @returns Array of connections
    */
-  list(
-    body?: ConnectionListParams | null,
-    options?: RequestOptions
-  ): APIPromise<ConnectionListResponse> {
+  list(body?: ConnectionListParams | null, options?: RequestOptions): APIPromise<ConnectionListResponse> {
     return this._post<ConnectionListResponse>('/v3/connections/list', {
       body: body || {},
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -75,7 +72,7 @@ export class Connections extends APIResource {
   getByID(id: string, options?: RequestOptions): APIPromise<ConnectionGetByIDResponse> {
     return this.client.get<ConnectionGetByIDResponse>(`/v3/connections/${encodeURIComponent(id)}`, {
       requestOptions: options,
-    });
+    })
   }
 
   /**
@@ -91,13 +88,10 @@ export class Connections extends APIResource {
     body: ConnectionGetByTagParams,
     options?: RequestOptions
   ): APIPromise<ConnectionGetByTagResponse> {
-    return this._post<ConnectionGetByTagResponse>(
-      `/v3/connections/${encodeURIComponent(provider)}/by-tag`,
-      {
-        body,
-        requestOptions: options,
-      }
-    );
+    return this._post<ConnectionGetByTagResponse>(`/v3/connections/${encodeURIComponent(provider)}/by-tag`, {
+      body,
+      requestOptions: options,
+    })
   }
 
   /**
@@ -113,13 +107,10 @@ export class Connections extends APIResource {
     body: ConnectionConfigureParams,
     options?: RequestOptions
   ): APIPromise<ConnectionConfigureResponse> {
-    return this._post<ConnectionConfigureResponse>(
-      `/v3/connections/${encodeURIComponent(id)}/configure`,
-      {
-        body,
-        requestOptions: options,
-      }
-    );
+    return this._post<ConnectionConfigureResponse>(`/v3/connections/${encodeURIComponent(id)}/configure`, {
+      body,
+      requestOptions: options,
+    })
   }
 
   /**
@@ -130,12 +121,9 @@ export class Connections extends APIResource {
    * @returns Deleted connection details
    */
   deleteByID(id: string, options?: RequestOptions): APIPromise<ConnectionDeleteByIDResponse> {
-    return this.client.delete<ConnectionDeleteByIDResponse>(
-      `/v3/connections/${encodeURIComponent(id)}`,
-      {
-        requestOptions: options,
-      }
-    );
+    return this.client.delete<ConnectionDeleteByIDResponse>(`/v3/connections/${encodeURIComponent(id)}`, {
+      requestOptions: options,
+    })
   }
 
   /**
@@ -151,13 +139,10 @@ export class Connections extends APIResource {
     body: ConnectionDeleteByProviderParams,
     options?: RequestOptions
   ): APIPromise<ConnectionDeleteByProviderResponse> {
-    return this.client.delete<ConnectionDeleteByProviderResponse>(
-      `/v3/connections/${encodeURIComponent(provider)}`,
-      {
-        body,
-        requestOptions: options,
-      }
-    );
+    return this.client.delete<ConnectionDeleteByProviderResponse>(`/v3/connections/${encodeURIComponent(provider)}`, {
+      body,
+      requestOptions: options,
+    })
   }
 
   /**
@@ -173,13 +158,10 @@ export class Connections extends APIResource {
     body?: ConnectionImportParams | null,
     options?: RequestOptions
   ): APIPromise<ConnectionImportResponse> {
-    return this._post<ConnectionImportResponse>(
-      `/v3/connections/${encodeURIComponent(id)}/import`,
-      {
-        body: body || {},
-        requestOptions: options,
-      }
-    );
+    return this._post<ConnectionImportResponse>(`/v3/connections/${encodeURIComponent(id)}/import`, {
+      body: body || {},
+      requestOptions: options,
+    })
   }
 
   /**
@@ -195,13 +177,10 @@ export class Connections extends APIResource {
     body?: ConnectionListDocumentsParams | null,
     options?: RequestOptions
   ): APIPromise<ConnectionListDocumentsResponse> {
-    return this._post<ConnectionListDocumentsResponse>(
-      `/v3/connections/${encodeURIComponent(id)}/documents`,
-      {
-        body: body || {},
-        requestOptions: options,
-      }
-    );
+    return this._post<ConnectionListDocumentsResponse>(`/v3/connections/${encodeURIComponent(id)}/documents`, {
+      body: body || {},
+      requestOptions: options,
+    })
   }
 
   /**
@@ -217,12 +196,9 @@ export class Connections extends APIResource {
     body?: ConnectionResourcesParams | null,
     options?: RequestOptions
   ): APIPromise<ConnectionResourcesResponse> {
-    return this.client.get<ConnectionResourcesResponse>(
-      `/v3/connections/${encodeURIComponent(id)}/resources`,
-      {
-        query: body as Record<string, unknown> | undefined,
-        requestOptions: options,
-      }
-    );
+    return this.client.get<ConnectionResourcesResponse>(`/v3/connections/${encodeURIComponent(id)}/resources`, {
+      query: body as Record<string, unknown> | undefined,
+      requestOptions: options,
+    })
   }
 }

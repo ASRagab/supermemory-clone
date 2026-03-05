@@ -5,7 +5,7 @@
  * for the job queue system.
  */
 
-import { QueueOptions, WorkerOptions } from 'bullmq';
+import { QueueOptions, WorkerOptions } from 'bullmq'
 
 /**
  * Redis connection configuration with health checks and reconnection logic
@@ -19,20 +19,20 @@ export const redisConfig = {
     enableOfflineQueue: true,
     retryStrategy: (times: number) => {
       // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
-      const delay = Math.min(times * 1000, 30000);
-      console.log(`[Redis] Reconnection attempt ${times}, waiting ${delay}ms`);
-      return delay;
+      const delay = Math.min(times * 1000, 30000)
+      console.log(`[Redis] Reconnection attempt ${times}, waiting ${delay}ms`)
+      return delay
     },
     reconnectOnError: (err: Error) => {
-      const targetErrors = ['READONLY', 'ECONNREFUSED', 'ETIMEDOUT'];
-      if (targetErrors.some(targetError => err.message.includes(targetError))) {
-        console.log(`[Redis] Reconnecting due to error: ${err.message}`);
-        return true;
+      const targetErrors = ['READONLY', 'ECONNREFUSED', 'ETIMEDOUT']
+      if (targetErrors.some((targetError) => err.message.includes(targetError))) {
+        console.log(`[Redis] Reconnecting due to error: ${err.message}`)
+        return true
       }
-      return false;
+      return false
     },
   },
-};
+}
 
 /**
  * Default queue options with retry logic and dead letter queue support
@@ -54,7 +54,7 @@ export const defaultQueueOptions: QueueOptions = {
       age: 7 * 24 * 3600, // Keep for 7 days
     },
   },
-};
+}
 
 /**
  * Queue-specific concurrency settings from environment variables
@@ -64,7 +64,7 @@ export const concurrencySettings = {
   chunking: parseInt(process.env.BULLMQ_CONCURRENCY_CHUNKING || '3', 10),
   embedding: parseInt(process.env.BULLMQ_CONCURRENCY_EMBEDDING || '2', 10),
   indexing: parseInt(process.env.BULLMQ_CONCURRENCY_INDEXING || '1', 10),
-};
+}
 
 /**
  * Worker options factory
@@ -77,7 +77,7 @@ export function createWorkerOptions(queueName: keyof typeof concurrencySettings)
     autorun: true,
     removeOnComplete: { count: 100 },
     removeOnFail: { count: 500 },
-  };
+  }
 }
 
 /**
@@ -94,7 +94,7 @@ export const deadLetterQueueOptions: QueueOptions = {
     },
     removeOnFail: false, // Never remove failed jobs from DLQ
   },
-};
+}
 
 /**
  * Priority levels for job scheduling
@@ -111,9 +111,9 @@ export enum JobPriority {
  * Job progress tracking interface
  */
 export interface JobProgress {
-  percentage: number; // 0-100
-  stage?: string;
-  message?: string;
-  processedItems?: number;
-  totalItems?: number;
+  percentage: number // 0-100
+  stage?: string
+  message?: string
+  processedItems?: number
+  totalItems?: number
 }
