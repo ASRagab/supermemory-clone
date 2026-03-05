@@ -198,12 +198,12 @@ if [[ "$update_if_exists" -eq 1 ]]; then
 else
   clone_into_temp_dir "$(dirname "$install_dir")"
 
-  log "INFO" "Running turnkey installer"
-  run_installer "$temp_clone_dir" "${install_args[@]}"
-
   log "INFO" "Moving installed checkout into place: $install_dir"
   mv "$temp_clone_dir" "$install_dir"
   temp_clone_dir=""
+
+  log "INFO" "Running turnkey installer"
+  run_installer "$install_dir" "${install_args[@]}"
 fi
 
 log "OK" "Bootstrap complete"
