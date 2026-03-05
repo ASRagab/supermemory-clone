@@ -61,39 +61,45 @@ function isPostgresDatabaseUrl(url: string): boolean {
   return url.startsWith('postgresql://') || url.startsWith('postgres://')
 }
 
+function normalizeEnvValue(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 function loadConfig(): Config {
   const result = configSchema.safeParse({
-    openaiApiKey: process.env.OPENAI_API_KEY,
-    embeddingModel: process.env.EMBEDDING_MODEL,
-    embeddingDimensions: process.env.EMBEDDING_DIMENSIONS,
+    openaiApiKey: normalizeEnvValue(process.env.OPENAI_API_KEY),
+    embeddingModel: normalizeEnvValue(process.env.EMBEDDING_MODEL),
+    embeddingDimensions: normalizeEnvValue(process.env.EMBEDDING_DIMENSIONS),
 
     // LLM Provider
-    llmProvider: process.env.LLM_PROVIDER,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    llmModel: process.env.LLM_MODEL,
-    llmMaxTokens: process.env.LLM_MAX_TOKENS,
-    llmTemperature: process.env.LLM_TEMPERATURE,
-    llmTimeoutMs: process.env.LLM_TIMEOUT_MS,
-    llmMaxRetries: process.env.LLM_MAX_RETRIES,
-    llmCacheEnabled: process.env.LLM_CACHE_ENABLED,
-    llmCacheTtlMs: process.env.LLM_CACHE_TTL_MS,
+    llmProvider: normalizeEnvValue(process.env.LLM_PROVIDER),
+    anthropicApiKey: normalizeEnvValue(process.env.ANTHROPIC_API_KEY),
+    llmModel: normalizeEnvValue(process.env.LLM_MODEL),
+    llmMaxTokens: normalizeEnvValue(process.env.LLM_MAX_TOKENS),
+    llmTemperature: normalizeEnvValue(process.env.LLM_TEMPERATURE),
+    llmTimeoutMs: normalizeEnvValue(process.env.LLM_TIMEOUT_MS),
+    llmMaxRetries: normalizeEnvValue(process.env.LLM_MAX_RETRIES),
+    llmCacheEnabled: normalizeEnvValue(process.env.LLM_CACHE_ENABLED),
+    llmCacheTtlMs: normalizeEnvValue(process.env.LLM_CACHE_TTL_MS),
 
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: normalizeEnvValue(process.env.DATABASE_URL),
 
     // Vector Store
-    vectorStoreProvider: process.env.VECTOR_STORE_PROVIDER,
-    vectorDimensions: process.env.VECTOR_DIMENSIONS,
-    vectorSqlitePath: process.env.VECTOR_SQLITE_PATH,
-    chromaUrl: process.env.CHROMA_URL,
-    chromaCollection: process.env.CHROMA_COLLECTION,
+    vectorStoreProvider: normalizeEnvValue(process.env.VECTOR_STORE_PROVIDER),
+    vectorDimensions: normalizeEnvValue(process.env.VECTOR_DIMENSIONS),
+    vectorSqlitePath: normalizeEnvValue(process.env.VECTOR_SQLITE_PATH),
+    chromaUrl: normalizeEnvValue(process.env.CHROMA_URL),
+    chromaCollection: normalizeEnvValue(process.env.CHROMA_COLLECTION),
 
-    apiPort: process.env.API_PORT,
-    apiHost: process.env.API_HOST,
-    authEnabled: process.env.AUTH_ENABLED,
-    authToken: process.env.AUTH_TOKEN,
-    rateLimitRequests: process.env.RATE_LIMIT_REQUESTS,
-    rateLimitWindowMs: process.env.RATE_LIMIT_WINDOW_MS,
-    logLevel: process.env.LOG_LEVEL,
+    apiPort: normalizeEnvValue(process.env.API_PORT),
+    apiHost: normalizeEnvValue(process.env.API_HOST),
+    authEnabled: normalizeEnvValue(process.env.AUTH_ENABLED),
+    authToken: normalizeEnvValue(process.env.AUTH_TOKEN),
+    rateLimitRequests: normalizeEnvValue(process.env.RATE_LIMIT_REQUESTS),
+    rateLimitWindowMs: normalizeEnvValue(process.env.RATE_LIMIT_WINDOW_MS),
+    logLevel: normalizeEnvValue(process.env.LOG_LEVEL),
   })
 
   if (!result.success) {

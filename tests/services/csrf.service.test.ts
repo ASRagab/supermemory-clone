@@ -243,14 +243,34 @@ describe('CsrfService', () => {
 
     it('should throw error in production without secret', () => {
       const originalEnv = process.env.NODE_ENV
+      const originalAllowGenerated = process.env.SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS
       process.env.NODE_ENV = 'production'
       delete process.env.CSRF_SECRET
+      delete process.env.SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS
 
       expect(() => {
         createCsrfService()
       }).toThrow('CSRF_SECRET environment variable must be set in production')
 
       process.env.NODE_ENV = originalEnv
+      process.env.SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS = originalAllowGenerated
+    })
+
+    it('should allow generated secret for local docker-style production runtime when explicitly enabled', () => {
+      const originalEnv = process.env.NODE_ENV
+      const originalAllowGenerated = process.env.SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS
+      process.env.NODE_ENV = 'production'
+      process.env.SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS = 'true'
+      delete process.env.CSRF_SECRET
+
+      const localProdService = createCsrfService()
+      const token = localProdService.generateToken()
+
+      expect(token.token).toBeDefined()
+      localProdService.destroy()
+
+      process.env.NODE_ENV = originalEnv
+      process.env.SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS = originalAllowGenerated
     })
   })
 

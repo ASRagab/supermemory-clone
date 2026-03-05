@@ -232,12 +232,21 @@ export function createCsrfService(config?: Partial<CsrfConfig>): CsrfService {
 
 /** Generate a default secret for development. WARNING: Never use in production. */
 function generateDefaultSecret(): string {
-  if (process.env.NODE_ENV === 'production') {
+  const allowGeneratedLocalSecrets = process.env.SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS === 'true'
+
+  if (process.env.NODE_ENV === 'production' && !allowGeneratedLocalSecrets) {
     throw new Error(
       'CSRF_SECRET environment variable must be set in production. Generate a secure secret using: openssl rand -base64 48'
     )
   }
 
-  logger.warn('Using generated CSRF secret for development - set CSRF_SECRET in production')
+  if (process.env.NODE_ENV === 'production') {
+    logger.warn(
+      'CSRF_SECRET not set; generating an ephemeral local secret because SUPERMEMORY_ALLOW_GENERATED_LOCAL_SECRETS=true'
+    )
+  } else {
+    logger.warn('Using generated CSRF secret for development - set CSRF_SECRET in production')
+  }
+
   return crypto.randomBytes(48).toString('base64')
 }
