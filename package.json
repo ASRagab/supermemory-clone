@@ -1,16 +1,29 @@
 {
-  "name": "supermemory-clone",
+  "name": "@supermemory/runtime",
   "version": "1.0.0",
   "description": "A personal AI memory assistant - supermemory.ai clone",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "files": [
+    "README.md",
+    ".env.example",
+    "package-lock.json",
+    "src",
+    "scripts",
+    "drizzle",
+    "docker-compose.yml",
+    "docker-compose.prod.yml",
+    "drizzle.config.ts",
+    "tsconfig.json"
+  ],
   "bin": {
     "supermemory-mcp": "dist/mcp/index.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "build:install": "npm --prefix packages/install run build",
     "start": "node dist/index.js",
     "mcp": "node dist/mcp/index.js",
     "mcp:dev": "tsx src/mcp/index.ts",
@@ -38,7 +51,10 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
+    "typecheck:install": "node node_modules/typescript/bin/tsc -p packages/install/tsconfig.json --noEmit",
     "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test:run",
+    "pack:check:runtime": "tsx scripts/check-runtime-pack.ts",
+    "test:install": "vitest run tests/install/*.test.ts",
     "clean": "rm -rf dist coverage",
     "prepublishOnly": "npm run build"
   },

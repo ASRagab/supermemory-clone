@@ -18,6 +18,11 @@ SKIP_BUILD=0
 SKIP_API_START=0
 MCP_SCOPE="user"
 MCP_SCOPE_EXPLICIT=0
+INSTALLER_BRIEF="${SUPERMEMORY_INSTALLER_BRIEF:-0}"
+INSTALLER_RESULT_FILE="${SUPERMEMORY_INSTALLER_RESULT_FILE:-}"
+CLAUDE_MCP_STATUS="not_requested"
+CLAUDE_MCP_SCOPE_USED=""
+API_KEYS_WERE_SKIPPED=0
 
 usage() {
   cat <<'USAGE'
@@ -391,10 +396,12 @@ verify_api_health() {
 
 configure_api_keys() {
   if [[ "$SKIP_API_KEYS" -eq 1 || "$NON_INTERACTIVE" -eq 1 ]]; then
+    API_KEYS_WERE_SKIPPED=1
     return 0
   fi
 
   if ! confirm "Configure API keys now?" "n"; then
+    API_KEYS_WERE_SKIPPED=1
     log "WARN" "Skipping API key setup"
     return 0
   fi
@@ -433,17 +440,20 @@ configure_api_keys() {
 
 configure_claude_mcp() {
   if [[ "$SKIP_CLAUDE" -eq 1 ]]; then
+    CLAUDE_MCP_STATUS="skipped"
     log "WARN" "Skipped Claude Code setup"
     return 0
   fi
 
   if ! command_exists claude; then
+    CLAUDE_MCP_STATUS="missing_cli"
     log "WARN" "Claude CLI not found. Install Claude Code or run npm run mcp:setup later"
     return 0
   fi
 
   local should_register=0
   local selected_scope="$MCP_SCOPE"
+  CLAUDE_MCP_SCOPE_USED="$selected_scope"
   local register_command
   printf -v register_command 'claude mcp add supermemory --scope %q -- node %q' "$selected_scope" "$REPO_ROOT/dist/mcp/index.js"
 
@@ -451,12 +461,14 @@ configure_claude_mcp() {
     if [[ "$REGISTER_MCP" -eq 1 || "$MCP_SCOPE_EXPLICIT" -eq 1 ]]; then
       should_register=1
     else
+      CLAUDE_MCP_STATUS="not_requested"
       log "INFO" "Skipped Claude Code MCP registration in non-interactive mode. Pass --register-mcp or --scope to opt in"
       return 0
     fi
   else
     if [[ "$MCP_SCOPE_EXPLICIT" -eq 0 ]]; then
       selected_scope="$(prompt_mcp_scope)"
+      CLAUDE_MCP_SCOPE_USED="$selected_scope"
       printf -v register_command 'claude mcp add supermemory --scope %q -- node %q' "$selected_scope" "$REPO_ROOT/dist/mcp/index.js"
     fi
 
@@ -466,11 +478,13 @@ configure_claude_mcp() {
   fi
 
   if [[ "$should_register" -ne 1 ]]; then
+    CLAUDE_MCP_STATUS="declined"
     log "WARN" "Skipped Claude Code MCP registration"
     return 0
   fi
 
   if npx tsx scripts/claude-mcp-config.ts check --scope "$selected_scope" --name supermemory --command node --arg "$REPO_ROOT/dist/mcp/index.js" --project-dir "$REPO_ROOT" >/dev/null 2>&1; then
+    CLAUDE_MCP_STATUS="match"
     log "OK" "Claude Code MCP server 'supermemory' already matches ${selected_scope} scope and command path"
     return 0
   else
@@ -494,6 +508,7 @@ configure_claude_mcp() {
       printf -v remove_command 'claude mcp remove --scope %q supermemory' "$selected_scope"
       log "INFO" "Removing stale Claude Code MCP registration with: $remove_command"
       if ! claude mcp remove --scope "$selected_scope" supermemory; then
+        CLAUDE_MCP_STATUS="remove_failed"
         log "WARN" "Could not remove existing Claude Code MCP registration in ${selected_scope} scope"
         return 0
       fi
@@ -502,9 +517,133 @@ configure_claude_mcp() {
 
   log "INFO" "Registering Claude Code MCP server with: $register_command"
   if claude mcp add supermemory --scope "$selected_scope" -- node "$REPO_ROOT/dist/mcp/index.js"; then
+    CLAUDE_MCP_STATUS="registered"
     log "OK" "Registered MCP server with Claude Code (${selected_scope} scope)"
   else
+    CLAUDE_MCP_STATUS="register_failed"
     log "WARN" "Could not register MCP automatically. Run: npm run mcp:setup"
+  fi
+}
+
+write_install_result() {
+  local api_started="$1"
+  local api_host_port="$2"
+  local connectivity_ok="$3"
+
+  if [[ -z "$INSTALLER_RESULT_FILE" ]]; then
+    return 0
+  fi
+
+  INSTALL_RESULT_FILE="$INSTALLER_RESULT_FILE" \
+  INSTALL_RESULT_ACTION="$ACTION" \
+  INSTALL_RESULT_MODE="$INSTALL_MODE" \
+  INSTALL_RESULT_DIR="$REPO_ROOT" \
+  INSTALL_RESULT_ENV_FILE="$ENV_FILE" \
+  INSTALL_RESULT_API_HOST_PORT="$api_host_port" \
+  INSTALL_RESULT_API_STARTED="$api_started" \
+  INSTALL_RESULT_CONNECTIVITY_OK="$connectivity_ok" \
+  INSTALL_RESULT_MCP_SCOPE="$CLAUDE_MCP_SCOPE_USED" \
+  INSTALL_RESULT_MCP_STATUS="$CLAUDE_MCP_STATUS" \
+  INSTALL_RESULT_SKIP_DOCKER="$SKIP_DOCKER" \
+  INSTALL_RESULT_SKIP_API_KEYS="$SKIP_API_KEYS" \
+  INSTALL_RESULT_SKIP_API_START="$SKIP_API_START" \
+  INSTALL_RESULT_API_KEYS_WERE_SKIPPED="$API_KEYS_WERE_SKIPPED" \
+  node <<'NODE'
+const { writeFileSync } = require('node:fs')
+
+const resultPath = process.env.INSTALL_RESULT_FILE
+if (!resultPath) {
+  process.exit(0)
+}
+
+const asBoolean = (value) => value === '1'
+const nullableString = (value) => (value ? value : null)
+
+writeFileSync(
+  resultPath,
+  `${JSON.stringify(
+    {
+      action: process.env.INSTALL_RESULT_ACTION,
+      installMode: process.env.INSTALL_RESULT_MODE,
+      installDir: process.env.INSTALL_RESULT_DIR,
+      envFile: process.env.INSTALL_RESULT_ENV_FILE,
+      apiHostPort: nullableString(process.env.INSTALL_RESULT_API_HOST_PORT),
+      apiStarted: asBoolean(process.env.INSTALL_RESULT_API_STARTED),
+      connectivityOk: asBoolean(process.env.INSTALL_RESULT_CONNECTIVITY_OK),
+      mcp: {
+        scope: nullableString(process.env.INSTALL_RESULT_MCP_SCOPE),
+        status: process.env.INSTALL_RESULT_MCP_STATUS,
+      },
+      flags: {
+        skipDocker: asBoolean(process.env.INSTALL_RESULT_SKIP_DOCKER),
+        skipApiKeys: asBoolean(process.env.INSTALL_RESULT_SKIP_API_KEYS),
+        skipApiStart: asBoolean(process.env.INSTALL_RESULT_SKIP_API_START),
+        apiKeysWereSkipped: asBoolean(process.env.INSTALL_RESULT_API_KEYS_WERE_SKIPPED),
+      },
+    },
+    null,
+    2
+  )}\n`
+)
+NODE
+}
+
+print_install_summary() {
+  local api_started="$1"
+  local api_host_port="$2"
+  local connectivity_ok="$3"
+  local step=1
+
+  if [[ "$INSTALLER_BRIEF" == "1" ]]; then
+    return 0
+  fi
+
+  printf '\nInstall complete.\n'
+  printf '\nNext:\n'
+
+  if [[ "$INSTALL_MODE" == "api" || "$INSTALL_MODE" == "full" ]]; then
+    if [[ "$api_started" -eq 1 && -n "$api_host_port" ]]; then
+      printf '  %d. Verify the API: curl http://localhost:%s/health\n' "$step" "$api_host_port"
+      step=$((step + 1))
+    elif [[ "$SKIP_API_START" -eq 1 ]]; then
+      printf '  %d. Start the API stack when ready: docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d api postgres redis\n' "$step"
+      step=$((step + 1))
+    fi
+  fi
+
+  if [[ "$INSTALL_MODE" == "agent" || "$INSTALL_MODE" == "full" ]]; then
+    case "$CLAUDE_MCP_STATUS" in
+      registered|match)
+        if [[ "$CLAUDE_MCP_SCOPE_USED" == "project" ]]; then
+          printf '  %d. Open Claude in this directory\n' "$step"
+        else
+          printf '  %d. Open Claude and use supermemory_add\n' "$step"
+        fi
+        step=$((step + 1))
+        ;;
+      *)
+        printf '  %d. Register Claude later with: npm run mcp:setup -- --scope project --non-interactive --register-mcp\n' "$step"
+        step=$((step + 1))
+        ;;
+    esac
+  fi
+
+  if [[ "$INSTALL_MODE" == "full" && "$CLAUDE_MCP_SCOPE_USED" == "project" ]]; then
+    if [[ "$CLAUDE_MCP_STATUS" == "registered" || "$CLAUDE_MCP_STATUS" == "match" ]]; then
+      printf '  %d. Ask Claude to use supermemory_add\n' "$step"
+    fi
+  fi
+
+  if [[ "$SKIP_API_KEYS" -eq 1 ]]; then
+    printf '\nAPI keys were skipped, so extraction quality may be limited until you update %s.\n' "$ENV_FILE"
+  fi
+
+  if [[ "$SKIP_DOCKER" -eq 1 ]]; then
+    printf '\nDocker startup was skipped, so start services manually before using the installed surfaces.\n'
+  fi
+
+  if [[ "$connectivity_ok" -ne 1 ]]; then
+    printf '\nConnectivity checks found issues. Review the logs above.\n'
   fi
 }
 
@@ -809,107 +948,8 @@ run_install_or_update_flow() {
     esac
   fi
 
-  case "$INSTALL_MODE" in
-    agent)
-      cat <<GUIDE
-
-Setup complete.
-
-Agent-first usage flow:
-  1) Start the MCP server:
-       npm run mcp
-     or during development:
-       npm run mcp:dev
-  2) Verify local prerequisites:
-       docker compose ps postgres
-       npm run doctor -- --env-file ${ENV_FILE} --mode agent
-  3) If you want the REST API later:
-       ./scripts/install.sh api --skip-claude --env-file ${ENV_FILE}
-
-This mode does not start the API container by default.
-GUIDE
-      ;;
-    api)
-      if [[ "$api_started" -eq 1 ]]; then
-        cat <<GUIDE
-
-Setup complete.
-
-API usage flow:
-  1) Verify health:
-       curl http://localhost:${api_host_port}/health
-  2) Add a document:
-       curl -X POST http://localhost:${api_host_port}/api/v1/documents -H "Content-Type: application/json" -d '{"content":"My first memory"}'
-  3) Search:
-       curl -X POST http://localhost:${api_host_port}/api/v1/search -H "Content-Type: application/json" -d '{"query":"first memory"}'
-
-If you want to run the API in local watch mode instead of Docker:
-  - Stop the API container:
-      docker compose stop api
-  - Start locally:
-      npm run dev
-  - Then use:
-      curl http://localhost:${api_port}/health
-GUIDE
-      else
-        cat <<GUIDE
-
-Setup complete.
-
-API mode is installed, but the API was not auto-started.
-
-Next steps:
-  1) Start the stack:
-       docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis
-  2) Verify health:
-       curl http://localhost:${api_port}/health
-GUIDE
-      fi
-      ;;
-    full)
-      if [[ "$api_started" -eq 1 ]]; then
-        cat <<GUIDE
-
-Setup complete.
-
-Full install usage flow:
-  1) Verify API health:
-       curl http://localhost:${api_host_port}/health
-  2) Use the REST API:
-       curl -X POST http://localhost:${api_host_port}/api/v1/documents -H "Content-Type: application/json" -d '{"content":"My first memory"}'
-  3) Use MCP from a coding agent:
-       npm run mcp
-     or:
-       npm run mcp:dev
-GUIDE
-      else
-        cat <<GUIDE
-
-Setup complete.
-
-Full mode is installed. Start whichever surface you need next:
-  - API stack:
-      docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis
-  - MCP server:
-      npm run mcp
-GUIDE
-      fi
-      ;;
-  esac
-
-  cat <<GUIDE
-
-If you skipped API keys:
-  - Edit ${ENV_FILE} and set OPENAI_API_KEY and/or ANTHROPIC_API_KEY
-  - Then rerun connectivity checks:
-      npm run doctor -- --env-file ${ENV_FILE} --mode ${INSTALL_MODE}
-
-If you skipped Docker:
-  - Start services manually, then run:
-      docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api postgres redis
-      ./scripts/migrations/run_migrations.sh
-      npm run doctor -- --mode ${INSTALL_MODE}
-GUIDE
+  write_install_result "$api_started" "$api_host_port" "$connectivity_ok"
+  print_install_summary "$api_started" "$api_host_port" "$connectivity_ok"
 
   if [[ "$connectivity_ok" -ne 1 ]]; then
     exit 1

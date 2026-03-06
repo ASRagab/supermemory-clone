@@ -30,42 +30,49 @@ It stores documents, extracts memories, indexes embeddings, and serves search/pr
 
 ## Quick Start (Turnkey)
 
-`curl | bash` bootstrap:
+Primary path for first-time users:
 
 ```bash
+npx -y @supermemory/install@latest full --dir ./supermemory --mcp project
+cd ./supermemory
+claude
+```
+
+That command unpacks the runtime into `./supermemory`, runs the canonical `scripts/install.sh` from the final directory, registers Claude MCP against that final path, and prints only the next steps a new user can actually take.
+
+The npx installer supports:
+
+```bash
+npx -y @supermemory/install@latest agent --dir ./supermemory-agent --mcp project
+npx -y @supermemory/install@latest api --dir ./supermemory-api
+npx -y @supermemory/install@latest full --dir ./supermemory --mcp project --skip-api-keys
+npx -y @supermemory/install@latest full --dir ./supermemory --source-path "$(pwd)"
+```
+
+Maintainer-only override for a non-empty target directory:
+
+```bash
+npx -y @supermemory/install@latest full --dir ./supermemory --source-path "$(pwd)" --update
+```
+
+Fallback transport for users who prefer reviewing remote scripts first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | less
 curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | bash
 ```
 
-You can pass installer flags after `--`, for example:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | bash -s -- -- --non-interactive --skip-api-keys
-```
-
-Bootstrap supports a safe rerun/update path for existing compatible clones:
-
-```bash
-bash scripts/bootstrap.sh --dir ./supermemory-clone -- --non-interactive --skip-mcp
-bash scripts/bootstrap.sh --dir ./supermemory-clone --update-if-exists -- --non-interactive --skip-mcp
-```
-
-Local clone + install:
+Local clone + canonical installer (fallback for contributors and maintainers):
 
 ```bash
 git clone https://github.com/ASRagab/supermemory-clone.git
 cd supermemory-clone
-./scripts/install.sh
+./scripts/install.sh full --scope project
 ```
 
-The default installer path is agent-first. It builds the project, starts PostgreSQL, and leaves the API stopped unless you choose an API-oriented mode.
+The in-repo shell installer remains canonical. `@supermemory/install` is the default transport and zero-knowledge entrypoint.
 
-Prefer reviewing remote scripts before execution:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ASRagab/supermemory-clone/main/scripts/bootstrap.sh | less
-```
-
-The installer supports explicit modes:
+The canonical installer still supports explicit modes:
 
 ```bash
 ./scripts/install.sh                  # same as: install --mode agent
@@ -123,7 +130,7 @@ npm run build
 npm run doctor
 ```
 
-After the default `./scripts/install.sh` agent install, the API is not running yet. To start the MCP server:
+After a clone-based `./scripts/install.sh agent` install, the API is not running yet. To start the MCP server manually:
 
 ```bash
 npm run mcp
@@ -214,8 +221,15 @@ Base path: `/api/v1`
 
 ### Quick Setup
 
-`./scripts/install.sh agent` is the MCP-first installer path. Interactive installs can register Claude MCP after prompting for a scope. Non-interactive installs do not touch Claude config unless you pass `--scope` or `--register-mcp`.
-If you want to register or repair Claude MCP later, run:
+First-time user path:
+
+```bash
+npx -y @supermemory/install@latest full --dir ./supermemory --mcp project
+cd ./supermemory
+claude
+```
+
+Clone-based maintainer path:
 
 ```bash
 npm run mcp:setup
@@ -224,27 +238,33 @@ npm run mcp:setup -- --scope project --non-interactive --register-mcp
 
 ### Installation Options
 
-**Option A — Manual registration with the setup helper**
+**Option A — npx-first install**
+
+```bash
+npx -y @supermemory/install@latest full --dir ./supermemory --mcp project
+```
+
+**Option B — Manual registration with the setup helper**
 
 ```bash
 npm run mcp:setup
 ```
 
-**Option B — Project-scope registration**
+**Option C — Project-scope registration**
 
 ```bash
 npm run build
 npm run mcp:setup -- --scope project --non-interactive --register-mcp
 ```
 
-**Option C — Direct Claude CLI registration**
+**Option D — Direct Claude CLI registration**
 
 ```bash
 npm run build
 claude mcp add supermemory --scope user -- node "$(pwd)/dist/mcp/index.js"
 ```
 
-**Option D — npx (after package is published)**
+**Option E — Direct MCP package execution**
 
 ```bash
 claude mcp add supermemory -- npx supermemory-mcp
@@ -296,6 +316,7 @@ claude mcp get supermemory
 
 - `npm run dev` - API with watch mode
 - `npm run build` - TypeScript build
+- `npm run build:install` - Build `packages/install`
 - `npm run start` - Run built API
 - `npm run mcp:dev` - MCP with tsx
 - `npm run mcp` - Run built MCP server
@@ -303,8 +324,11 @@ claude mcp get supermemory
 - `npm run stack:down` - Stop and remove stack containers
 - `npm run stack:logs` - Tail API container logs
 - `npm run test:run` - Full tests once
+- `npm run test:install` - Installer-specific tests
 - `npm run lint` - ESLint
 - `npm run typecheck` - TS checks
+- `npm run typecheck:install` - Installer package TS checks
+- `npm run pack:check:runtime` - Verify the runtime npm tarball contents
 - `npm run validate` - typecheck + lint + format + tests
 
 ## Testing
@@ -320,6 +344,22 @@ npx vitest run tests/services/search.service.test.ts
 
 ```bash
 npm run db:test:phase1
+```
+
+## Publish and Smoke Release
+
+Publish order:
+
+1. Publish `@supermemory/runtime` from the repo root after `npm run build` and `npm run pack:check:runtime`.
+2. Publish `@supermemory/install` from `packages/install` after `npm run build:install`, `npm run typecheck:install`, and `npm run test:install`.
+
+Smoke-release procedure for the freshly published packages:
+
+```bash
+bash scripts/smoke-install.sh ./supermemory-smoke
+cd ./supermemory-smoke
+curl http://localhost:13000/health
+claude
 ```
 
 ## Project Policy

@@ -1,0 +1,20 @@
+{
+  "name": "@supermemory/install",
+  "version": "1.0.0",
+  "description": "Zero-knowledge installer for Supermemory",
+  "type": "module",
+  "bin": {
+    "supermemory-install": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
