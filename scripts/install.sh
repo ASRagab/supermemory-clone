@@ -5,6 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
+if [[ -d "$HOME/.local/bin" ]]; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
+
+if [[ -d "/usr/local/bin" ]]; then
+  PATH="/usr/local/bin:$PATH"
+fi
+
 ACTION="install"
 INSTALL_MODE="agent"
 ENV_FILE=""

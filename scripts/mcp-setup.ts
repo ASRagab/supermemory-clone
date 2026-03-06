@@ -2,7 +2,8 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { delimiter, resolve } from 'node:path';
 import pkg from 'pg';
 import { loadEnvFile } from '../src/config/env.js';
 import {
@@ -52,9 +53,26 @@ function formatRemovalCommand(scope: ClaudeMcpScope): string {
   return `claude mcp remove --scope ${scope} supermemory`;
 }
 
+function createCommandEnv(): NodeJS.ProcessEnv {
+  const preferredPaths = [`${homedir()}/.local/bin`, '/usr/local/bin'];
+  const currentPath = process.env.PATH ?? '';
+  const mergedPath = [...preferredPaths, currentPath]
+    .filter(Boolean)
+    .join(delimiter);
+
+  return {
+    ...process.env,
+    PATH: mergedPath,
+  };
+}
+
 function commandExists(name: string): boolean {
   try {
-    execSync(`command -v ${name}`, { stdio: 'ignore', shell: '/bin/zsh' });
+    execSync(`command -v ${name}`, {
+      env: createCommandEnv(),
+      stdio: 'ignore',
+      shell: '/bin/zsh',
+    });
     return true;
   } catch {
     return false;
@@ -162,7 +180,7 @@ async function run(): Promise<void> {
     if (answer === '' || answer.toLowerCase() === 'y') {
       console.log('Building...');
       try {
-        execSync('npm run build', { stdio: 'inherit' });
+        execSync('npm run build', { env: createCommandEnv(), stdio: 'inherit' });
       } catch {
         console.error('Build failed. Fix errors and try again.');
         process.exit(1);
@@ -238,7 +256,7 @@ async function run(): Promise<void> {
     const removeCmd = formatRemovalCommand(selectedScope);
     console.log(`[INFO] Existing ${selectedScope} scope registration does not match the current build output; repairing with: ${removeCmd} && ${cmd}`);
     try {
-      execSync(removeCmd, { stdio: 'inherit', shell: '/bin/zsh' });
+      execSync(removeCmd, { env: createCommandEnv(), stdio: 'inherit', shell: '/bin/zsh' });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error(`\nCould not remove the existing ${selectedScope} scope registration: ${msg}`);
@@ -250,6 +268,7 @@ async function run(): Promise<void> {
 
   try {
     execSync(`claude mcp add supermemory --scope ${selectedScope} -- node ${JSON.stringify(entryPoint)}`, {
+      env: createCommandEnv(),
       stdio: 'inherit',
       shell: '/bin/zsh',
     });

@@ -31,6 +31,25 @@ fi
 # Database URL from environment or default
 DATABASE_URL="${DATABASE_URL:-postgresql://supermemory:supermemory_secret@localhost:15432/supermemory}"
 
+run_drizzle_migrations() {
+    print_info "Applying Drizzle schema migrations..."
+
+    if ! command -v npm >/dev/null 2>&1; then
+        print_error "npm is required to run Drizzle migrations"
+        return 1
+    fi
+
+    if ! (cd "$PROJECT_ROOT" && npm run db:migrate > /dev/null 2>&1); then
+        print_error "Drizzle schema migration failed"
+        print_info "Run with verbose mode from the project root:"
+        print_info "  npm run db:migrate"
+        return 1
+    fi
+
+    print_success "Drizzle schema migration completed"
+    return 0
+}
+
 # Check if DATABASE_URL is set
 if [ -z "$DATABASE_URL" ]; then
     echo -e "${RED}Error: DATABASE_URL not set${NC}"
@@ -122,7 +141,6 @@ run_migration() {
 run_all_migrations() {
     local migrations=(
         "001_create_pgvector_extension.sql"
-        "003_create_hnsw_index.sql"
     )
 
     print_info "Starting migration process..."
@@ -139,6 +157,35 @@ run_all_migrations() {
         if ! run_migration "$migration_path"; then
             print_error "Migration process aborted"
             return 1
+        fi
+
+        echo ""
+    done
+
+    if ! run_drizzle_migrations; then
+        print_error "Migration process aborted"
+        return 1
+    fi
+
+    echo ""
+
+    local optional_migrations=(
+        "003_create_hnsw_index.sql"
+    )
+
+    for migration in "${optional_migrations[@]}"; do
+        local migration_path="$MIGRATIONS_DIR/$migration"
+
+        if [ ! -f "$migration_path" ]; then
+            print_warning "Optional migration file not found: $migration"
+            continue
+        fi
+
+        if ! run_migration "$migration_path"; then
+            print_warning "Optional migration failed: $migration"
+            print_warning "Continuing because the core schema is already installed"
+            echo ""
+            continue
         fi
 
         echo ""
