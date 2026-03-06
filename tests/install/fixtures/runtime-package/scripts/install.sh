@@ -30,6 +30,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 mkdir -p "$(pwd)/scripts" "$(pwd)/dist/mcp"
+cat > "$(pwd)/dist/mcp/index.js" <<'JS'
+#!/usr/bin/env node
+void 0
+JS
 
 if [[ "$REGISTER_MCP" -eq 1 && "$MCP_SCOPE" == "project" ]]; then
   cat > .mcp.json <<JSON
