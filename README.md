@@ -33,7 +33,7 @@ It stores documents, extracts memories, indexes embeddings, and serves search/pr
 Primary path for first-time users:
 
 ```bash
-npx -y @supermemory/install@latest full --dir ./supermemory --mcp project
+npx -y @twelvehart/install@latest full --dir ./supermemory --mcp project
 cd ./supermemory
 claude
 ```
@@ -43,16 +43,16 @@ That command unpacks the runtime into `./supermemory`, runs the canonical `scrip
 The npx installer supports:
 
 ```bash
-npx -y @supermemory/install@latest agent --dir ./supermemory-agent --mcp project
-npx -y @supermemory/install@latest api --dir ./supermemory-api
-npx -y @supermemory/install@latest full --dir ./supermemory --mcp project --skip-api-keys
-npx -y @supermemory/install@latest full --dir ./supermemory --source-path "$(pwd)"
+npx -y @twelvehart/install@latest agent --dir ./supermemory-agent --mcp project
+npx -y @twelvehart/install@latest api --dir ./supermemory-api
+npx -y @twelvehart/install@latest full --dir ./supermemory --mcp project --skip-api-keys
+npx -y @twelvehart/install@latest full --dir ./supermemory --source-path "$(pwd)"
 ```
 
 Maintainer-only override for a non-empty target directory:
 
 ```bash
-npx -y @supermemory/install@latest full --dir ./supermemory --source-path "$(pwd)" --update
+npx -y @twelvehart/install@latest full --dir ./supermemory --source-path "$(pwd)" --update
 ```
 
 Fallback transport for users who prefer reviewing remote scripts first:
@@ -70,7 +70,7 @@ cd supermemory-clone
 ./scripts/install.sh full --scope project
 ```
 
-The in-repo shell installer remains canonical. `@supermemory/install` is the default transport and zero-knowledge entrypoint.
+The in-repo shell installer remains canonical. `@twelvehart/install` is the default transport and zero-knowledge entrypoint.
 
 The canonical installer still supports explicit modes:
 
@@ -224,7 +224,7 @@ Base path: `/api/v1`
 First-time user path:
 
 ```bash
-npx -y @supermemory/install@latest full --dir ./supermemory --mcp project
+npx -y @twelvehart/install@latest full --dir ./supermemory --mcp project
 cd ./supermemory
 claude
 ```
@@ -241,7 +241,7 @@ npm run mcp:setup -- --scope project --non-interactive --register-mcp
 **Option A — npx-first install**
 
 ```bash
-npx -y @supermemory/install@latest full --dir ./supermemory --mcp project
+npx -y @twelvehart/install@latest full --dir ./supermemory --mcp project
 ```
 
 **Option B — Manual registration with the setup helper**
@@ -350,8 +350,8 @@ npm run db:test:phase1
 
 Publish order:
 
-1. Publish `@supermemory/runtime` from the repo root after `npm run build` and `npm run pack:check:runtime`.
-2. Publish `@supermemory/install` from `packages/install` after `npm run build:install`, `npm run typecheck:install`, and `npm run test:install`.
+1. Publish `@twelvehart/runtime` from the repo root after `npm run build` and `npm run pack:check:runtime`.
+2. Publish `@twelvehart/install` from `packages/install` after `npm run build:install`, `npm run typecheck:install`, and `npm run test:install`.
 
 Smoke-release procedure for the freshly published packages:
 
