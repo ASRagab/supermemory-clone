@@ -21,7 +21,7 @@ const EMBEDDING_CONFIGS: Record<EmbeddingProvider, EmbeddingConfig> = {
   },
   local: {
     model: 'local-tfidf',
-    dimensions: 384,
+    dimensions: 1536,
     isLocal: true,
     maxTokens: 512,
     batchSize: 50,
@@ -64,7 +64,7 @@ function normalizeVector(vector: number[]): number[] {
  * Local TF-IDF based embedding generator (fallback)
  * Generates deterministic embeddings based on text content
  */
-function generateLocalEmbedding(text: string, dimensions: number = 384): number[] {
+function generateLocalEmbedding(text: string, dimensions: number = 1536): number[] {
   // Tokenize and normalize text
   const tokens = text
     .toLowerCase()
