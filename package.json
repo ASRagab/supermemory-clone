@@ -1,6 +1,6 @@
 {
   "name": "@twelvehart/supermemory-runtime",
-  "version": "1.0.0-next.1",
+  "version": "1.0.0-next.2",
   "description": "A personal AI memory assistant - supermemory.ai clone",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,6 +8,7 @@
   "files": [
     "README.md",
     ".env.example",
+    "Dockerfile",
     "package-lock.json",
     "src",
     "scripts",

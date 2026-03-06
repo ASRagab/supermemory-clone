@@ -14,6 +14,7 @@ interface PackResult {
 
 const REQUIRED_PATHS = [
   '.env.example',
+  'Dockerfile',
   'docker-compose.prod.yml',
   'docker-compose.yml',
   'package.json',

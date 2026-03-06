@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+
 import { describe, expect, it } from 'vitest'
 
 import { renderSuccessOutput } from '../../packages/install/src/output.ts'
@@ -46,5 +48,40 @@ Next:
 API health:
   curl http://localhost:13000/health
 `)
+  })
+
+  it('renders the default home install path as ~/.supermemory', () => {
+    const defaultTargetDir = `${homedir()}/.supermemory`
+    const args: ParsedCliArgs = {
+      cwd: '/tmp/workspace',
+      mode: 'agent',
+      mcpScope: 'project',
+      runtimeVersion: 'latest',
+      skipApiKeys: false,
+      skipApiStart: false,
+      skipDocker: false,
+      targetDir: defaultTargetDir,
+      update: false,
+    }
+
+    const summary: InstallerRunSummary = {
+      action: 'install',
+      installMode: 'agent',
+      installDir: defaultTargetDir,
+      apiStarted: false,
+      connectivityOk: true,
+      mcp: {
+        scope: 'project',
+        status: 'registered',
+      },
+      flags: {
+        apiKeysWereSkipped: false,
+        skipApiKeys: false,
+        skipApiStart: false,
+        skipDocker: false,
+      },
+    }
+
+    expect(renderSuccessOutput(args, summary)).toContain('1. cd ~/.supermemory')
   })
 })

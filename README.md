@@ -33,12 +33,12 @@ It stores documents, extracts memories, indexes embeddings, and serves search/pr
 Primary path for first-time users:
 
 ```bash
-npx -y @twelvehart/supermemory@latest full --dir ./supermemory --mcp project
-cd ./supermemory
+npx -y @twelvehart/supermemory@latest full --mcp project
+cd ~/.supermemory
 claude
 ```
 
-That command unpacks the runtime into `./supermemory`, runs the canonical `scripts/install.sh` from the final directory, registers Claude MCP against that final path, and prints only the next steps a new user can actually take.
+That command unpacks the runtime into `~/.supermemory`, runs the canonical `scripts/install.sh` from the final directory, registers Claude MCP against that final path, and prints only the next steps a new user can actually take.
 
 The npx installer supports:
 

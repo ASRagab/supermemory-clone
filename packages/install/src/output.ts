@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { relative, resolve } from 'node:path'
 
 import type { InstallerRunSummary, ParsedCliArgs } from './types.js'
@@ -10,6 +11,15 @@ function isProjectMcpReady(summary: InstallerRunSummary): boolean {
 }
 
 function displayTargetDir(cwd: string, targetDir: string): string {
+  const resolvedHome = resolve(homedir())
+  if (targetDir === resolvedHome) {
+    return '~'
+  }
+
+  if (targetDir.startsWith(`${resolvedHome}/`)) {
+    return `~/${relative(resolvedHome, targetDir)}`
+  }
+
   const relativeTarget = relative(cwd, targetDir)
   if (!relativeTarget) {
     return '.'

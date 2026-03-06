@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -46,6 +46,12 @@ describe('installer cli', () => {
     expect(parsed.skipApiKeys).toBe(true)
     expect(parsed.runtimeVersion).toBe('1.2.3')
     expect(parsed.update).toBe(true)
+  })
+
+  it('defaults installs to ~/.supermemory when --dir is omitted', () => {
+    const parsed = parseCliArgs(['full'], '/tmp/workspace')
+
+    expect(parsed.targetDir).toBe(resolve(homedir(), '.supermemory'))
   })
 
   it('installs from a local runtime fixture and writes the final-path manifest', () => {

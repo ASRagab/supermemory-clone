@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { renderSuccessOutput } from './output.js'
@@ -6,7 +7,7 @@ import { runCanonicalInstaller, writeInstallManifest } from './run-install.js'
 import type { CliIo, InstallMode, McpScope, ParsedCliArgs } from './types.js'
 import { ensureInstallDirectory, readRuntimePackageMetadata, unpackRuntimeTarball } from './unpack.js'
 
-const DEFAULT_INSTALL_DIR = './supermemory'
+const DEFAULT_INSTALL_DIR = '~/.supermemory'
 const DEFAULT_RUNTIME_VERSION = 'latest'
 const DEFAULT_IO: CliIo = {
   stderr: (message) => process.stderr.write(`${message}\n`),
@@ -60,7 +61,7 @@ export function parseCliArgs(argv: string[], cwd = process.cwd()): ParsedCliArgs
     skipApiKeys: false,
     skipApiStart: false,
     skipDocker: false,
-    targetDir: resolve(cwd, DEFAULT_INSTALL_DIR),
+    targetDir: resolve(homedir(), '.supermemory'),
     update: false,
   }
 

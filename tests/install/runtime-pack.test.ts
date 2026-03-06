@@ -9,6 +9,7 @@ describe('runtime package validation', () => {
     expect(packPaths).toContain('scripts/install.sh')
     expect(packPaths).toContain('scripts/mcp-setup.ts')
     expect(packPaths).toContain('src/mcp/index.ts')
+    expect(packPaths).toContain('Dockerfile')
     expect(packPaths).toContain('docker-compose.yml')
     expect(packPaths).not.toContain('tests/install/runtime-pack.test.ts')
     expect(packPaths.some((packPath) => packPath.startsWith('packages/'))).toBe(false)
