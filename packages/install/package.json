@@ -1,10 +1,10 @@
 {
   "name": "@twelvehart/supermemory",
-  "version": "1.0.0-next.0",
+  "version": "1.0.0-next.1",
   "description": "Zero-knowledge installer for Supermemory",
   "type": "module",
   "bin": {
-    "supermemory-install": "dist/cli.js"
+    "supermemory-install": "dist/bin.js"
   },
   "files": [
     "dist",

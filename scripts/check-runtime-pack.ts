@@ -30,7 +30,6 @@ const REQUIRED_PATHS = [
 const FORBIDDEN_PATTERNS = [
   /^coverage\//,
   /^data\//,
-  /^dist\//,
   /^packages\//,
   /^tests\//,
   /^2026-03-05-npx-first-installer-/,

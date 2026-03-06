@@ -331,6 +331,38 @@ claude mcp get supermemory
 - `npm run pack:check:runtime` - Verify the runtime npm tarball contents
 - `npm run validate` - typecheck + lint + format + tests
 
+## Claude Sandbox VM
+
+For isolated Claude Code and plugin testing on macOS/Linux hosts, use Multipass with the bundled sandbox scripts.
+
+Host prerequisite: install Multipass on the host. On macOS, for example:
+
+```bash
+brew install --cask multipass
+```
+
+Create and provision a reusable Ubuntu VM with Docker, Node/npm, uv, Claude Code, and common CLI tools:
+
+```bash
+./scripts/claude-sandbox-vm.sh create --mount "$PWD:/home/ubuntu/workspace/repo"
+```
+
+Common operations:
+
+```bash
+./scripts/claude-sandbox-vm.sh info
+./scripts/claude-sandbox-vm.sh shell
+./scripts/claude-sandbox-vm.sh exec -- claude --version
+./scripts/claude-sandbox-vm.sh provision
+./scripts/claude-sandbox-vm.sh delete
+```
+
+Notes:
+
+- The VM installs Claude Code from npm but does not authenticate it for you; run `claude login` inside the VM.
+- Docker group membership is added during provisioning; reconnect or run `exec newgrp docker` before using Docker.
+- Override defaults with env vars such as `CLAUDE_SANDBOX_VM_NAME`, `CLAUDE_SANDBOX_MEMORY`, `NODE_MAJOR`, and `CLAUDE_NPM_PACKAGE`.
+
 ## Testing
 
 - Unit/integration tests: `vitest`

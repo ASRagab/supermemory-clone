@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { resolve } from 'node:path'
 
 import { renderSuccessOutput } from './output.js'
@@ -157,17 +156,4 @@ export function executeInstall(args: ParsedCliArgs, io: CliIo = DEFAULT_IO, stdi
 export function runCli(argv: string[], io: CliIo = DEFAULT_IO, stdio: 'inherit' | 'pipe' = 'inherit'): void {
   const args = parseCliArgs(argv)
   executeInstall(args, io, stdio)
-}
-
-const entrypoint = process.argv[1]
-const isMainModule = entrypoint ? import.meta.url === new URL(entrypoint, 'file://').href : false
-
-if (isMainModule) {
-  try {
-    runCli(process.argv.slice(2))
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    process.stderr.write(`${message}\n`)
-    process.exit(1)
-  }
 }
