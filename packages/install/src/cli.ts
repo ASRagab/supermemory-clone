@@ -15,7 +15,7 @@ const DEFAULT_IO: CliIo = {
 }
 
 function usage(): string {
-  return `Usage: npx -y @twelvehart/install@latest <mode> [options]
+  return `Usage: npx -y @twelvehart/supermemory@latest <mode> [options]
 
 Modes:
   agent

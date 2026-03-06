@@ -17,7 +17,7 @@ The current install surface is optimized for contributors, not first-time users.
 The new default should be:
 
 ```bash
-npx -y @twelvehart/install@latest full --dir ./supermemory --mcp project
+npx -y @twelvehart/supermemory@latest full --dir ./supermemory --mcp project
 ```
 
 That command should:
@@ -64,7 +64,7 @@ Observed issues from the current UX:
 ### Primary Path
 
 ```bash
-npx -y @twelvehart/install@latest full --dir ./supermemory --mcp project
+npx -y @twelvehart/supermemory@latest full --dir ./supermemory --mcp project
 cd ./supermemory
 claude
 ```
@@ -114,7 +114,7 @@ Keep one repo and add one installer workspace:
   scripts/bootstrap.sh         # fallback transport only
   packages/
     install/
-      package.json             # published as @twelvehart/install
+      package.json             # published as @twelvehart/supermemory
       src/cli.ts
       src/runtime-source.ts
       src/unpack.ts
@@ -127,7 +127,7 @@ Keep one repo and add one installer workspace:
 
 ### Runtime package
 
-- Proposed name: `@twelvehart/runtime`
+- Proposed name: `@twelvehart/supermemory-runtime`
 - Source location: repo root package
 - Purpose: publish the installable runtime tarball
 - Must include:
@@ -141,7 +141,7 @@ Keep one repo and add one installer workspace:
 
 ### Installer package
 
-- Proposed name: `@twelvehart/install`
+- Proposed name: `@twelvehart/supermemory`
 - Source location: `packages/install`
 - Purpose: zero-knowledge entrypoint via `npx`
 - Responsibility:
@@ -169,7 +169,7 @@ Fallback, not primary:
 Recommended command surface:
 
 ```bash
-npx -y @twelvehart/install@latest <mode> [options]
+npx -y @twelvehart/supermemory@latest <mode> [options]
 ```
 
 Modes:
@@ -200,7 +200,7 @@ Behavioral mapping:
 1. Resolve target directory.
 2. Refuse to install into a non-empty directory unless `--update` or equivalent is explicitly chosen.
 3. Resolve runtime source:
-   - default: npm registry tarball for `@twelvehart/runtime`
+   - default: npm registry tarball for `@twelvehart/supermemory-runtime`
    - dev override: local path
 4. Unpack runtime into the final install directory.
 5. Run the canonical installer from the final install directory.
@@ -288,7 +288,7 @@ Release ordering matters.
 
 1. publish runtime package
 2. publish installer package targeting that runtime version
-3. smoke test `npx -y @twelvehart/install@latest ...`
+3. smoke test `npx -y @twelvehart/supermemory@latest ...`
 4. switch README quick-start to `npx`
 5. demote `curl` and manual clone to fallback sections
 
@@ -311,7 +311,7 @@ Demo:
 
 ## Sprint 2: Installer Package
 
-**Goal**: ship `@twelvehart/install` as a thin wrapper around the canonical installer
+**Goal**: ship `@twelvehart/supermemory` as a thin wrapper around the canonical installer
 
 Tasks:
 
@@ -324,7 +324,7 @@ Tasks:
 
 Demo:
 
-- `npx -y @twelvehart/install@latest agent --dir ./tmp-smoke --mcp project --source-path <local>` succeeds locally
+- `npx -y @twelvehart/supermemory@latest agent --dir ./tmp-smoke --mcp project --source-path <local>` succeeds locally
 
 ## Sprint 3: Output and UX Hardening
 
@@ -382,7 +382,7 @@ If the `npx` installer is not production-ready:
 
 This effort is done when:
 
-1. `npx -y @twelvehart/install@latest full --dir ./supermemory --mcp project` is the default recommended command.
+1. `npx -y @twelvehart/supermemory@latest full --dir ./supermemory --mcp project` is the default recommended command.
 2. That command works without repo knowledge.
 3. The installed directory is not a git checkout by default.
 4. Project-scope MCP registration points to the final install path.

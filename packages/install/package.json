@@ -1,5 +1,5 @@
 {
-  "name": "@twelvehart/install",
+  "name": "@twelvehart/supermemory",
   "version": "1.0.0",
   "description": "Zero-knowledge installer for Supermemory",
   "type": "module",

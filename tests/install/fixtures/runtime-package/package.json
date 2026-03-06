@@ -1,5 +1,5 @@
 {
-  "name": "@supermemory/runtime-fixture",
+  "name": "@twelvehart/supermemory-runtime-fixture",
   "version": "9.9.9",
   "files": [
     "dist",

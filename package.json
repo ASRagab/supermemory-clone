@@ -1,5 +1,5 @@
 {
-  "name": "@twelvehart/runtime",
+  "name": "@twelvehart/supermemory-runtime",
   "version": "1.0.0",
   "description": "A personal AI memory assistant - supermemory.ai clone",
   "main": "dist/index.js",

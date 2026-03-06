@@ -20,7 +20,7 @@
     },
     {
       "id": "D2",
-      "decision": "Use @twelvehart/install as the zero-knowledge npx entrypoint",
+      "decision": "Use @twelvehart/supermemory as the zero-knowledge npx entrypoint",
       "status": "locked"
     },
     {
@@ -102,7 +102,7 @@
             "packages/install/src"
           ],
           "acceptance": [
-            "The repo contains a publishable @twelvehart/install package with an executable bin"
+            "The repo contains a publishable @twelvehart/supermemory package with an executable bin"
           ]
         },
         {

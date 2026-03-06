@@ -27,7 +27,7 @@ function packSpecifier(runtimeVersion: string, sourcePath?: string, cwd = proces
   const packDestination = join(tmpdir(), `supermemory-install-pack-${process.pid}-${Date.now()}`)
   mkdirSync(packDestination, { recursive: true })
 
-  const specifier = sourcePath ? resolve(cwd, sourcePath) : `@twelvehart/runtime@${runtimeVersion}`
+  const specifier = sourcePath ? resolve(cwd, sourcePath) : `@twelvehart/supermemory-runtime@${runtimeVersion}`
   if (sourcePath && !existsSync(specifier)) {
     throw new Error(`Local runtime source path does not exist: ${specifier}`)
   }

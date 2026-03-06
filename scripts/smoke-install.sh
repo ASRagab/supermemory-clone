@@ -5,7 +5,7 @@ TARGET_DIR="${1:-./supermemory-smoke}"
 INSTALLER_VERSION="${SUPERMEMORY_INSTALLER_VERSION:-latest}"
 RUNTIME_VERSION="${SUPERMEMORY_RUNTIME_VERSION:-latest}"
 
-npx -y "@twelvehart/install@${INSTALLER_VERSION}" full \
+npx -y "@twelvehart/supermemory@${INSTALLER_VERSION}" full \
   --dir "$TARGET_DIR" \
   --mcp project \
   --runtime-version "$RUNTIME_VERSION" \
