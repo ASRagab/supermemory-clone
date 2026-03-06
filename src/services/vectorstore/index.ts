@@ -423,7 +423,7 @@ export async function reindexVectorStore(
  */
 export function getDefaultVectorStoreConfig(): VectorStoreConfig {
   const provider = (process.env.VECTOR_STORE_PROVIDER as VectorStoreProvider) ?? 'memory'
-  const dimensions = parseInt(process.env.VECTOR_DIMENSIONS ?? '1536', 10)
+  const dimensions = 1536
 
   const config: VectorStoreConfig = {
     provider,

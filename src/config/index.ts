@@ -2,11 +2,13 @@ import { z } from 'zod'
 import './bootstrap-env.js'
 import { ConfigurationError } from '../utils/errors.js'
 
+const PINNED_EMBEDDING_DIMENSIONS = 1536
+
 const configSchema = z.object({
   // OpenAI (optional - local fallback available)
   openaiApiKey: z.string().optional(),
   embeddingModel: z.string().default('text-embedding-3-small'),
-  embeddingDimensions: z.coerce.number().default(1536),
+  embeddingDimensions: z.coerce.number().default(PINNED_EMBEDDING_DIMENSIONS),
 
   // LLM Provider Configuration
   llmProvider: z.enum(['openai', 'anthropic', 'mock']).optional().describe('LLM provider for memory extraction'),
@@ -30,7 +32,7 @@ const configSchema = z.object({
 
   // Vector Store
   vectorStoreProvider: z.enum(['memory', 'sqlite-vss', 'chroma']).default('memory'),
-  vectorDimensions: z.coerce.number().default(1536),
+  vectorDimensions: z.coerce.number().default(PINNED_EMBEDDING_DIMENSIONS),
   vectorSqlitePath: z.string().default('./data/vectors.db'),
   chromaUrl: z.string().default('http://localhost:8000'),
   chromaCollection: z.string().default('supermemory_vectors'),
@@ -67,11 +69,34 @@ function normalizeEnvValue(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+function assertPinnedDimension(name: 'EMBEDDING_DIMENSIONS' | 'VECTOR_DIMENSIONS', rawValue: string | undefined): void {
+  const normalized = normalizeEnvValue(rawValue)
+  if (!normalized) {
+    return
+  }
+
+  const parsed = Number.parseInt(normalized, 10)
+  if (parsed !== PINNED_EMBEDDING_DIMENSIONS) {
+    throw new ConfigurationError(
+      `${name} is pinned to ${PINNED_EMBEDDING_DIMENSIONS}. Dimension overrides are not supported.`,
+      undefined,
+      {
+        fieldErrors: {
+          [name]: [`${name} must be ${PINNED_EMBEDDING_DIMENSIONS}. Dimension overrides are not supported.`],
+        },
+      }
+    )
+  }
+}
+
 function loadConfig(): Config {
+  assertPinnedDimension('EMBEDDING_DIMENSIONS', process.env.EMBEDDING_DIMENSIONS)
+  assertPinnedDimension('VECTOR_DIMENSIONS', process.env.VECTOR_DIMENSIONS)
+
   const result = configSchema.safeParse({
     openaiApiKey: normalizeEnvValue(process.env.OPENAI_API_KEY),
     embeddingModel: normalizeEnvValue(process.env.EMBEDDING_MODEL),
-    embeddingDimensions: normalizeEnvValue(process.env.EMBEDDING_DIMENSIONS),
+    embeddingDimensions: PINNED_EMBEDDING_DIMENSIONS,
 
     // LLM Provider
     llmProvider: normalizeEnvValue(process.env.LLM_PROVIDER),
@@ -88,7 +113,7 @@ function loadConfig(): Config {
 
     // Vector Store
     vectorStoreProvider: normalizeEnvValue(process.env.VECTOR_STORE_PROVIDER),
-    vectorDimensions: normalizeEnvValue(process.env.VECTOR_DIMENSIONS),
+    vectorDimensions: PINNED_EMBEDDING_DIMENSIONS,
     vectorSqlitePath: normalizeEnvValue(process.env.VECTOR_SQLITE_PATH),
     chromaUrl: normalizeEnvValue(process.env.CHROMA_URL),
     chromaCollection: normalizeEnvValue(process.env.CHROMA_COLLECTION),
